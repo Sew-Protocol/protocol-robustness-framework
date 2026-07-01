@@ -199,6 +199,12 @@
   (io/make-parents path)
   (spit path (json/write-str doc {:indent true :key-fn name :value-fn json-value})))
 
+(defn- write-edn-file
+  "Write a Clojure map as proper EDN with keyword keys."
+  [doc path]
+  (io/make-parents path)
+  (spit path (pr-str doc)))
+
 (defn- scenario-inline-metadata
   "Extract metadata directly from the scenario map if available.
    Returns nil when the scenario has no inline metadata keys."
@@ -230,6 +236,6 @@
                       (str sc/*scenario-dir* "/" public-name))]
     (write-json-file trace-doc trace-p)
     (when scen-p
-      (write-json-file (scenario->public-json-document scenario) scen-p))
+      (write-edn-file (scenario->public-json-document scenario) scen-p))
     (cond-> {:trace-path trace-p :scenario-id sid}
       scen-p (assoc :scenario-path scen-p))))

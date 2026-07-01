@@ -1,55 +1,106 @@
 (ns scripts.parallel-test-runner
   "Run Clojure test namespaces in parallel using future, each with isolated
    artifact directory to prevent evidence reconciliation warnings.
-   Usage: clojure -M:test -m scripts.parallel-test-runner ns1 ns2 ns3"
+
+   Usage: clojure -M:test -m scripts.parallel-test-runner ns1 ns2 ns3
+
+   Environment variables:
+     PARALLEL_TEST_JOBS  — max concurrent namespaces (default: (dec n-cpus), min 1)
+     KEEP_PARALLEL_TEST_ARTIFACTS — set to any truthy value to preserve temp dirs
+                                   even on success (they are always kept on failure)
+
+   Load-time side-effect invariant:
+     Namespace loading (require) happens before per-namespace registry/artifact
+     isolation, so test namespace require forms must be side-effect-light.
+     Evidence writes, registry initialization, and artifact path writes must
+     happen during test execution (run-tests), not at load time."
   (:require [clojure.java.io :as io]
             [clojure.test :as t]
             [resolver-sim.evidence.chain :as chain]
             [resolver-sim.evidence.attestation-registry :as ar]
             [resolver-sim.evidence.config :as evcfg]))
 
+(defn- default-jobs
+  []
+  (max 1 (dec (.availableProcessors (Runtime/getRuntime)))))
+
+(defn- parse-job-limit
+  []
+  (or (some-> (System/getenv "PARALLEL_TEST_JOBS") Integer/parseInt)
+      (default-jobs)))
+
+(defn- cleanup!
+  [root]
+  (doseq [f (reverse (doall (file-seq (io/file root))))]
+    (.delete f)))
+
 (defn -main
   [& namespaces]
   (let [syms (map symbol namespaces)
         _ (doseq [s syms] (require s))
+        n (count syms)
         start (System/currentTimeMillis)
         tmp-root (str (System/getProperty "java.io.tmpdir")
                       "/parallel-test-artifacts-" (java.util.UUID/randomUUID))
-        futures (mapv (fn [sym]
-                        (let [ns-artifact-dir (str tmp-root "/" (munge (str sym)))]
+        jobs (parse-job-limit)
+        sem (java.util.concurrent.Semaphore. jobs)
+        futures (mapv (fn [i sym]
+                        (let [ns-artifact-dir (str tmp-root "/" (format "%03d" i) "-" (munge (str sym)))]
                           (.mkdirs (io/file ns-artifact-dir))
                           (future
-                            (chain/with-fresh-registry*
-                             (fn []
-                               (ar/with-fresh-registry*
-                                (fn []
-                                  (binding [evcfg/*artifact-dir* ns-artifact-dir]
-                                    (try (t/run-tests sym)
-                                         (catch Exception e
-                                           (println "ERROR in" sym ":" (.getMessage e))
-                                           {:test 0 :pass 0 :fail 1 :error 1}))))))))))
+                            (.acquire sem)
+                            (try
+                              (chain/with-fresh-evidence-context*
+                               (fn []
+                                 (ar/with-fresh-registry*
+                                  (fn []
+                                    (binding [evcfg/*artifact-dir* ns-artifact-dir
+                                              chain/*allow-dirty* true]
+                                      (let [r (try (t/run-tests sym)
+                                                   (catch Throwable t
+                                                     (when (instance? InterruptedException t)
+                                                       (.interrupt (Thread/currentThread)))
+                                                     (println "ERROR in" sym ":" (.getMessage t))
+                                                     (.printStackTrace t)
+                                                     {:test 0 :pass 0 :fail 0 :error 1}))]
+                                        {:sym sym :result r}))))))
+                              (finally
+                                (.release sem))))))
+                      (range)
                       syms)
         results (mapv deref futures)
         elapsed (- (System/currentTimeMillis) start)
-        total {:test (apply + (map :test results))
-               :pass (apply + (map :pass results))
-               :fail (apply + (map :fail results))
-               :error (apply + (map :error results))}]
+        total {:test (apply + (map (comp :test :result) results))
+               :pass (apply + (map (comp :pass :result) results))
+               :fail (apply + (map (comp :fail :result) results))
+               :error (apply + (map (comp :error :result) results))}
+        failed? (pos? (+ (:fail total) (:error total)))
+        keep? (or failed? (some? (System/getenv "KEEP_PARALLEL_TEST_ARTIFACTS")))]
+    ;; Per-namespace results
+    (println)
+    (doseq [{:keys [sym result]} results]
+      (let [label (str sym)]
+        (if (and (zero? (:fail result)) (zero? (:error result)))
+          (println (str "  PASS  " label "  (" (:test result) " tests)"))
+          (println (str "  FAIL  " label "  " (:fail result) " fail, " (:error result) " errors, "
+                        (:test result) " tests")))))
+    ;; Summary box
     (println "\n┌─ Parallel test summary ─────────────────────────────────────┐")
     (println (format "│  %4d tests, %4d assertions, %d failures, %d errors  │"
                      (:test total) (:pass total) (:fail total) (:error total)))
-    (println (format "│  elapsed: %.2fs                                          │"
-                     (/ elapsed 1000.0)))
+    (println (format "│  elapsed: %.2fs  jobs: %d                              │"
+                     (/ elapsed 1000.0) jobs))
     (println "├─────────────────────────────────────────────────────────────┤")
-    (println (format "│  artifact dirs: %s                                    " tmp-root))
+    (if keep?
+      (println (format "│  artifacts: %s                                    " tmp-root))
+      (println "│  artifacts: cleaned (all passed)                          │"))
     (println "└─────────────────────────────────────────────────────────────┘")
-    (try
-      (when (nil? (System/getenv "KEEP_PARALLEL_TEST_ARTIFACTS"))
-        (let [root (io/file tmp-root)]
-          (when (.exists root)
-            (doseq [f (reverse (doall (file-seq root)))]
-              (.delete f)))))
-      (catch Exception e
-        (println "WARN: artifact cleanup failed:" (.getMessage e))))
-    (when (pos? (+ (:fail total) (:error total)))
+    ;; Cleanup — keep on failure, delete on success
+    (if keep?
+      (println "Keeping artifact dirs:" tmp-root)
+      (try
+        (cleanup! tmp-root)
+        (catch Exception e
+          (println "WARN: artifact cleanup failed:" (.getMessage e)))))
+    (when failed?
       (System/exit 1))))

@@ -2,6 +2,7 @@
          '[clojure.java.io :as io]
          '[clojure.set :as set]
          '[clojure.string :as str]
+         '[resolver-sim.concepts.benchmark :as benchmark-concepts]
          '[resolver-sim.concepts.registry :as concepts-registry]
          '[resolver-sim.scenario.suites :as suites])
 
@@ -16,23 +17,12 @@
   (when (file-exists? path)
     (edn/read-string (slurp path))))
 
-(defn benchmark-concept-files []
-  (let [root (io/file "benchmarks/concepts")]
-    (when (.exists root)
-      (->> (file-seq root)
-           (filter #(.isFile %))
-           (filter #(str/ends-with? (.getName %) ".edn"))))))
-
-(defn concept-index
-  [concepts]
-  (into {} (map (fn [concept] [(:concept/id concept) concept]) concepts)))
-
 (defn scoring-path-for [scoring-id]
   (let [filename (case scoring-id
                    :scoring/robustness-dimensions-v0 "robustness-dimensions-v0.edn"
                    :scoring/binary-claims-v1 "binary-claims-v1.edn"
-                   :scoring/severity-weighted-robustness-v1 "severity-weighted-v1.edn"
-                   :scoring/severity-weighted-v1 "severity-weighted-v1.edn"
+                   :scoring/severity-weighted-robustness-v1 "severity-weighted-robustness-v1.edn"
+                   :scoring/severity-weighted-v1 "severity-weighted-robustness-v1.edn"
                    :scoring/shortfall-allocation-v0 "shortfall-allocation-v0.edn"
                    nil)]
     (when filename
@@ -179,6 +169,21 @@
           (do (swap! errors conj (str "scenario claim " scenario-claim " does not resolve to claim registry or deferred-claims in " benchmark-path))
               (println "    FAIL scenario claim" scenario-claim "does not resolve — add to claim-registry.edn or :benchmark/deferred-scenario-claims")))))
 
+    ;; ── Version and lifecycle checks ──────────────────────────────
+    (let [version (:benchmark/version benchmark)]
+      (when-not version
+        (swap! errors conj (str "missing :benchmark/version in " benchmark-path))
+        (println "    FAIL missing :benchmark/version in" benchmark-path))
+      (when (and version (not (integer? version)))
+        (swap! errors conj (str ":benchmark/version must be an integer in " benchmark-path))
+        (println "    FAIL :benchmark/version must be an integer in" benchmark-path)))
+
+    (let [suite-version (:benchmark/suite-pinned-version benchmark)]
+      (when suite-version
+        (when-not (string? suite-version)
+          (swap! errors conj (str ":benchmark/suite-pinned-version must be a string in " benchmark-path))
+          (println "    FAIL :benchmark/suite-pinned-version must be a string in" benchmark-path))))
+
     ;; ── Claim ref validation ──────────────────────────────────
     (let [claim-refs (:benchmark/claims benchmark)]
       (when (seq claim-refs)
@@ -208,7 +213,13 @@
             (swap! errors conj (str "unknown property type " pt " in " benchmark-path))
             (println "    FAIL unknown property type" pt)))))))
 
-(defn validate-pack-registry! [errors concept-idx claim-registry registry-path]
+(defn- registered-domain-ids
+  "Return the set of domain IDs from the global registry."
+  [registry-path]
+  (let [[registry _] (parse-edn (io/file registry-path))]
+    (set (map :domain/id (:domains registry)))))
+
+(defn validate-pack-registry! [errors concept-idx claim-registry registry-path domain-ids]
   (let [[data parse-err] (parse-edn (io/file registry-path))]
     (if parse-err
       (do (swap! errors conj (str registry-path ": " parse-err))
@@ -218,12 +229,40 @@
         (when (nil? (:pack/id data))
           (swap! errors conj (str registry-path " missing :pack/id"))
           (println "    FAIL" registry-path "missing :pack/id"))
+        (let [pack-domain (:pack/domain data)]
+          (when (and domain-ids pack-domain (not (contains? domain-ids pack-domain)))
+            (swap! errors conj (str registry-path " pack domain " pack-domain " is not registered in benchmarks/registry.edn"))
+            (println "    FAIL pack domain" pack-domain "not registered in benchmarks/registry.edn")))
+
+        ;; ── Check active benchmark IDs are keywords ──────────────
         (doseq [benchmark-ref (:benchmarks data)]
+          (let [bid (:benchmark/id benchmark-ref)
+                status (:benchmark/status benchmark-ref)]
+            (when (and (#{:active :experimental} status) bid (not (keyword? bid)))
+              (swap! errors conj (str "active/experimental benchmark id " bid " must be a keyword, got " (type bid) " in " registry-path))
+              (println "    FAIL benchmark id" bid "must be a keyword"))
+            ;; ── Check benchmark domain resolves ──────────────
+            (let [bdomain (:benchmark/domain benchmark-ref)]
+              (when (and domain-ids bdomain (not (contains? domain-ids bdomain)))
+                (swap! errors conj (str "benchmark domain " bdomain " for " bid " is not registered in benchmarks/registry.edn"))
+                (println "    FAIL benchmark domain" bdomain "for" bid "not registered")))))
+        (doseq [benchmark-ref (:benchmarks data)]
+          (let [status (:benchmark/status benchmark-ref)]
+            (when-not (contains? #{:active :experimental :deprecated} status)
+              (swap! errors conj (str "invalid :benchmark/status " status " for " (:benchmark/id benchmark-ref)))
+              (println "    FAIL invalid :benchmark/status" status "for" (:benchmark/id benchmark-ref)))
+            (when (= :deprecated status)
+              (when-not (:deprecated-on benchmark-ref)
+                (swap! errors conj (str "deprecated benchmark " (:benchmark/id benchmark-ref) " missing :deprecated-on"))
+                (println "    FAIL deprecated benchmark" (:benchmark/id benchmark-ref) "missing :deprecated-on"))
+              (when-not (:replaced-by benchmark-ref)
+                (swap! errors conj (str "deprecated benchmark " (:benchmark/id benchmark-ref) " missing :replaced-by"))
+                (println "    FAIL deprecated benchmark" (:benchmark/id benchmark-ref) "missing :replaced-by"))))
           (let [benchmark-path (str pack-dir "/" (:benchmark/file benchmark-ref))]
             (validate-file-exists! errors benchmark-path "benchmark file")
             (when-let [benchmark (read-edn-file benchmark-path)]
-              (validate-benchmark-file! errors concept-idx claim-registry benchmark-path benchmark))))))))
-
+               (validate-benchmark-file! errors concept-idx claim-registry benchmark-path benchmark))))))))
+ 
 (defn run-validation []
   (println "▶ benchmarks:validate\n")
   (let [errors (atom [])]
@@ -236,22 +275,13 @@
           (validate-file-exists! errors (str "benchmarks/" (:pack/registry pack)) "pack registry"))))
 
     (println "  Checking benchmark concepts...")
-    (let [concept-files (vec (benchmark-concept-files))
+    (let [concept-files (vec (benchmark-concepts/benchmark-concept-files))
           global-concepts (try
                             (:concepts (concepts-registry/load-registry))
                             (catch Exception _ nil))
-          local-concepts (reduce
-                          (fn [acc path]
-                            (let [[data parse-err] (parse-edn path)]
-                              (if parse-err
-                                (do (swap! errors conj (str (.getPath path) ": " parse-err))
-                                    (println "    FAIL" (.getPath path) "-" parse-err)
-                                    acc)
-                                (into acc (:concepts data)))))
-                          []
-                          concept-files)
-          concept-idx (merge (concept-index global-concepts)
-                             (concept-index local-concepts))]
+          local-concepts (benchmark-concepts/load-benchmark-local-concepts concept-files)
+          concept-idx (merge (concepts-registry/concept-index global-concepts)
+                             (concepts-registry/concept-index local-concepts))]
 
       ;; ── Concept ID collision detection ─────────────────────────────
       (let [global-ids (set (map :concept/id global-concepts))
@@ -309,7 +339,7 @@
        (println "  Checking scoring definitions...")
       (doseq [path ["benchmarks/scoring/robustness-dimensions-v0.edn"
                     "benchmarks/scoring/binary-claims-v1.edn"
-                    "benchmarks/scoring/severity-weighted-v1.edn"
+                    "benchmarks/scoring/severity-weighted-robustness-v1.edn"
                     "benchmarks/scoring/shortfall-allocation-v0.edn"]]
         (validate-file-exists! errors path "scoring"))
 
@@ -323,9 +353,35 @@
           (println "    OK" (count (:claims claim-registry-data)) "claims registered"))
         (let [claim-registry (when-not parse-err
                                (into {} (map (fn [c] [(:claim/id c) c]) (:claims claim-registry-data))))]
-          (doseq [registry-path ["benchmarks/packs/prf-core/registry.edn"
-                                 "benchmarks/packs/sew/registry.edn"]]
-            (validate-pack-registry! errors concept-idx claim-registry registry-path))))
+          (let [domain-ids (registered-domain-ids "benchmarks/registry.edn")]
+            (doseq [registry-path ["benchmarks/packs/prf-core/registry.edn"
+                                   "benchmarks/packs/sew/registry.edn"]]
+              (validate-pack-registry! errors concept-idx claim-registry registry-path domain-ids)))
+
+          ;; ── Duplicate active benchmark detection ───────────────────
+          (println "  Checking for duplicate active benchmark structures...")
+          (let [active-manifests (atom [])]
+            (doseq [registry-path ["benchmarks/packs/prf-core/registry.edn"
+                                   "benchmarks/packs/sew/registry.edn"]]
+              (when-let [data (read-edn-file registry-path)]
+                (let [pack-dir (.getParent (io/file registry-path))]
+                  (doseq [benchmark-ref (:benchmarks data)]
+                    (when (= :active (:benchmark/status benchmark-ref))
+                      (when-let [benchmark (read-edn-file (str pack-dir "/" (:benchmark/file benchmark-ref)))]
+                        (swap! active-manifests conj
+                               {:benchmark/id (:benchmark/id benchmark-ref)
+                                :suite (:benchmark/scenario-suite benchmark)
+                                :claims (set (keep :claim/id (:benchmark/claims benchmark)))
+                                :scoring (:benchmark/scoring-rule benchmark)
+                                :runner (:benchmark/runner-policy benchmark)
+                                :pack-domain (:pack/domain data)})))))))
+            (let [groups (group-by (juxt :suite :claims :scoring :runner) @active-manifests)]
+              (doseq [[key entries] (sort-by (comp count second) groups)
+                      :when (> (count entries) 1)]
+                (let [ids (map :benchmark/id entries)]
+                  (println "    WARN active benchmarks" (str/join ", " ids)
+                           "share suite, claims, scoring, and runner —"
+                           "possible structural duplication")))))))
       )
 
     (println)

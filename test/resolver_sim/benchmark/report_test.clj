@@ -16,10 +16,10 @@
   "Build a minimal evidence map from a benchmark pack file path."
   [benchmark-path scenario-results & {:keys [claim-results metrics reproduce env inv-summary]
                                       :or {claim-results []
-                                            metrics {:total 0 :passed 0}
-                                            reproduce {:command "bb benchmark:reproduce"}
-                                            env {:os-name "Linux" :os-version "test" :java-version "test"}
-                                            inv-summary {:per-invariant {} :total-checks 0 :passed-checks 0 :all-pass? true}}}]
+                                           metrics {:total 0 :passed 0}
+                                           reproduce {:command "bb benchmark:reproduce"}
+                                           env {:os-name "Linux" :os-version "test" :java-version "test"}
+                                           inv-summary {:per-invariant {} :total-checks 0 :passed-checks 0 :all-pass? true}}}]
   {:benchmark (edn/read-string (slurp benchmark-path))
    :environment env
    :results scenario-results
@@ -88,7 +88,7 @@
 
 (deftest severity-weighted-classification-uses-scoring-severity
   (let [manifest (edn/read-string (slurp "benchmarks/packs/sew/escrow-dispute-v1.edn"))
-        scoring (edn/read-string (slurp "benchmarks/scoring/severity-weighted-v1.edn"))
+        scoring (edn/read-string (slurp "benchmarks/scoring/severity-weighted-robustness-v1.edn"))
         claim-results (benchmark-claims/evaluate-manifest-claims
                        manifest
                        [{:scenario/id "scenario-1"
@@ -263,7 +263,7 @@
         evidence-path (temp-evidence-file ev)
         report (rpt/build-report evidence-path
                                  "benchmarks/concepts/protocol-robustness-v0.edn"
-                                 "benchmarks/scoring/severity-weighted-v1.edn")]
+                                 "benchmarks/scoring/severity-weighted-robustness-v1.edn")]
     (testing "classification with critical failure"
       (let [cls (:scoring/classification report)]
         (is (re-find #"(?i)critical" (:classification-label cls)))))))
@@ -284,7 +284,7 @@
         evidence-path (temp-evidence-file ev)
         report (rpt/build-report evidence-path
                                  "benchmarks/concepts/protocol-robustness-v0.edn"
-                                 "benchmarks/scoring/severity-weighted-v1.edn")]
+                                 "benchmarks/scoring/severity-weighted-robustness-v1.edn")]
     (testing "classification all pass"
       (let [cls (:scoring/classification report)]
         (is (re-find #"(?i)pass" (:classification-label cls)))
@@ -345,12 +345,117 @@
                                    "benchmarks/concepts/protocol-robustness-v0.edn"
                                    "benchmarks/scoring/nonexistent-file.edn")))))
 
-(deftest build-report-missing-concepts-path-throws
+;; ── End-to-end integration tests ──────────────────────────────────────────────
+;; These tests load actual fixture evidence bundles from data/fixtures/benchmark-reports/
+;; and validate the full report pipeline: evidence → resolve-report → report map.
+
+(defn- evidence-bundle-path
+  [pack-name]
+  (str "data/fixtures/benchmark-reports/" pack-name ".evidence.edn"))
+
+(defn- load-evidence-fixture
+  [pack-name]
+  (edn/read-string (slurp (evidence-bundle-path pack-name))))
+
+(defn- report-fixture
+  [pack-name]
+  (edn/read-string (slurp (str "data/fixtures/benchmark-reports/" pack-name ".report.edn"))))
+
+(deftest e2e-protocol-robustness-resolve-report
+  (let [evidence-path (evidence-bundle-path "protocol-robustness-v0")
+        report (rpt/resolve-report evidence-path)]
+    (testing "basic structure"
+      (is (= :benchmark/prf-protocol-robustness-v0 (:benchmark/id report)))
+      (is (string? (:purpose report)))
+      (is (integer? (:total-scenarios report)))
+      (is (integer? (:passed-scenarios report)))
+      (is (some? (:all-pass? report))))
+    (testing "evidence traceability"
+      (is (string? (:evidence/hash report)))
+      (is (map? (:reproduce report)))
+      (is (map? (:environment report))))
+    (testing "scoring classification"
+      (let [cls (:scoring/classification report)]
+        (is (map? cls))
+        (is (string? (:classification-label cls)))
+        (is (string? (:scoring/summary cls)))))
+    (testing "claim status"
+      (is (contains? #{:verified :partial :declared-not-verified :none}
+                     (:claim/status report)))
+      (is (some? (:claim-results report))))
+    (testing "dimensions"
+      (is (vector? (:dimensions report)))
+      (is (pos? (count (:dimensions report))))
+      (doseq [d (:dimensions report)]
+        (is (keyword? (:dimension d)))
+        (is (string? (:scenario/id d)))
+        (is (contains? #{:pass :fail nil} (:outcome d)))
+        (is (some? (:concept/title d))  ;; concept enrichment from concept file
+            (str "concept/title missing for " (:dimension d)))))
+    (testing "invariant summary"
+      (is (map? (:invariant-summary report))))))
+
+(deftest e2e-protocol-robustness-report-fields-match-expectations
+  (let [evidence-path (evidence-bundle-path "protocol-robustness-v0")
+        report (rpt/resolve-report evidence-path)
+        expected (report-fixture "protocol-robustness-v0")]
+    (is (= (:benchmark/id report) (:benchmark/id expected)))
+    (is (= (:total-scenarios report) (:total-scenarios expected)))
+    (is (= (:passed-scenarios report) (:passed-scenarios expected)))
+    (is (= (:all-pass? report) (:all-pass? expected)))
+    (is (= (count (:dimensions report)) (count (:dimensions expected))))))
+
+(deftest e2e-shortfall-allocation-resolve-report
+  (let [evidence-path (evidence-bundle-path "shortfall-allocation-v0")
+        report (rpt/resolve-report evidence-path)]
+    (testing "basic structure"
+      (is (= :benchmark/prf-shortfall-allocation-v0 (:benchmark/id report)))
+      (is (integer? (:total-scenarios report)))
+      (is (integer? (:passed-scenarios report)))
+      (is (some? (:all-pass? report))))
+    (testing "dimensions resolve with concepts"
+      (is (vector? (:dimensions report)))
+      (is (pos? (count (:dimensions report))))
+      (doseq [d (:dimensions report)]
+        (is (keyword? (:dimension d)))
+        (is (some? (:concept/title d))
+            (str "concept/title missing for " (:dimension d)))))
+    (testing "scoring classification"
+      (let [cls (:scoring/classification report)]
+        (is (map? cls))
+        (is (string? (:classification-label cls)))))
+    (testing "auto-resolution worked"
+      (is (= (:benchmark/id report) :benchmark/prf-shortfall-allocation-v0))
+      (is (pos? (count (:dimensions report)))))))
+
+(deftest e2e-shortfall-allocation-report-fields-match-expectations
+  (let [evidence-path (evidence-bundle-path "shortfall-allocation-v0")
+        report (rpt/resolve-report evidence-path)
+        expected (report-fixture "shortfall-allocation-v0")]
+    (is (= (:benchmark/id report) (:benchmark/id expected)))
+    (is (= (count (:dimensions report)) (count (:dimensions expected))))))
+
+(deftest e2e-resolve-report-throws-on-missing-scoring-rule
+  (let [ev (make-evidence "benchmarks/packs/prf-core/protocol-robustness-v0.edn" []
+                          :metrics {:total 0 :passed 0})
+        evidence-path (temp-evidence-file ev)
+        evidence (edn/read-string (slurp evidence-path))
+        ;; Override with unknown scoring rule to trigger the error path
+        bad-evidence (assoc-in evidence [:benchmark :benchmark/scoring-rule] :scoring/nonexistent)
+        bad-path (temp-evidence-file bad-evidence)]
+    (is (thrown? Exception
+                 (rpt/resolve-report bad-path)))))
+
+(deftest build-report-missing-concepts-path-still-builds
   (let [ev (make-evidence "benchmarks/packs/prf-core/protocol-robustness-v0.edn"
                           []
                           :metrics {:total 0 :passed 0})
-        evidence-path (temp-evidence-file ev)]
-    (is (thrown? Exception
-                 (rpt/build-report evidence-path
-                                   "benchmarks/concepts/nonexistent-file.edn"
-                                   "benchmarks/scoring/robustness-dimensions-v0.edn")))))
+        evidence-path (temp-evidence-file ev)
+        report (rpt/build-report evidence-path
+                                 "benchmarks/concepts/nonexistent-file.edn"
+                                 "benchmarks/scoring/robustness-dimensions-v0.edn")]
+    (is (some? report))
+    ;; Dimensions are resolved from the manifest through the shared
+    ;; benchmark concept resolver even when the explicit path is absent.
+    (is (pos? (count (:dimensions report))))
+    (is (every? some? (map :concept/title (:dimensions report))))))

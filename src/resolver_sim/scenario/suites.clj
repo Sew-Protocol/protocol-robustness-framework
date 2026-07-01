@@ -141,6 +141,20 @@
    "S103_negative-yield-shortfall-cascade"
    "S104_resolver-stake-shortfall"])
 
+(def ^:private reversal-slashing-scenario-ids
+  ["DR-N-001-reversal-slash-appeal-lifecycle"
+   "DR-N-002-reversal-slash-appeal-rejected"
+   "DR-N-003-reversal-slash-appeal-window-expired"
+   "DR-N-004-reversal-slash-appeal-wrong-party"
+   "DR-O-001-vindication-4-level"
+   "DR-O-002-vindication-minimum-stake"
+   "DR-O-003-vindication-zero-stake"
+   "DR-P-001-force-reversal-slash"
+   "DR-P-002-force-reversal-slash-idempotent"
+   "DR-Q-001-challenge-bounty-reversal"
+   "DR-Q-002-challenge-bounty-no-challenger"
+   "DR-R-001-reversal-slash-insufficient-stake"])
+
 ;; ── Suite definitions ─────────────────────────────────────────────────────────
 ;; Use :scenario-ids for executable scenarios (resolved via sc/scenario-path)
 ;; or :paths for trace/reference files (used as-is).
@@ -165,12 +179,18 @@
                                   :description  "Standalone yield-v1 provider scenarios."
                                   :kind         :file-path-suite
                                   :ci-tier      :provider}
+   :sew-reversal-slashing        {:scenario-ids reversal-slashing-scenario-ids
+                                  :protocol-id  "sew-v1"
+                                  :title        "Sew reversal-slashing scenarios"
+                                  :description  "Reversal-reviewer slashing: appeal due process, multi-level vindication, governance force slashing, challenger bounty, and insufficient-stake accounting."
+                                  :kind         :file-path-suite
+                                  :ci-tier      :coverage}
    :sew-reference-v1             {:paths        sew-reference-scenario-paths
                                   :protocol-id  "sew-v1"
                                   :title        "Sew reference v1 — external verifier suite"
                                   :description  "Curated reference scenarios for external-verifier reproducibility.
-                                                  Tests cancellation griefing protection, auto-cancel-time, same-timestamp
-                                                  ordering, and extortion resistance.  All files are standalone .trace.json."
+                                                   Tests cancellation griefing protection, auto-cancel-time, same-timestamp
+                                                   ordering, and extortion resistance.  All files are standalone .trace.json."
                                   :kind         :file-path-suite
                                   :ci-tier      :reference}})
 
@@ -222,6 +242,13 @@
                                      Used by the protocol-robustness-v0 benchmark pack."
                                    :kind         :file-path-suite
                                    :ci-tier      :coverage}
+   :suite/sew-reversal-slashing-v1
+   {:scenario-ids reversal-slashing-scenario-ids
+    :protocol-id  "sew-v1"
+    :title        "Sew reversal-slashing benchmark suite"
+    :description  "Reversal-reviewer slashing scenarios: appeal due process, multi-level vindication, governance force slashing, challenger bounty, and insufficient-stake accounting."
+    :kind         :file-path-suite
+    :ci-tier      :coverage}
    :suite/sew-shortfall-allocation-v0
    {:scenario-ids shortfall-scenario-ids
     :protocol-id  "sew-v1"

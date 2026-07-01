@@ -2,7 +2,8 @@
   "VCS-agnostic wrapper supporting jj (Jujutsu) and Git.
    Tries jj first, falls back to git, returns nil when neither is available."
   (:require [clojure.java.shell :refer [sh]]
-            [clojure.string :as str]))
+            [clojure.string :as str]
+            [resolver-sim.forensic.source-hash :as source-hash]))
 
 (defn- run
   "Run a command, return trimmed stdout on success, nil otherwise."
@@ -16,19 +17,19 @@
 (defn commit-sha
   "Full commit SHA from jj or git HEAD."
   []
-  (or (run "jj" "log" "-r" "@" "--no-graph" "-T" "commit_id")
+  (or (run "jj" "log" "--ignore-working-copy" "-r" "@" "--no-graph" "-T" "commit_id")
       (run "git" "rev-parse" "HEAD")))
 
 (defn short-sha
   "Short commit SHA (12 chars) from jj or git HEAD."
   []
-  (or (run "jj" "log" "-r" "@" "--no-graph" "-T" "commit_id.shortest(12)")
+  (or (run "jj" "log" "--ignore-working-copy" "-r" "@" "--no-graph" "-T" "commit_id.shortest(12)")
       (run "git" "rev-parse" "--short" "HEAD")))
 
 (defn commit-message
   "First line of current commit message from jj or git."
   []
-  (or (some-> (run "jj" "log" "-r" "@" "--no-graph" "-T" "description")
+  (or (some-> (run "jj" "log" "--ignore-working-copy" "-r" "@" "--no-graph" "-T" "description")
               str/split-lines
               first)
       (run "git" "log" "-1" "--format=%s")))
@@ -38,11 +39,11 @@
    For jj, returns bookmarks on the current change, then falls back to
    the change ID prefix, then git branch."
   []
-  (or (some-> (run "jj" "bookmark" "list" "-r" "@" "-T" "name")
+  (or (some-> (run "jj" "bookmark" "list" "--ignore-working-copy" "-r" "@" "-T" "name")
               str/split-lines
               (->> (remove str/blank?))
               first)
-      (some-> (run "jj" "log" "-r" "@" "--no-graph" "-T" "change_id.shortest(8)")
+      (some-> (run "jj" "log" "--ignore-working-copy" "-r" "@" "--no-graph" "-T" "change_id.shortest(8)")
               not-empty)
       (run "git" "rev-parse" "--abbrev-ref" "HEAD")))
 
@@ -134,9 +135,10 @@
           (catch Exception _ nil)))))
 
 (defn code-hash
-  "Hash of source code: src/ and protocols_src/."
+  "Hash of execution-relevant source code from the current working tree."
   []
-  (dirs-hash "src/" "protocols_src/"))
+  (when-let [r (root)]
+    (source-hash/source-tree-hash* r (source-hash/source-roots))))
 
 (defn deps-hash
   "Hash of dependency configuration: bb.edn, deps.edn."
@@ -176,6 +178,9 @@
   "Multi-dimensional source provenance for chain cursor and forensic attestations.
 
    Returns {:git-commit-sha <string or nil>
+            :source/hash    <string or nil>
+            :source/hash-algorithm <string or nil>
+            :source/hash-roots <vector of strings>
             :code-hash      <string or nil>
             :deps-hash      <string or nil>
             :input-hash     <string or nil>
@@ -183,8 +188,14 @@
    or nil when VCS root is unavailable (unknown source state)."
   []
   (when (root)
-    {:git-commit-sha (commit-sha)
-     :code-hash      (code-hash)
-     :deps-hash      (deps-hash)
-     :input-hash     (input-hash)
-     :dirty?         (boolean (dirty?))}))
+    (let [hash-roots (source-hash/included-source-roots (root)
+                                                        (source-hash/source-roots))
+          source-hash-value (code-hash)]
+      {:git-commit-sha        (commit-sha)
+       :source/hash           source-hash-value
+       :source/hash-algorithm source-hash/source-tree-hash-algorithm
+       :source/hash-roots     hash-roots
+       :code-hash             source-hash-value
+       :deps-hash             (deps-hash)
+       :input-hash            (input-hash)
+       :dirty?                (boolean (dirty?))})))

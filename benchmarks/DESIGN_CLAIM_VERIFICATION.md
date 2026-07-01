@@ -1,10 +1,13 @@
 # Design: Claim Verification for Benchmark Packs
 
-## Status: Design — do not implement
+## Status: Implemented (Levels 1-2), Level 3 Deferred
 
-This document describes how to wire claim verification into the benchmark
-runner so that declared claims (`:benchmark/claims`) are actually checked
-and reported. Do not implement until this design is reviewed and approved.
+Level 1 (mechanical) and Level 2 (invariant-backed) claim evaluators have been
+implemented in `resolver-sim.benchmark.claims/evaluator-registry`. The benchmark
+runner evaluates claims after scenario execution, and results appear in the
+evidence bundle as `:claim-results`. See `src/resolver_sim/benchmark/claims.clj`
+for the evaluator registry and `src/resolver_sim/benchmark/report.clj` for
+report-level classification and maturity labeling.
 
 ---
 
@@ -13,16 +16,12 @@ and reported. Do not implement until this design is reviewed and approved.
 Before writing any evaluator, classify the claim by verification level.
 This prevents overbuilding and makes the scope of each evaluator explicit.
 
-| Level | Name | What the evaluator checks | Example |
-|-------|------|---------------------------|---------|
-| 0 | Declared only | Nothing — claim is metadata | `:benchmark/claims` in the manifest, no evaluator exists |
-| 1 | Mechanical | Required artifacts, hashes, evidence roots, or result fields exist and are internally consistent | `:scenario-hash-present`, `:evidence-root-present`, `:replay-result-present` |
-| 2 | Invariant-backed | Named invariants passed; claim is linked to invariant results | `:no-invariant-errors`, `:slashable-liability-preserved-holds` |
-| 3 | Semantic | Domain-specific reasoning over scenario results, world state, metrics, or evidence nodes | `:malicious-verdict-economically-bounded`, `:pull-first-settlement-safety` |
-
-**Initial implementation must support Level 1 only**, with optional
-Level 2 for already-existing invariant results (`check-all` post-hoc).
-Level 3 claims require separate review before implementation.
+| Level | Name | What the evaluator checks | Example | Status |
+|-------|------|---------------------------|---------|--------|
+| 0 | Declared only | Nothing — claim is metadata | `:benchmark/claims` in the manifest, no evaluator exists | Always present (metadata) |
+| 1 | Mechanical | Required artifacts, hashes, evidence roots, or result fields exist and are internally consistent | `:scenario-hash-present`, `:evidence-root-present`, `:replay-result-present` | **Implemented** in `resolver-sim.benchmark.claims` |
+| 2 | Invariant-backed | Named post-hoc invariants passed; claim is proxied by invariant results | `:claim/no-unauthorized-release` → checks `conservation-of-funds` + `released-monotonic` | **Implemented** for 9 Sew protocol claims |
+| 3 | Semantic | Domain-specific reasoning over scenario results, world state, or evidence nodes | `:malicious-verdict-economically-bounded`, `:pull-first-settlement-safety` | **Deferred** — scenario-level claims declared but not evaluated |
 
 ---
 
@@ -220,50 +219,32 @@ Into this (after):
 
 ---
 
-## 7. What exists already
+## 7. What exists now
 
-The codebase already has most of the machinery:
+All levels 1-2 machinery is implemented and operational:
 
-| Component | Location | Ready? |
+| Component | Location | Status |
 |-----------|----------|--------|
-| Claim definition registry | `passive_registries.clj` | ✓ — supports `:evaluation` type `:code-reference` with `:entry` var |
-| Evaluator dispatch map | `pro_rata_claims.clj` `evaluator-registry` | ✓ — pattern exists, needs extension |
-| Claims engine | `claims/engine.clj` `evaluate-claims` | ✓ — accepts claim specs + evidence nodes + evaluator resolver |
-| Benchmark result spec | `BENCHMARK_RESULT_SPEC_V1.md` | ✓ — defines `:claim-results` shape |
-| Evidence bundle | `runner.clj` | Missing `:claim-results` — otherwise ready |
-
-Prefer adapting to the existing claims engine. Do not modify it unless the runner integration reveals a clear mismatch.
+| Claim evaluator registry (5 Level 1 + 9 Level 2) | `src/resolver_sim/benchmark/claims.clj` `evaluator-registry` | ✓ — 14 evaluators registered |
+| Claim evaluation dispatch | `src/resolver_sim/benchmark/claims.clj` `evaluate-manifest-claims` | ✓ — per-scope (`:scenario`/`:benchmark`) dispatch |
+| Runner integration | `src/resolver_sim/benchmark/runner.clj` `run-benchmark` | ✓ — claim evaluation after scenario execution, results in evidence bundle |
+| Report classification | `src/resolver_sim/benchmark/report.clj` `classify-result` | ✓ — `:scoring/classification` with `:claim-maturity` level |
+| Claim status taxonomy | `src/resolver_sim/benchmark/report.clj` `build-report` | ✓ — `:claim/status` (`:verified`/`:partial`/`:declared-not-verified`/`:none`) + `:claim/maturity` |
+| Benchmark result spec | `benchmarks/BENCHMARK_RESULT_SPEC_V1.md` | ✓ — defines `:claim-results` shape |
+| Claim registry | `benchmarks/claim-registry.edn` | ✓ — 20 registered claims |
+| Level 3 deferred claims | `benchmarks/packs/prf-core/protocol-robustness-v0.edn` | ✓ — `:benchmark/deferred-scenario-claims` set for 3 semantic claims |
+| Report maturity labels | `benchmarks/BENCHMARK_REPORT_FIELDS.md` | ✓ — Level 1/2/3 taxonomy documented |
 ---
 
-## 8. Files to create/modify (when implemented)
+## 8. Remaining work (Level 3)
 
-| File | Action |
-|------|--------|
-| `src/resolver_sim/benchmark/claims.clj` | Create — evaluator registry + Level 1 check fns |
-| `src/resolver_sim/benchmark/runner.clj` | Modify — wire claim evaluation into `run-benchmark`, respect `:claim/scope` |
-| `src/resolver_sim/benchmark/report.clj` | Modify — thread `:claim-results` through `build-report` |
-| `benchmarks/packs/prf-core/protocol-robustness-v0.edn` | Modify — replace claims with Level 1 claims (see section 3) |
-| `notebooks/benchmark_protocol_robustness.clj` | Modify — display per-claim results |
-| `benchmarks/DESIGN_CLAIM_VERIFICATION.md` | This file — delete when implemented |
+| Item | Priority | Notes |
+|------|----------|-------|
+| Level 3 semantic evaluators | Low | Scenario-level claims (`:malicious-verdict-economically-bounded`, etc.) are deferred. Requires domain-specific reasoning over world state and evidence. Separate review needed before implementation. |
 
 ---
 
-## 9. Implementation order
-
-| Step | What | Depends on |
-|------|------|-----------|
-| 1 | Create `benchmark/claims.clj` with 3 Level 1 `:scope :scenario` evaluators | Nothing |
-| 2 | Create 1 Level 1 `:scope :benchmark` evaluator (`:all-scenarios-pass`) | Step 1 |
-| 3 | Wire scope-dispatched evaluation into `run-benchmark` | Steps 1-2 |
-| 4 | Thread `:claim-results` through `build-report` into the evidence bundle | Step 3 |
-| 5 | Update protocol-robustness-v0 `:benchmark/claims` to use Level 1 claims | Step 4 |
-| 6 | Add Level 2 invariant-backed evaluators (optional) | Steps 1-5 |
-| 7 | Update notebook to display claim results | Step 5 |
-| 8 | Level 3 semantic evaluators — separate review first | Everything above |
-
----
-
-## 10. Risk
+## 9. Risk
 
 | Risk | Likelihood | Mitigation |
 |------|-----------|------------|
@@ -271,3 +252,5 @@ Prefer adapting to the existing claims engine. Do not modify it unless the runne
 | Claim scope confusion | Low | Explicit `:claim/scope` field; runner dispatches on it |
 | Evidence-node data not available post-replay | Low | Level 1 checks need only the scenario result map, which the adapter already produces |
 | Report builder expects different claim shape | Low | `build-report` passes `:claim-results` through unchanged — shape is defined by the claim evaluators |
+| Level 2 invariant-based proxy is wrong | Low | Each Level 2 claim lists explicit invariant IDs. Adding/removing an invariant changes the check. Reviewed per claim. |
+| Deferred Level 3 claims not validated | Low | `bb benchmarks:validate` checks that deferred scenario claims are explicitly declared via `:benchmark/deferred-scenario-claims`. |

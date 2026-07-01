@@ -3,8 +3,10 @@
   "Benchmark-local concepts for the shortfall-allocation-v0 pack.
 
  These concepts describe shortfall detection, recording, and pro-rata
- allocation. Shortfall recovery (deferred claims paid in a later epoch)
- is covered by the Sew yield-shortfall-v1 benchmark (scenario S82)."
+  allocation. Shortfall recovery (deferred claims paid in a later epoch)
+  is a planned extension — scenario S82 is an intended cross-reference
+  to the Sew yield-shortfall-v1 suite but has not yet been materialized
+  as a standalone scenario file with benchmark manifest entry."
 
  :concepts
   [{:concept/id :allocation/partial-fill

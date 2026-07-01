@@ -2,6 +2,19 @@
 
 ## [Unreleased]
 
+### Fixed (2026-07-02)
+
+- **Shared benchmark concept resolution and deferred-claim coverage:** Added a shared benchmark concept resolver used by runner, report generation, and benchmark validation; removed report-side concept file guessing as the primary resolution path; added `:concept/related` validation for global concepts; and introduced the missing reusable `:allocation/deferred-claim` concept to close the broken cross-link from partial-fill allocation. (`src/resolver_sim/concepts/benchmark.clj`, `src/resolver_sim/concepts/registry.clj`, `src/resolver_sim/benchmark/runner.clj`, `src/resolver_sim/benchmark/report.clj`, `scripts/concepts_validate.clj`, `scripts/benchmarks_validate.clj`, `data/concepts/allocation/deferred_claim.edn`, `data/concepts/registry.edn`, `test/resolver_sim/concepts/benchmark_test.clj`, `test/resolver_sim/benchmark/report_test.clj`, `data/concepts/README.md`, `benchmarks/README.md`)
+
+### Fixed (2026-07-02)
+
+- **Explicit source hash provenance for downstream consumers:** Added `:source/hash`, `:source/hash-algorithm`, and `:source/hash-roots` alongside the legacy `:code-hash` alias in Clojure source provenance, forensic source snapshots, reproduce pre-checks, and evidence cursor artifacts. This makes the emitted hash semantics explicit without breaking existing readers. (`src/resolver_sim/vcs.clj`, `src/resolver_sim/forensic/provenance.clj`, `src/resolver_sim/evidence/chain.clj`, `scripts/forensic/run.py`, `scripts/forensic/reproduce.py`, `tests/forensic_python/conftest.py`, `test/resolver_sim/evidence/chain_test.clj`)
+- **Forensic source hashing and stability self-check hardening:** Replaced the old metadata-based source hash with a content-based `source-tree-hash.v1.path-content-sha256` implementation shared by Clojure and Python forensic paths, removed the 1000-file truncation behavior, aligned `resolver-sim.vcs/code-hash` with `bb hash:source`, taught `forensic:reproduce` to classify legacy algorithm bundles explicitly, and fixed `bb stability:check` so the `:stability/stability-manifest` entry covers the entire manifest rather than only its own entry. Added focused Clojure and Python regression tests for same-size edits, >1000 files, root filtering, and manifest self-hash drift. (`src/resolver_sim/forensic/source_hash.clj`, `src/resolver_sim/vcs.clj`, `src/resolver_sim/tools/stability_checker.clj`, `scripts/forensic/source_hash.py`, `scripts/forensic/run.py`, `scripts/forensic/reproduce.py`, `test/resolver_sim/forensic/source_hash_test.clj`, `test/resolver_sim/tools/stability_checker_test.clj`, `tests/forensic_python/test_source_hash.py`)
+
+### Added (2026-07-01)
+
+- **Evidence DAG high-level overview:** Added a researcher-facing document explaining the canonical evidence DAG, forensic-grade integrity properties, bundle-root relationship, validation expectations, derived artifact boundary, and navigation-oriented review workflow. (`docs/evidence/EVIDENCE_DAG_OVERVIEW.md`, `docs/evidence/README.md`)
+
 ### Added (2026-06-30)
 
 - **Benchmark report auto-resolution:** Added `resolve-report` to `resolver-sim.benchmark.report` that auto-resolves concept and scoring file paths from an evidence bundle's benchmark manifest. Supports protocol-robustness-v0, shortfall-allocation-v0, and evidence-integrity-v1 packs without hardcoded paths. (`src/resolver_sim/benchmark/report.clj`)

@@ -30,6 +30,11 @@
     from a slide deck. Without it, stakeholders cannot independently
     verify claims about deterministic replay."
    :concept/note
-   "The claims listed here are Level 3 semantic claims — no evaluator
-    is registered yet. The benchmark report status will remain
-    :declared-not-verified until evaluators are implemented."}]}
+   "The claims listed here (replay-identical-results,
+    hash-consistency-across-runs, no-nondeterminism) are registered
+    in claim-registry.edn with Level 1 mechanical evaluators. These
+    are NOT Level 3 deferred claims — they are evaluated during every
+    benchmark run. The evidence-integrity-v1 benchmark itself is
+    deprecated (superseded by deterministic-replay-v1), but this
+    concept file serves as the canonical definition of the evidence
+    integrity dimension."}]}

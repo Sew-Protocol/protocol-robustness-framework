@@ -4,29 +4,8 @@
     "appeal-window-duration": 0,
     "max-dispute-duration": 300
   },
-  "schema-version": "1.1",
   "threat-tags": [],
-  "initial-block-time": 1000,
-  "scenario-author": "@grifma",
-  "id": "scenarios/s04-dispute-timeout-autocancel",
-  "agents": [
-    {
-      "id": "buyer",
-      "address": "0xbuyer",
-      "type": "honest"
-    },
-    {
-      "id": "seller",
-      "address": "0xseller",
-      "type": "honest"
-    },
-    {
-      "id": "keeper",
-      "address": "0xkeeper",
-      "type": "keeper"
-    }
-  ],
-  "scenario-id": "s04-dispute-timeout-autocancel",
+  "purpose": "regression",
   "events": [
     {
       "seq": 0,
@@ -67,19 +46,27 @@
       }
     }
   ],
+  "schema-version": "1.1",
+  "scenario-author": "@grifma",
+  "scenario-id": "s04-dispute-timeout-autocancel",
   "title": "s04-dispute-timeout-autocancel",
-  "purpose": "equilibrium-validation",
-  "theory": {
-    "claim-id": "claims/cancellation-timeout-auto-cancel-dominance",
-    "claim": "Dispute timeout auto-cancel path does not create profitable deviations.",
-    "equilibrium-concept": [
-      "cancellation-dominance"
-    ],
-    "mechanism-properties": [
-      "budget-balance",
-      "individual-rationality"
-    ],
-    "assumptions": [],
-    "falsifies-if": []
-  }
+  "id": "scenarios\/s04-dispute-timeout-autocancel",
+  "agents": [
+    {
+      "id": "buyer",
+      "address": "0xbuyer",
+      "type": "honest"
+    },
+    {
+      "id": "seller",
+      "address": "0xseller",
+      "type": "honest"
+    },
+    {
+      "id": "keeper",
+      "address": "0xkeeper",
+      "type": "keeper"
+    }
+  ],
+  "initial-block-time": 1000
 }

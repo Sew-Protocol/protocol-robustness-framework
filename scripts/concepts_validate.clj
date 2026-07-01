@@ -1,6 +1,7 @@
 (require '[clojure.edn :as edn]
          '[clojure.java.io :as io]
-         '[clojure.set :as set])
+         '[clojure.set :as set]
+         '[resolver-sim.concepts.registry :as concepts-registry])
 
 (def concept-root (io/file "data/concepts"))
 (def registry-path (io/file concept-root "registry.edn"))
@@ -62,7 +63,8 @@
     (let [reg-entries (:concepts registry)
           reg-by-id (into {} (map (fn [e] [(:concept/id e) e]) reg-entries))
           errors (atom [])
-          files-ok (atom 0)]
+          files-ok (atom 0)
+          loaded-concepts (atom [])]
       (println "    OK" (count reg-entries) "entries")
       (println "  Checking registry...")
       (doseq [[cid entry] reg-by-id]
@@ -98,6 +100,7 @@
                         ctype (:concept/type data)
                         reg-entry (get reg-by-id cid)]
                     (swap! files-ok inc)
+                    (swap! loaded-concepts conj data)
                     (when (nil? reg-entry)
                       (swap! errors conj (str rel ": not registered in registry.edn"))
                       (println "    WARN" rel "not registered"))
@@ -126,6 +129,10 @@
                           (swap! errors conj (str rel ": unknown protocol " p))
                           (println "    FAIL" rel "unknown protocol" p))))
                     (check-value-maps-to rel data errors))))))))
+      (println "  Checking related concept references...")
+      (doseq [{:keys [from to]} (concepts-registry/missing-related-concepts @loaded-concepts)]
+        (swap! errors conj (str "concept " from " references missing related concept " to))
+        (println "    FAIL concept" from "references missing related concept" to))
       (println)
       (if (empty? @errors)
         (println "  OK" @files-ok "files, all valid\n\nVALIDATION PASSED")

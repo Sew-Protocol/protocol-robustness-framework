@@ -90,7 +90,7 @@ result summary for consensus comparison.
     "execution/summary/totals/expected-failed": 0,
     "execution/summary/totals/unexpected-failed": 0,
     "source/tree-hash": "deadbeef...",
-    "source/tree-hash-algorithm": "source-tree-hash.v0.shell-sha256sum",
+    "source/tree-hash-algorithm": "source-tree-hash.v1.path-content-sha256",
     "source/commit": "abc123def456",
     "source/dirty?": "false",
     "registry/snapshot/hash": "1234..."

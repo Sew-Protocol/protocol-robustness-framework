@@ -323,6 +323,32 @@
                          :expected-fail? (boolean (:expected-fail? scenario* false))}
                         opts)))
 
+(defn- run-entry
+  [entry {:keys [replay-fn type-meta-fn] :as opts}]
+  (cond
+    (and (map? entry) (:scenario entry))
+    (run-scenario (:scenario entry)
+                  (assoc opts :replay-fn replay-fn
+                         :name (:name entry)
+                         :source (:source entry :inline)))
+
+    (vector? entry) (let [[name data] entry
+                          type-meta (when type-meta-fn
+                                      (type-meta-fn (:scenario-id (if (map? data) data (first data)))))]
+                      (if (map? data)
+                        (let [res (replay-fn data)]
+                          (merge (build-entry-result
+                                  {:name           name
+                                   :replay-result  res
+                                   :scenario       data
+                                   :source         :registry
+                                   :expected-fail? (boolean (:expected-fail? data false))}
+                                  opts)
+                                 type-meta))
+                        (build-paired-entry name data replay-fn opts type-meta)))
+
+    :else (throw (ex-info "Invalid collection entry" {:entry entry}))))
+
 (defn run-collection
   "Run a collection of scenarios. Returns a summary map from `summary/build-summary`.
 
@@ -333,34 +359,16 @@
      :replay-fn — (fn [scenario] → replay result), required
      :type-meta-fn — optional (fn [scenario-id] → metadata map for entry)
 
-   `opts` forwarded to build-entry-result / theory (e.g. :evaluate-theory?)."
-  [{:keys [entries replay-fn type-meta-fn]} opts]
+   `opts` forwarded to build-entry-result / theory (e.g. :evaluate-theory?).
+   When `opts` includes `:parallel? true`, entries are run concurrently via pmap."
+  [{:keys [entries] :as collection} opts]
   (let [t0      (System/currentTimeMillis)
-        results (mapv (fn [entry]
-                        (cond
-                          (and (map? entry) (:scenario entry))
-                          (run-scenario (:scenario entry)
-                                        (assoc opts :replay-fn replay-fn
-                                               :name (:name entry)
-                                               :source (:source entry :inline)))
-
-                          (vector? entry) (let [[name data] entry
-                                                type-meta (when type-meta-fn
-                                                            (type-meta-fn (:scenario-id (if (map? data) data (first data)))))]
-                                            (if (map? data)
-                                              (let [res (replay-fn data)]
-                                                (merge (build-entry-result
-                                                        {:name           name
-                                                         :replay-result  res
-                                                         :scenario       data
-                                                         :source         :registry
-                                                         :expected-fail? (boolean (:expected-fail? data false))}
-                                                        opts)
-                                                       type-meta))
-                                              (build-paired-entry name data replay-fn opts type-meta)))
-
-                          :else (throw (ex-info "Invalid collection entry" {:entry entry}))))
-                      entries)
+        parallel? (:parallel? opts)
+        do-run   (fn [entry] (run-entry entry (assoc opts :replay-fn (:replay-fn collection)
+                                                     :type-meta-fn (:type-meta-fn collection))))
+        results (if parallel?
+                  (vec (pmap do-run entries))
+                  (mapv do-run entries))
         elapsed (- (System/currentTimeMillis) t0)]
     (summary/build-summary results {:elapsed-ms elapsed
                                     :suite-id   (:suite-id opts)})))

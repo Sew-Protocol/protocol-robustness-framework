@@ -8,7 +8,6 @@
      java -jar prf-runner-sew.jar -m resolver-sim.minimal-runner \\
        --suite :sew-invariants --self-test"
   (:require [clojure.java.io :as io]
-            [clojure.string :as str]
             [clojure.tools.cli :as cli])
   (:gen-class))
 

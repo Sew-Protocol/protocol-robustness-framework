@@ -1,16 +1,12 @@
 (ns user
   (:require
    [clojure.repl :refer :all]
-   [clojure.pprint :refer [pprint]]
-   [clojure.string :as str]
    [clojure.tools.namespace.repl :as tn]
-   [portal.api :as p]
-   [dev.repl :as repl]
    [dev.explore :as explore]
-   [dev.scenarios :as scenarios]
-   [dev.artifacts :as artifacts]
    [dev.pro-rata :as pro-rata]
-   [dev.tests :as tests]))
+   [dev.scenarios :as scenarios]
+   [dev.tests :as tests]
+   [portal.api :as p]))
 
 (defonce portal-instance (atom nil))
 

@@ -4,29 +4,8 @@
     "appeal-window-duration": 0,
     "max-dispute-duration": 300
   },
-  "schema-version": "1.1",
   "threat-tags": [],
-  "initial-block-time": 1000,
-  "scenario-author": "@grifma",
-  "id": "scenarios/s17-ieo-dispute-no-resolver-timeout",
-  "agents": [
-    {
-      "id": "buyer",
-      "address": "0xbuyer",
-      "type": "honest"
-    },
-    {
-      "id": "seller",
-      "address": "0xseller",
-      "type": "honest"
-    },
-    {
-      "id": "keeper",
-      "address": "0xkeeper",
-      "type": "resolver"
-    }
-  ],
-  "scenario-id": "s17-ieo-dispute-no-resolver-timeout",
+  "purpose": "regression",
   "events": [
     {
       "seq": 0,
@@ -67,19 +46,27 @@
       }
     }
   ],
+  "schema-version": "1.1",
+  "scenario-author": "@grifma",
+  "scenario-id": "s17-ieo-dispute-no-resolver-timeout",
   "title": "s17-ieo-dispute-no-resolver-timeout",
-  "purpose": "equilibrium-validation",
-  "theory": {
-    "claim-id": "claims/cancellation-ieo-timeout-dominance",
-    "claim": "IEO dispute timeout path maintains equilibrium.",
-    "equilibrium-concept": [
-      "cancellation-dominance"
-    ],
-    "mechanism-properties": [
-      "budget-balance",
-      "incentive-compatibility"
-    ],
-    "assumptions": [],
-    "falsifies-if": []
-  }
+  "id": "scenarios\/s17-ieo-dispute-no-resolver-timeout",
+  "agents": [
+    {
+      "id": "buyer",
+      "address": "0xbuyer",
+      "type": "honest"
+    },
+    {
+      "id": "seller",
+      "address": "0xseller",
+      "type": "honest"
+    },
+    {
+      "id": "keeper",
+      "address": "0xkeeper",
+      "type": "resolver"
+    }
+  ],
+  "initial-block-time": 1000
 }

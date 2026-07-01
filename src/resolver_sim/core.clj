@@ -72,7 +72,6 @@
               (.printStackTrace e)
               (System/exit 1)))
 
-          :else
           (try
             (log/info! "simulation/params-loading" {:path (:params options)})
             (println "Loading params from:" (:params options))

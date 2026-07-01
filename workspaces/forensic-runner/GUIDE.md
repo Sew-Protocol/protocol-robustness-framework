@@ -217,7 +217,7 @@ files. See `docs/forensic/FORENSIC_HARDENING.md` for the full reference.
 | Variable | Default | Purpose |
 |---|---|---|
 | `PRF_SOURCE_ROOTS` | `src,protocols_src` | Source dirs for `code-hash` |
-| `PRF_CODE_HASH_ALGORITHM` | `source-tree-hash.v0.shell-sha256sum` | Hash algorithm name |
+| `PRF_CODE_HASH_ALGORITHM` | `source-tree-hash.v1.path-content-sha256` | Hash algorithm name |
 | `PRF_RUNS_ROOT` | `~/prf-runs` | Output directory base |
 | `PRF_ARTIFACT_DIR` | `results/test-artifacts` | Clojure artifact dir |
 | `PRF_EVIDENCE_USER` | `evidence_runner` | Expected UID for check |

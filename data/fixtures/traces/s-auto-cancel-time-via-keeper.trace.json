@@ -1,33 +1,11 @@
 {
-  "schema-version": "1.1",
-  "scenario-id": "s-auto-cancel-time-via-keeper",
-  "id": "scenarios/s-auto-cancel-time-via-keeper",
-  "title": "s-auto-cancel-time-via-keeper",
-  "scenario-author": "@research",
-  "purpose": "equilibrium-validation",
-  "initial-block-time": 1000,
-  "agents": [
-    {
-      "id": "buyer",
-      "address": "0xbuyer",
-      "type": "honest"
-    },
-    {
-      "id": "seller",
-      "address": "0xseller",
-      "type": "honest"
-    },
-    {
-      "id": "keeper",
-      "address": "0xkeeper",
-      "type": "keeper"
-    }
-  ],
   "protocol-params": {
     "resolver-fee-bps": 150,
     "appeal-window-duration": 0,
     "max-dispute-duration": 2592000
   },
+  "threat-tags": [],
+  "purpose": "regression",
   "events": [
     {
       "seq": 0,
@@ -51,17 +29,27 @@
       }
     }
   ],
-  "theory": {
-    "claim-id": "claims/cancellation-auto-time-via-keeper",
-    "claim": "Auto-cancel-time on a PENDING escrow triggers automated refund via automate-timed-actions when deadline is reached. Escrow is in PENDING state at deadline, keeper action fires auto-cancel, funds refunded to sender.",
-    "equilibrium-concept": [
-      "cancellation-dominance"
-    ],
-    "mechanism-properties": [
-      "budget-balance",
-      "individual-rationality"
-    ],
-    "assumptions": [],
-    "falsifies-if": []
-  }
+  "schema-version": "1.1",
+  "scenario-author": "@research",
+  "scenario-id": "s-auto-cancel-time-via-keeper",
+  "title": "s-auto-cancel-time-via-keeper",
+  "id": "scenarios\/s-auto-cancel-time-via-keeper",
+  "agents": [
+    {
+      "id": "buyer",
+      "address": "0xbuyer",
+      "type": "honest"
+    },
+    {
+      "id": "seller",
+      "address": "0xseller",
+      "type": "honest"
+    },
+    {
+      "id": "keeper",
+      "address": "0xkeeper",
+      "type": "keeper"
+    }
+  ],
+  "initial-block-time": 1000
 }

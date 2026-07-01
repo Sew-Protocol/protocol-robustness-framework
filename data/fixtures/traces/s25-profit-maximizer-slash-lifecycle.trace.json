@@ -2,7 +2,8 @@
   "protocol-params": {
     "resolver-fee-bps": 150,
     "appeal-window-duration": 120,
-    "max-dispute-duration": 600
+    "max-dispute-duration": 600,
+    "resolver-bond-bps": 0
   },
   "threat-tags": [],
   "purpose": "regression",
@@ -93,10 +94,6 @@
   "scenario-id": "s25-profit-maximizer-slash-lifecycle",
   "title": "s25-profit-maximizer-slash-lifecycle",
   "id": "scenarios\/s25-profit-maximizer-slash-lifecycle",
-  "provenance": {
-    "author-id": "@grifma",
-    "author": "Marc Griffiths"
-  },
   "agents": [
     {
       "id": "buyer",

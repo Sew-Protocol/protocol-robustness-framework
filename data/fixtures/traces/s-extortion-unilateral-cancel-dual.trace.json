@@ -1,23 +1,4 @@
 {
-  "schema-version": "1.1",
-  "scenario-id": "s-extortion-unilateral-cancel-dual",
-  "id": "scenarios/s-extortion-unilateral-cancel-dual",
-  "title": "s-extortion-unilateral-cancel-dual",
-  "scenario-author": "@research",
-  "purpose": "equilibrium-validation",
-  "initial-block-time": 1000,
-  "agents": [
-    {
-      "id": "buyer",
-      "address": "0xbuyer",
-      "type": "honest"
-    },
-    {
-      "id": "seller",
-      "address": "0xseller",
-      "type": "honest"
-    }
-  ],
   "protocol-params": {
     "resolver-fee-bps": 150,
     "appeal-window-duration": 0,
@@ -27,6 +8,8 @@
       "unilateral-cancel?": true
     }
   },
+  "threat-tags": [],
+  "purpose": "regression",
   "events": [
     {
       "seq": 0,
@@ -49,17 +32,22 @@
       }
     }
   ],
-  "theory": {
-    "claim-id": "claims/cancellation-extortion-no-profit",
-    "claim": "Unilateral cancellation does not create profitable extortion: buyer receives A-F (same as mutual cancel or dispute refund) and cannot extract more.",
-    "equilibrium-concept": [
-      "cancellation-dominance"
-    ],
-    "mechanism-properties": [
-      "budget-balance",
-      "individual-rationality"
-    ],
-    "assumptions": [],
-    "falsifies-if": []
-  }
+  "schema-version": "1.1",
+  "scenario-author": "@research",
+  "scenario-id": "s-extortion-unilateral-cancel-dual",
+  "title": "s-extortion-unilateral-cancel-dual",
+  "id": "scenarios\/s-extortion-unilateral-cancel-dual",
+  "agents": [
+    {
+      "id": "buyer",
+      "address": "0xbuyer",
+      "type": "honest"
+    },
+    {
+      "id": "seller",
+      "address": "0xseller",
+      "type": "honest"
+    }
+  ],
+  "initial-block-time": 1000
 }

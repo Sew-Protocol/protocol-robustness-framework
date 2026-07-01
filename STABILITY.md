@@ -7,7 +7,9 @@ This project is under active development. Not all code is stable.
 Source-level stability is tracked in `STABILITY_MANIFEST.edn`. Each
 entry records a canonical hash (via `hash-with-intent` with intent
 `:stability/snapshot`) of the source files that define a stability
-surface. Run `bb stability:check` to verify which surfaces have
+surface. The manifest self-entry covers the entire manifest with
+`:stability/hash` fields removed recursively, plus the checker
+implementation files. Run `bb stability:check` to verify which surfaces have
 changed since their last recorded checkpoint.
 
 ```

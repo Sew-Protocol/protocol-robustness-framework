@@ -60,12 +60,21 @@
 (def ^:private warn-badge "#f59e0b")
 
 ;; ── Data loading ──────────────────────────────────────────────────────────────
+;; Override evidence path via BENCHMARK_EVIDENCE_PATH env var to view any
+;; benchmark report without editing the notebook:
+;;   BENCHMARK_EVIDENCE_PATH=results/benchmarks/shortfall-allocation-v0.edn \
+;;     bb clerk:serve
 
 ^{::clerk/visibility {:code :hide :result :hide}}
 (def config
-  {:evidence-path "results/benchmarks/protocol-robustness-v0.edn"
-   :concepts-path "benchmarks/concepts/protocol-robustness-v0.edn"
-   :scoring-path  "benchmarks/scoring/robustness-dimensions-v0.edn"})
+  (let [default-path "results/benchmarks/protocol-robustness-v0.edn"
+        env-path (System/getenv "BENCHMARK_EVIDENCE_PATH")
+        evidence-path (or env-path default-path)]
+    (when env-path
+      (println "Using evidence path from BENCHMARK_EVIDENCE_PATH:" env-path))
+    {:evidence-path evidence-path
+     :concepts-path "benchmarks/concepts/protocol-robustness-v0.edn"
+     :scoring-path  "benchmarks/scoring/robustness-dimensions-v0.edn"}))
 
 ^{::clerk/visibility {:code :hide :result :hide}}
 (def report

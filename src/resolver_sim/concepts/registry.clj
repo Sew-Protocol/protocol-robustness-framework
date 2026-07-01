@@ -88,6 +88,11 @@
   [concepts id]
   (first (filter #(= (:concept/id %) id) concepts)))
 
+(defn concept-index
+  "Build a concept-id -> concept map."
+  [concepts]
+  (into {} (map (fn [concept] [(:concept/id concept) concept]) concepts)))
+
 (defn concept-ids
   "Return all registered concept IDs."
   [concepts]
@@ -97,3 +102,16 @@
   "Return concept definitions that support a given protocol."
   [concepts protocol-id]
   (filter #(contains? (:concept/protocols %) protocol-id) concepts))
+
+(defn missing-related-concepts
+  "Return unresolved :concept/related references as
+   {:from <concept-id> :to <related-concept-id>} maps."
+  [concepts]
+  (let [known-ids (set (concept-ids concepts))]
+    (mapcat (fn [concept]
+              (keep (fn [related-id]
+                      (when-not (contains? known-ids related-id)
+                        {:from (:concept/id concept)
+                         :to related-id}))
+                    (:concept/related concept)))
+            concepts)))

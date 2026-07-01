@@ -9,6 +9,7 @@
    Usage: bb stability:check"
   (:require [clojure.java.io :as io]
             [clojure.edn :as edn]
+            [clojure.walk :as walk]
             [resolver-sim.hash.canonical :as hc])
   (:import [java.time ZoneId]
            [java.time.format DateTimeFormatter]))
@@ -28,20 +29,36 @@
 
 ;; ── Hash computation ─────────────────────────────────────────────────────────
 
+(defn- normalize-manifest-for-self-hash [manifest]
+  (walk/postwalk (fn [form]
+                   (if (map? form)
+                     (dissoc form :stability/hash)
+                     form))
+                 manifest))
+
 (defn- compute-entry-hash
   "Compute the canonical hash for a stability entry's listed source files.
    Reads each file, builds a sorted map of path → content, and hashes it
    with intent :stability/snapshot.
 
    For the self-referential manifest entry (:stability/stability-manifest),
-   hashes the entry definition itself (with :stability/hash dissoc'd) rather
-   than reading STABILITY_MANIFEST.edn from disk (which would create a
-   circular dependency between the file content and the recorded hash)."
+   hashes the entire manifest with every :stability/hash removed recursively,
+   then includes the listed implementation files. This avoids circularity
+   while still detecting drift anywhere in the manifest."
   [entry]
   (if (= :stability/stability-manifest (:stability/id entry))
-    (hc/hash-with-intent {:hash/intent :stability/snapshot}
-                         {:files {"STABILITY_MANIFEST.edn (entry)"
-                                  (pr-str (dissoc entry :stability/hash))}})
+    (let [manifest (normalize-manifest-for-self-hash (load-manifest))
+          file-contents (into (sorted-map)
+                              (concat
+                               [["STABILITY_MANIFEST.edn" (pr-str manifest)]]
+                               (keep (fn [path]
+                                       (when (not= path manifest-path)
+                                         (let [f (io/file path)]
+                                           (when (.exists f)
+                                             [(str path) (slurp f)]))))
+                                     (:stability/files entry))))]
+      (hc/hash-with-intent {:hash/intent :stability/snapshot}
+                           {:files file-contents}))
     (let [files (:stability/files entry)
           file-contents (into (sorted-map)
                               (map (fn [path]
@@ -64,13 +81,16 @@
         missing (remove #(.exists (io/file %)) files)]
     (if (seq missing)
       {:stability/id (:stability/id entry)
+       :stability/surface (:stability/surface entry)
        :stability/status :missing-files
        :stability/missing missing}
       (let [computed (compute-entry-hash entry)
             recorded (:stability/hash entry)]
         {:stability/id (:stability/id entry)
+         :stability/surface (:stability/surface entry)
          :stability/level (:stability/level entry)
          :stability/started-at (:stability/started-at entry)
+         :stability/files files
          :stability/status (if (= computed recorded) :unchanged :changed)
          :stability/matched (= computed recorded)
          :stability/recorded-hash recorded
@@ -99,12 +119,14 @@
 
 (defn- print-report [results]
   (printf "\nStability Check — %s\n" (.toString (java.time.LocalDate/now)))
-  (println (apply str (repeat 94 "─")))
-  (println (format "  %-48s %-12s %-14s %s" "Surface" "Level" "Started At" "Status"))
-  (println (apply str (repeat 94 "─")))
+  (println (apply str (repeat 118 "─")))
+  (println (format "  %-36s %-34s %-12s %-14s %s"
+                   "Stability ID" "Surface" "Level" "Started At" "Status"))
+  (println (apply str (repeat 118 "─")))
   (doseq [r results]
-    (println (format "  %-48s %-12s %-14s %s %s"
+    (println (format "  %-36s %-34s %-12s %-14s %s %s"
                      (str (:stability/id r))
+                     (or (:stability/surface r) "-")
                      (level-label (:stability/level r))
                      (or (format-date (:stability/started-at r)) "-")
                      (status-icon (:stability/status r))
@@ -112,7 +134,15 @@
                        :changed (str "(hash mismatch)")
                        :missing-files (str "(missing: " (pr-str (:stability/missing r)) ")")
                        ""))))
-  (println (apply str (repeat 94 "─")))
+  (let [changed-results (filter #(= :changed (:stability/status %)) results)]
+    (when (seq changed-results)
+      (println)
+      (println "Changed entries:")
+      (doseq [r changed-results]
+        (println (format "  %s" (:stability/id r)))
+        (doseq [path (:stability/files r)]
+          (println (format "    - %s" path))))))
+  (println (apply str (repeat 118 "─")))
   (let [unchanged (count (filter #(= :unchanged (:stability/status %)) results))
         changed (count (filter #(= :changed (:stability/status %)) results))
         missing (count (filter #(= :missing-files (:stability/status %)) results))]

@@ -203,6 +203,7 @@
       :solvency/proof-required? (= :invalid proof-status*)
       :solvency/proof-valid?    proof-valid?
       :solvency/ratio           (:ratio balance-result 1.0)
+      :class                     :analytic
       :solvency/commitment      stored-commitment
       :solvency/reason
       (cond

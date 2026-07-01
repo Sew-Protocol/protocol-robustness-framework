@@ -1,16 +1,23 @@
 {:benchmark/id              :benchmark/prf-shortfall-allocation-v0
- :benchmark/domain          :domain/allocation-shortfall
- :benchmark/protocol        :protocol/prf
- :benchmark/scenario-suite  :suite/sew-shortfall-allocation-v0
+  :benchmark/version         0
+  :benchmark/domain          :domain/allocation-shortfall
+  :benchmark/protocol        :protocol/prf
+  :benchmark/scenario-suite  :suite/sew-shortfall-allocation-v0
  :benchmark/scenario-suite-description
  "Three Sew scenarios testing yield-backed shortfall with partial fill
   (S-DR-043), negative yield cascade with deferred recovery (S103), and
   resolver stake shortfall with action blocking (S104)."
  :benchmark/runner-policy   :runner-policy/deterministic-local-v1
  :benchmark/evidence-policy :evidence-policy/forensic-standard-v1
-  :benchmark/scoring-rule    :scoring/shortfall-allocation-v0
-   :benchmark/property-types  #{:fairness :safety}
-   :benchmark/deferred-scenario-claims #{:allocation-complete
+   :benchmark/scoring-rule    :scoring/shortfall-allocation-v0
+    :benchmark/property-types  #{:fairness :safety}
+    :benchmark/description
+   "Evaluates shortfall handling across three conditions: yield liquidity
+    shortfall with partial fill, negative yield cascade with deferred
+    recovery, and resolver stake shortfall. Each scenario exercises
+    shortfall detection, pro-rata allocation, and deferred claim recording.
+    Uses :suite/sew-shortfall-allocation-v0 (3 scenarios)."
+    :benchmark/deferred-scenario-claims #{:allocation-complete
                                          :conservation
                                          :ordering-independent}
    :benchmark/purpose

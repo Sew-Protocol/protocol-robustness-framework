@@ -614,7 +614,7 @@
      :checks {:hashes-valid? (every? #(get-in % [:checks :hash-valid?]) per-node)
               :parents-valid? (every? empty? (map #(get-in % [:checks :missing-parents]) per-node))
               :cycle-free? (nil? cycle)
-              :duplicate-hashes (seq duplicates)}}))
+              :duplicate-hashes (boolean (seq duplicates))}}))
 
 ;; ── Detailed validation ──────────────────────────────────────────────────────
 
@@ -846,7 +846,7 @@
         by-status (reduce (fn [m e]
                             (let [s (get e :status)]
                               (if s
-                                (update m s (fnil conj []) (:node-hash e))
+                                (update m s (fnil conj #{}) (:node-hash e))
                                 m)))
                           {} entries)
         short-hashes (into {} (map (fn [h] [(node->short-hash h) h]) node-hashes))
@@ -988,7 +988,7 @@
         failure-entries (keep by-hash failure-hashes)
 
         bfs-paths (fn [root-hash target-hashes]
-                    (loop [queue (mapv vector (repeat root-hash))
+                    (loop [queue [[root-hash]]
                            visited #{root-hash}
                            found {}]
                       (if (or (empty? queue) (>= (count found) max-failure-paths))

@@ -1,10 +1,17 @@
 {:concepts/version 1
  :concepts/description
  "Concept mappings for protocol-robustness-v0 benchmark.
-
+ 
  Each concept maps a robustness dimension to stakeholder-readable
  language, referencing the specific scenario, claim, and evidence
- types that support it."
+ types that support it.
+
+ CROSS-REFERENCE: The :robustness/evidence-integrity concept used
+ by this benchmark is defined in benchmarks/concepts/evidence-integrity-v1.edn
+ (the canonical evidence-integrity dimension definition). The concept
+ file is maintained independently because both protocol-robustness-v0
+ and deterministic-replay-v1 reference the same evidence integrity
+ dimension."
 
  :concepts
  [{:concept/id :robustness/resolver-accountability

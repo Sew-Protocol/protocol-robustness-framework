@@ -63,7 +63,9 @@ def make_minimal_bundle(tmp_path: Path, **overrides: Any) -> Path:
 
     # Minimal source snapshot
     src = {"git_commit": "abc123", "dirty": False, "code-hash": "deadbeef",
-           "code-hash-algorithm": "source-tree-hash.v0", "included-roots": ["src"],
+           "code-hash-algorithm": "source-tree-hash.v1.path-content-sha256", "included-roots": ["src"],
+           "source-hash": "deadbeef", "source-hash-algorithm": "source-tree-hash.v1.path-content-sha256",
+           "source-hash-roots": ["src"],
            "byte-size": 100, "repo_root": str(run_dir)}
     (run_dir / "source-snapshot.json").write_text(json.dumps(src, indent=2))
 

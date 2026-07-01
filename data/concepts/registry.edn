@@ -116,6 +116,14 @@
    :concept/status :draft
    :concept/protocols #{:protocol/sew-v1 :protocol/prf}}
 
+  {:concept/id    :allocation/deferred-claim
+   :concept/type  :allocation
+   :concept/layer :stakeholder
+   :concept/file  "data/concepts/allocation/deferred_claim.edn"
+   :concept/name  "Deferred claim recovery"
+   :concept/status :draft
+   :concept/protocols #{:protocol/sew-v1 :protocol/prf}}
+
   {:concept/id    :allocation/slash-obligation
    :concept/type  :allocation
    :concept/layer :stakeholder

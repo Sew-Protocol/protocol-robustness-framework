@@ -25,12 +25,58 @@ benchmarks/
     shortfall-v1.edn            PRF shortfall mechanism map v1
 
   scoring/                      Scoring rule definitions
-    severity-weighted-v1.edn
+    severity-weighted-robustness-v1.edn
     binary-claims-v1.edn
     robustness-dimensions-v0.edn
+    shortfall-allocation-v0.edn
 
   archived/                     Legacy/experimental material
 ```
+
+## Status Meanings
+
+| Status | Meaning |
+|--------|---------|
+| `active` | Ready for production use. All Level 1 mechanical claims have evaluators. Suite scenarios execute and produce reproducible evidence. |
+| `experimental` | Under development. Some claims may be deferred (Level 3 semantic). Scenarios or evaluators may change without notice. |
+| `deprecated` | No longer maintained. Replaced by a newer benchmark version or superseded by a different approach. May be removed from the registry after one quarter. |
+| `planned` | Not yet materialized as scenario files or manifests. Reference from documentation only. |
+
+Benchmarks within a pack are listed in the pack's `registry.edn` (e.g.
+`packs/prf-core/registry.edn`). Each entry carries a `:benchmark/status`
+and optionally `:benchmark/status-updated`.
+
+## Terminology
+
+| Term | Meaning |
+|------|---------|
+| **Benchmark ID** | Global keyword identifying a benchmark pack (e.g. `:benchmark/prf-protocol-robustness-v0`). |
+| **Claim ID** | Keyword identifying an atomic property under test (e.g. `:claim/replay-identical-results`). Defined in `claim-registry.edn`. |
+| **Evaluator ID** | Always identical to the Claim ID (no separate namespace). The evaluator function that checks whether the claim holds. |
+| **Concept reference** | Keyword identifying a stakeholder-facing explanation of a benchmark dimension (e.g. `:robustness/evidence-integrity`). Defined in concept files under `concepts/`. |
+| **Scenario ID** | String identifier for a scenario within a suite (e.g. `malicious-resolver-verdict-v1`). |
+| **Scenario file** | On-disk EDN or JSON file containing scenario data. Scenario IDs map to scenario files via suite registration. |
+| **Suite** | A named collection of scenarios registered in `suites.clj` or `pack-suites`. A suite may be shared by multiple benchmarks. |
+
+## Shared-Suite Benchmarks (Lenses)
+
+Multiple benchmarks can reference the same scenario suite. This is not
+an error — it is a design pattern. Each benchmark acts as a *lens* over
+the shared suite, applying different:
+
+- Claims (which properties to evaluate)
+- Scoring rules (pass/fail vs severity-weighted)
+- Property types (safety vs liveness vs fairness)
+- Concept mappings (stakeholder-facing explanations)
+
+For example, all three Sew dispute benchmarks (`escrow-dispute-v1`,
+`dispute-liveness-v1`, `resolver-slashing-v1`) reference
+`:suite/sew-dispute-safety-v1`. A single suite run provides evidence
+for all three, but each produces a different evaluation report.
+
+When reviewing a benchmark, look at its claims, scoring rule, and
+description — not just its suite reference — to understand what it
+measures.
 
 ## Benchmark as Contract
 
@@ -61,6 +107,12 @@ decision-quality concepts in `data/concepts/`, benchmark concepts
 are specific to what a given benchmark evaluates. Packs may provide
 their own concept file when the benchmark needs report-specific
 language that is not part of the shared registry.
+
+Runner execution, report rendering, and `bb benchmarks:validate` all use
+the same benchmark concept resolver. Resolution order is:
+- benchmark-local concept with `:concept/shadows-global? true`
+- otherwise global concept from `data/concepts/`
+- otherwise validation failure / missing concept warning
 
 Each concept entry includes:
 - `:concept/title` and `:concept/summary` — what the concept means

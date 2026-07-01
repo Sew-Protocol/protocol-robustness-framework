@@ -1,0 +1,53 @@
+{:benchmark/id              :benchmark/sew-reversal-slashing-v1
+ :benchmark/version         1
+ :benchmark/domain          :domain/escrow-dispute-resolution
+ :benchmark/protocol        :protocol/sew
+ :benchmark/scenario-suite  :suite/sew-reversal-slashing-v1
+ :benchmark/scenario-suite-description
+ "12 reversal-reviewer slashing scenarios covering appeal due process,
+  multi-level vindication, governance force slashing, challenger bounty
+  payment, insufficient-stake accounting, and appeal window boundaries."
+ :benchmark/runner-policy   :runner-policy/deterministic-local-v1
+ :benchmark/evidence-policy :evidence-policy/forensic-standard-v1
+ :benchmark/scoring-rule    :scoring/severity-weighted-robustness-v1
+ :benchmark/property-types  #{:safety :liveness :fairness}
+ :benchmark/description
+ "A dedicated benchmark for reversal-reviewer slashing correctness:
+  reversal-slash appeal due process for reversing resolvers (Track 2
+  appeals upheld/rejected/window-expired/wrong-party), multi-level
+  vindication stability across 4-level ladders, governance force slashing
+  with idempotency, challenger bounty payment correctness, and
+  insufficient-stake accounting. Provides mechanical verification of
+  reversal-slash lifecycle transitions and accounting invariants."
+ :benchmark/purpose
+ "Evaluate reversal-reviewer slashing: appeal due process for reversing
+  resolvers, multi-level vindication, governance force slashing,
+  challenger bounty payment, and insufficient-stake accounting."
+ :benchmark/concepts        [:decision-quality/solvency-status
+                             :allocation/slash-obligation
+                             :consensus/authority
+                             :consensus/evidence
+                             :consensus/finality
+                             :consensus/escalation
+                             :consensus/liveness
+                             :consensus/legitimacy]
+ :benchmark/claims          [{:claim/id :claim/reversal-reviewer-due-process
+                              :claim/role :primary
+                              :claim/rationale "A reversing resolver (L1) who is themselves reversed must have due-process access to appeal their own slash."
+                              :claim/failure-meaning "Reversal reviewer could not appeal their own slash, or appeal was mishandled."}
+                             {:claim/id :claim/reversal-slash-conservation
+                              :claim/role :primary
+                              :claim/rationale "Reversal slash accounting must satisfy requested = debited + unmet + reversed."
+                              :claim/failure-meaning "Reversal slash accounting equation violated."}
+                             {:claim/id :claim/vindication-stability
+                              :claim/role :primary
+                              :claim/rationale "Multi-level vindication must credit each vindicated resolver exactly once with no duplicate credit or slash drift."
+                              :claim/failure-meaning "Vindication credit duplicated, missed, or caused drift at higher levels."}
+                             {:claim/id :claim/challenge-bounty-correctness
+                              :claim/role :supporting
+                              :claim/rationale "Challenge bounty must be paid to the challenger (not keeper/caller) and bounded by max rate. Absent challenger → no bounty."
+                              :claim/failure-meaning "Bounty mispaid, unbounded, or caused nil deref when challenger absent."}
+                             {:claim/id :claim/governance-force-reversal-authorized
+                              :claim/role :supporting
+                              :claim/rationale "Governance force-reversal-slash must be accepted from governance and idempotent (duplicate rejected)."
+                              :claim/failure-meaning "Force slash rejected, duplicated, or not idempotent."}]}

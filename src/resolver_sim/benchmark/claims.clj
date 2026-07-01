@@ -193,13 +193,45 @@
    :claim/appeal-bond-adequacy
    {:scope :scenario
     :check (fn [ctx]
-             (check-invariants ctx [:appeal-bond-conserved :challenge-bond-proportional]))}})
+             (check-invariants ctx [:appeal-bond-conserved :challenge-bond-proportional]))}
+
+   ;; escrow-dispute-v1 pack (solvency)
+   :claim/solvency-status
+   {:scope :scenario
+    :check (fn [ctx]
+             (check-invariants ctx [:solvency :conservation-of-funds]))}
+
+   ;; reversal-slashing-v1 pack
+   :claim/reversal-reviewer-due-process
+   {:scope :scenario
+    :check (fn [ctx]
+             (check-invariants ctx [:slash-distribution-consistent :resolver/balances-conserved]))}
+
+   :claim/reversal-slash-conservation
+   {:scope :scenario
+    :check (fn [ctx]
+             (check-invariants ctx [:slash-distribution-consistent :conservation-of-funds]))}
+
+   :claim/vindication-stability
+   {:scope :scenario
+    :check (fn [ctx]
+             (check-invariants ctx [:slash-distribution-consistent :resolver/balances-conserved]))}
+
+   :claim/challenge-bounty-correctness
+   {:scope :scenario
+    :check (fn [ctx]
+             (check-invariants ctx [:slash-distribution-consistent :resolver/balances-conserved]))}
+
+   :claim/governance-force-reversal-authorized
+   {:scope :scenario
+    :check (fn [ctx]
+             (check-invariants ctx [:slash-distribution-consistent :resolver/balances-conserved]))}})
 
 (def ^:private scoring-rule-paths
   {:scoring/robustness-dimensions-v0 "benchmarks/scoring/robustness-dimensions-v0.edn"
    :scoring/binary-claims-v1 "benchmarks/scoring/binary-claims-v1.edn"
-   :scoring/severity-weighted-robustness-v1 "benchmarks/scoring/severity-weighted-v1.edn"
-   :scoring/severity-weighted-v1 "benchmarks/scoring/severity-weighted-v1.edn"
+   :scoring/severity-weighted-robustness-v1 "benchmarks/scoring/severity-weighted-robustness-v1.edn"
+   :scoring/severity-weighted-v1 "benchmarks/scoring/severity-weighted-robustness-v1.edn"
    :scoring/shortfall-allocation-v0 "benchmarks/scoring/shortfall-allocation-v0.edn"})
 
 (defn- load-scoring

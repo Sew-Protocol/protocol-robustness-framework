@@ -271,6 +271,10 @@
     (is (true? (get-in result [:checks :duplicate-hashes])))))
 
 (deftest with-execution-node-emits-pass-fail-and-error-nodes
+  ;; Force passive_registries to load before the with-redefs below, so that
+  ;; the startup-validation node created by validate-all-registries! at load
+  ;; time goes to the default artifact-dir rather than the test's temp dir.
+  (require 'resolver-sim.definitions.passive-registries)
   (node/with-fresh-registry
     (chain/reset-registry!)
     (let [artifact-dir (temp-artifact-dir)]
@@ -284,27 +288,31 @@
                    (fn [] 0))))
           (is (= :pass (get-in (last (node/all-nodes)) [:result :status]))))
         (testing "fail node"
-          (is (= 1
+          (let [pass-hash (:node-hash (last (node/all-nodes)))]
+            (is (= 1
+                   (node/with-execution-node
+                     {:execution-id :execution/diff
+                      :inputs {:baseline "a" :candidate "b"}
+                      :parent-hashes [pass-hash]
+                      :status-fn #(if (zero? %) :pass :fail)
+                      :failure-details-fn (fn [_]
+                                            [{:failure-type :trace-divergence
+                                              :class :unexpected
+                                              :message "diverged"
+                                              :expected? false}])}
+                     (fn [] 1))))
+            (is (= :fail (get-in (last (node/all-nodes)) [:result :status])))))
+        (testing "error node"
+          (let [fail-hash (:node-hash (last (node/all-nodes)))]
+            (is (thrown-with-msg?
+                 clojure.lang.ExceptionInfo
+                 #"boom"
                  (node/with-execution-node
                    {:execution-id :execution/diff
                     :inputs {:baseline "a" :candidate "b"}
-                    :status-fn #(if (zero? %) :pass :fail)
-                    :failure-details-fn (fn [_]
-                                          [{:failure-type :trace-divergence
-                                            :class :unexpected
-                                            :message "diverged"
-                                            :expected? false}])}
-                   (fn [] 1))))
-          (is (= :fail (get-in (last (node/all-nodes)) [:result :status]))))
-        (testing "error node"
-          (is (thrown-with-msg?
-               clojure.lang.ExceptionInfo
-               #"boom"
-               (node/with-execution-node
-                 {:execution-id :execution/diff
-                  :inputs {:baseline "a" :candidate "b"}}
-                 (fn [] (throw (ex-info "boom" {}))))))
-          (is (= :error (get-in (last (node/all-nodes)) [:result :status]))))
+                    :parent-hashes [fail-hash]}
+                   (fn [] (throw (ex-info "boom" {}))))))
+            (is (= :error (get-in (last (node/all-nodes)) [:result :status])))))
         (is (= 3 (count (node/all-nodes))))
         (is (:valid? (node/verify-persisted-node-artifacts!
                       artifact-dir
@@ -421,8 +429,8 @@
         index (node/build-dag-index [node])]
     (is (= "evidence-dag-index.v0" (:dag-index/schema-version index)))
     (is (= 1 (get-in index [:dag-index/summary :node-count])))
-    (is (= 1 (:dag-index/root-count (get-in index [:dag-index/summary]))))
-    (is (= 1 (:dag-index/leaf-count (get-in index [:dag-index/summary]))))
+    (is (= 1 (:root-count (get-in index [:dag-index/summary]))))
+    (is (= 1 (:leaf-count (get-in index [:dag-index/summary]))))
     (is (contains? (:dag-index/nodes-by-hash index) (:node-hash node)))
     (is (some? (get-in index [:dag-index/short-hashes (subs (:node-hash node) 0 12)])))
     (is (= 0 (get-in index [:dag-index/summary :failure-count])))))
@@ -434,8 +442,8 @@
                                 :execution-id :execution/replay}))
         index (node/build-dag-index [parent child])]
     (is (= 2 (get-in index [:dag-index/summary :node-count])))
-    (is (= 1 (:dag-index/root-count (get-in index [:dag-index/summary]))))
-    (is (= 1 (:dag-index/leaf-count (get-in index [:dag-index/summary]))))
+    (is (= 1 (:root-count (get-in index [:dag-index/summary]))))
+    (is (= 1 (:leaf-count (get-in index [:dag-index/summary]))))
     (is (= [(:node-hash child)]
            (get-in index [:dag-index/children-by-parent (:node-hash parent)])))
     (is (= [(:node-hash parent)]
@@ -462,7 +470,7 @@
   (let [a (node/build-execution-node (base-node-spec))
         b (node/build-execution-node (base-node-spec {:execution-id :execution/replay}))
         index (node/build-dag-index [a b])]
-    (is (= 2 (:dag-index/root-count (get-in index [:dag-index/summary]))))
+    (is (= 2 (:root-count (get-in index [:dag-index/summary]))))
     (is (= 2 (count (:dag-index/roots index))))))
 
 (deftest dag-summary-includes-failure-paths

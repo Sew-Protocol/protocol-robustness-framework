@@ -9,6 +9,10 @@ involved?*
 Concepts are a **stakeholder-facing explanation layer only**. They exist
 solely to make protocol outputs interpretable by non-expert audiences.
 
+Reusable concepts live in `data/concepts/`. Benchmark-local overlays live
+under `benchmarks/concepts/` and may shadow global concept IDs only when
+they explicitly declare `:concept/shadows-global? true`.
+
 **Concepts must never affect:**
 - Protocol execution (scenario running, dispute resolution, settlement)
 - Evidence capture (trace collection, hashing, attestation)
@@ -120,6 +124,7 @@ Checks that:
 - Registry entries reference existing files
 - File concept IDs match registry IDs
 - Concept IDs are unique in the registry
+- `:concept/related` references resolve to registered concept IDs
 - Protocols are known (`:protocol/sew-v1`, `:protocol/prf`)
 - Files live in the subdirectory matching their `:concept/type`
 - `:maps-to` values use keyword (not string) form with recognized namespaces

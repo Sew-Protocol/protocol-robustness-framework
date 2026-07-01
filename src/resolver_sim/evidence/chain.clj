@@ -172,6 +172,27 @@
      (binding [chain-cursor fresh#]
        ~@body)))
 
+(defn with-fresh-evidence-context*
+  "Run f with a fresh evidence registry, scenario evidence accumulator,
+   and chain cursor.  Intended for test namespaces, scenario runs, and
+   async/parallel execution boundaries where each thread needs its own
+   isolated evidence context.
+
+   This supersedes with-fresh-registry* for parallel contexts because
+   it binds all three dynamic vars (evidence-registry-atom,
+   scenario-evidence-atom, chain-cursor) instead of only the registry."
+  [f]
+  (let [fresh-registry (atom {:artifacts []
+                              :evidence-hashes []
+                              :run-id nil
+                              :run-label nil})
+        fresh-scenarios (atom [])
+        fresh-cursor (atom {:seq 0 :last-hash nil})]
+    (binding [evidence-registry-atom fresh-registry
+              scenario-evidence-atom fresh-scenarios
+              chain-cursor fresh-cursor]
+      (f))))
+
 (defn inject-chain-fields
   "Add :evidence/chain-seq, :evidence/chain-prev-hash, and
    :evidence/chain-self-hash to the evidence map using the cursor.
@@ -302,6 +323,16 @@
   (let [digest (java.security.MessageDigest/getInstance "SHA-256")]
     (.update digest (java.nio.file.Files/readAllBytes (.toPath (io/file path))))
     (apply str (map #(format "%02x" (bit-and % 0xff)) (.digest digest)))))
+
+(defn- preserve-ns-key
+  "JSON key function that preserves Clojure keyword namespaces.
+   :source/hash -> \"source/hash\", not \"hash\"."
+  [k]
+  (if (keyword? k)
+    (if-let [ns (namespace k)]
+      (str ns "/" (name k))
+      (name k))
+    (str k)))
 
 (defn registry-artifact-entry
   "Produce a test-artifacts.json compatible artifact entry for the written
@@ -445,15 +476,18 @@
                                :run/id (get-in @evidence-registry-atom [:run-id] "unknown")}
                               cursor-data
                               (when source
-                                {:code-hash      (:code-hash source)
-                                 :deps-hash      (:deps-hash source)
-                                 :input-hash     (:input-hash source)
+                                {:source/hash           (:source/hash source)
+                                 :source/hash-algorithm (:source/hash-algorithm source)
+                                 :source/hash-roots     (:source/hash-roots source)
+                                 :code-hash             (:code-hash source)
+                                 :deps-hash             (:deps-hash source)
+                                 :input-hash            (:input-hash source)
                                  :run-config-hash (:run-config-hash source)})
                               (when signed
                                 {:cursor/forensic (dissoc signed :cursor/hash)
                                  :cursor/signed-hash (:cursor/hash signed)}))]
           (.mkdirs (io/file out-dir))
-          (spit f (json/write-str artifact {:indent true}))
+          (spit f (json/write-str artifact :key-fn preserve-ns-key :indent true))
           (println (str "Wrote chain-cursor-final.json: seq " (:cursor/final-seq snapshot)
                         (when signed " [signed]")))
           (register-additional-artifact!

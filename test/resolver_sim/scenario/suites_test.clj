@@ -13,6 +13,7 @@
   #{:yield-provider-scenarios
     :sew-yield-scenarios
     :dispute-resolution-scenarios
+    :sew-reversal-slashing
     :sew-reference-v1})
 
 (def ^:private expected-metadata-keys
@@ -27,7 +28,7 @@
     (testing (name suite-key)
       (let [definition (suites/suite-definition suite-key)
             metadata   (suites/suite-metadata suite-key)
-            paths      (:paths definition)]
+            paths      (suites/suite-paths suite-key)]
         (is (map? definition))
         (is (= expected-metadata-keys (clojure.core/set (keys metadata)))
             (str "metadata keys: " (pr-str (keys metadata))))
@@ -48,7 +49,7 @@
             "scenarios/edn/Y04_vault-recovery-claim-deferred.edn"
             "scenarios/edn/Y05_auto-generated-shortfall.edn"]
            paths))
-    (is (every? #(str/starts-with? % "scenarios/Y") paths))
+    (is (every? #(str/starts-with? % "scenarios/edn/Y") paths))
     (is (not-any? #(str/includes? % "scenarios/yield/") paths))
     (is (= "yield-v1" (suites/suite-protocol-id :yield-provider-scenarios)))))
 

@@ -1,10 +1,11 @@
 (ns build
   "Build source-bundled uberjar (no AOT) for PRF scenario runner.
-   Two variants: core and sew.
+   Three variants: core, sew, and benchmark.
 
    Usage:
      clojure -T:build uberjar :variant core
-     clojure -T:build uberjar :variant sew"
+     clojure -T:build uberjar :variant sew
+     clojure -T:build uberjar :variant benchmark"
   (:require [clojure.java.io :as io]
             [clojure.tools.build.api :as b]))
 
@@ -15,10 +16,12 @@
     :or   {variant "sew"
            main   nil}}]
   (let [vname (name variant)
-        is-sew (= vname "sew")
-        main-cls (or main (if is-sew
-                            "resolver-sim.minimal-runner"
-                            "resolver-sim.replay-core"))
+        is-core (= vname "core")
+        is-benchmark (= vname "benchmark")
+        main-cls (or main (cond
+                            is-benchmark "resolver-sim.benchmark.cli"
+                            (not is-core) "resolver-sim.minimal-runner"
+                            :else "resolver-sim.replay-core"))
         lib (symbol (str "resolver-sim/prf-runner-" vname))
 
         ;; Build deps file for clean classpath
@@ -42,12 +45,15 @@
                                org.postgresql/postgresql {:mvn/version "42.7.2"}
                                metosin/malli {:mvn/version "0.17.0"}}
                         :paths ["src" "protocols_src" "resources"]})
-        deps-str (if is-sew sew-deps-str core-deps-str)
+        deps-str (cond
+                   is-core core-deps-str
+                   is-benchmark sew-deps-str  ;; benchmark needs same deps as sew (buddy, tools.cli, protocols_src)
+                   :else sew-deps-str)
         deps-path (str (System/getProperty "java.io.tmpdir")
                        "/prf-build-deps-" (System/nanoTime) ".edn")
         _ (spit deps-path deps-str)
         basis (b/create-basis {:project deps-path})
-        src-dirs (if is-sew ["src" "protocols_src" "resources"] ["src" "resources"])
+        src-dirs (if (or is-benchmark (not is-core)) ["src" "protocols_src" "resources"] ["src" "resources"])
         class-dir (str (System/getProperty "java.io.tmpdir")
                        "/prf-build-" (System/nanoTime))
         jar-file (str "target/prf-runner-" vname "-" version ".jar")

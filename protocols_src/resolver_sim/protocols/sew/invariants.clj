@@ -380,14 +380,27 @@
 
                      ;; Resolver stake slashes (USDC-only) may occur in the same
                      ;; transition as escrow finalization (e.g. dispute timeout).
-                     stake-held-delta
-                     (if (= token :USDC)
-                       (let [sb (reduce + 0 (vals (:resolver-stakes world-before {})))
-                             sa (reduce + 0 (vals (:resolver-stakes world-after {})))]
-                         (- sa sb))
-                       0)
+                      stake-held-delta
+                      (if (= token :USDC)
+                        (let [sb (reduce + 0 (vals (:resolver-stakes world-before {})))
+                              sa (reduce + 0 (vals (:resolver-stakes world-after {})))]
+                          (- sa sb))
+                        0)
 
-                     ;; Expected immediately-claimable amount:
+                      ;; Slash distribution may reduce held in the same transition as
+                      ;; escrow finalization (e.g. a reversal slash that triggers at the
+                      ;; maximum dispute level).  Account for the distribution outflow
+                      ;; so delta-held = -afa + stake-held-delta + slash-dist-delta.
+                      slash-dist-delta
+                      (let [bd-before (reduce + 0 (vals (:bond-distribution world-before {})))
+                            bd-after  (reduce + 0 (vals (:bond-distribution world-after {})))
+                            rs-before (:retained-slash-reserves world-before 0)
+                            rs-after  (:retained-slash-reserves world-after 0)
+                            total-before (+ bd-before rs-before)
+                            total-after  (+ bd-after rs-after)]
+                        (- total-before total-after))  ;; outflow from held
+
+                      ;; Expected immediately-claimable amount:
                      ;;   partial-yield shortfall → principal + net liquid yield (fee on yield leg)
                      ;;   gross shortfall → fulfilled-amount only (deferred stays in held)
                      ;;   no yield  → net-afa exactly
@@ -408,9 +421,11 @@
                      ;; Validation predicate
                      ok?
                      (cond
-                       ;; No yield module: strict principal accounting
-                       (nil? yield-mid)
-                       (and (= delta-held (+ (- afa) stake-held-delta))
+                        ;; No yield module: strict principal accounting
+                        ;;   slash-dist-delta accounts for slash distributions in same transition
+                        ;;   (stake-held-delta is excluded because it's a liability change, not held change)
+                        (nil? yield-mid)
+                        (and (= delta-held (+ (- afa) slash-dist-delta))
                             (= delta-claimable net-afa))
 
                        ;; Yield with shortfall: only fulfilled-amount goes to claimable immediately

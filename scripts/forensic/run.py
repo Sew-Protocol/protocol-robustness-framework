@@ -32,6 +32,10 @@ from scripts.forensic.preflight import (run_preflight, parse_edn_or_json,
                                         compute_sha256)
 from scripts.forensic.verify import verify_run
 from scripts.forensic.isolation_checks import run_isolation_checks
+from scripts.forensic.source_hash import (SOURCE_TREE_HASH_ALGORITHM,
+                                          compute_source_byte_size,
+                                          compute_source_tree_hash,
+                                          normalize_source_roots)
 
 SIGN_EXCLUDE_KEYS = frozenset({"bundle/id", "bundle/hash",
                                 "bundle/signature", "bundle/signing-key-id"})
@@ -40,9 +44,7 @@ SCHEMA_VERSION = "forensic-run.v1"
 PRF_RUNS_ROOT = Path(os.environ.get("PRF_RUNS_ROOT", "~/prf-runs")).expanduser()
 
 # Configurable hardening constants (override via env)
-PRF_SOURCE_ROOTS = os.environ.get("PRF_SOURCE_ROOTS", "src,protocols_src").split(",")
-PRF_CODE_HASH_ALGORITHM = os.environ.get("PRF_CODE_HASH_ALGORITHM",
-                                         "source-tree-hash.v0.shell-sha256sum")
+PRF_SOURCE_ROOTS = normalize_source_roots(os.environ.get("PRF_SOURCE_ROOTS"))
 PRF_ARTIFACT_DIR = os.environ.get("PRF_ARTIFACT_DIR", "results/test-artifacts")
 PRF_MAX_RUNS = int(os.environ.get("PRF_MAX_RUNS", "0"))  # 0 = unlimited
 PRF_TSA_URL = os.environ.get("PRF_TSA_URL") or None  # RFC 3161 TSA URL
@@ -132,35 +134,26 @@ def snapshot_source(repo_root: Path, run_dir: Path) -> dict:
 
     info["repo_root"] = str(repo_root.resolve())
 
-    # Source byte size (total source code footprint)
-    roots_str = " ".join(PRF_SOURCE_ROOTS)
     try:
-        r = subprocess.run(
-            ["du", "-sb"] + PRF_SOURCE_ROOTS,
-            capture_output=True, text=True, cwd=str(repo_root), timeout=10)
-        total = 0
-        for line in r.stdout.strip().split("\n"):
-            parts = line.split("\t")
-            if parts and parts[0].isdigit():
-                total += int(parts[0])
-        info["byte-size"] = total
+        info["byte-size"] = compute_source_byte_size(repo_root, PRF_SOURCE_ROOTS)
     except Exception:
         info["byte-size"] = 0
 
-    # Code hash: deterministic hash over all source files
-    find_expr = "find %s -type f | sort | xargs sha256sum 2>/dev/null | sha256sum" % roots_str
     try:
-        r = subprocess.run(
-            ["bash", "-c", find_expr],
-            capture_output=True, text=True, cwd=str(repo_root), timeout=30)
-        ch = r.stdout.strip().split()[0] if r.stdout.strip() else "unknown"
+        ch, included_roots = compute_source_tree_hash(repo_root, PRF_SOURCE_ROOTS)
         info["code-hash"] = ch
-        info["code-hash-algorithm"] = PRF_CODE_HASH_ALGORITHM
-        info["included-roots"] = list(PRF_SOURCE_ROOTS)
+        info["code-hash-algorithm"] = SOURCE_TREE_HASH_ALGORITHM
+        info["included-roots"] = included_roots
+        info["source-hash"] = ch
+        info["source-hash-algorithm"] = SOURCE_TREE_HASH_ALGORITHM
+        info["source-hash-roots"] = included_roots
     except Exception:
         info["code-hash"] = "unknown"
         info["code-hash-algorithm"] = "unknown"
         info["included-roots"] = []
+        info["source-hash"] = "unknown"
+        info["source-hash-algorithm"] = "unknown"
+        info["source-hash-roots"] = []
 
     return info
 
@@ -255,9 +248,10 @@ def run_invoke_scenario_pipeline(run_request_path: str,
     # Set PRF_* environment variables for attribution bridge (Phase B)
     env = os.environ.copy()
     if source_info:
-        env["PRF_SOURCE_TREE_HASH"] = source_info.get("code-hash", "")
+        env["PRF_SOURCE_TREE_HASH"] = source_info.get("source-hash", "")
         env["PRF_SOURCE_TREE_HASH_ALGORITHM"] = \
-            source_info.get("code-hash-algorithm", "")
+            source_info.get("source-hash-algorithm", "")
+        env["PRF_SOURCE_TREE_HASH_ROOTS"] = ",".join(source_info.get("source-hash-roots", []))
         env["PRF_SOURCE_COMMIT"] = source_info.get("git_commit", "") or ""
         env["PRF_SOURCE_DIRTY"] = str(
             bool(source_info.get("dirty", False))).lower()

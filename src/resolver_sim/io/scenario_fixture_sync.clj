@@ -57,11 +57,11 @@
   [scenario & {:keys [write-public-json?]}]
   (export/export-scenario-files!
    scenario
-   {:write-public-json? (boolean write-public-json?)}))
+   :write-public-json? (boolean write-public-json?)))
 
 (defn sync-scenario!
   [scenario & opts]
-  (export-scenario-fixtures! scenario opts))
+  (apply export-scenario-fixtures! scenario opts))
 
 (defn sync-all-with-traces!
   [& {:keys [write-public-json? only-scenario-ids]}]

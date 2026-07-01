@@ -1,7 +1,9 @@
 {:benchmark/id              :benchmark/prf-protocol-robustness-v0
- :benchmark/domain          :domain/escrow-dispute-resolution
- :benchmark/protocol        :protocol/prf
-  :benchmark/scenario-suite  :suite/reference-validation-v1
+  :benchmark/version         0
+  :benchmark/domain          :domain/escrow-dispute-resolution
+  :benchmark/protocol        :protocol/prf
+   :benchmark/scenario-suite  :suite/reference-validation-v1
+   :benchmark/suite-pinned-version "1.3.0"
   :benchmark/scenario-suite-description
   "Three Sew reference-validation scenarios: malicious-resolver-verdict-v1,
    dispute-flooding-v1, and autopush-settlement-v1. These are
@@ -9,9 +11,16 @@
    liveness under adversarial load, and pull-first fund safety."
  :benchmark/runner-policy   :runner-policy/deterministic-local-v1
  :benchmark/evidence-policy :evidence-policy/forensic-standard-v1
-  :benchmark/scoring-rule    :scoring/robustness-dimensions-v0
-   :benchmark/property-types  #{:integrity :safety :liveness}
-   :benchmark/deferred-scenario-claims #{:malicious-verdict-economically-bounded
+   :benchmark/scoring-rule    :scoring/robustness-dimensions-v0
+    :benchmark/property-types  #{:integrity :safety :liveness}
+    :benchmark/description
+   "Evaluates protocol robustness across three scenario-tested dimensions
+    (resolver accountability, liveness under adversarial load, fund safety
+    through pull-first settlement) plus a cross-cutting evidence-integrity
+    concept. Uses :suite/reference-validation-v1 (3 simulator-backed
+    scenarios) with explicit per-scenario dimension mapping. Semantic
+    claims per dimension are deferred (Level 3) — see :benchmark/deferred-scenario-claims."
+    :benchmark/deferred-scenario-claims #{:malicious-verdict-economically-bounded
                                          :liveness-under-adversarial-load
                                          :pull-first-settlement-safety}
    :benchmark/purpose

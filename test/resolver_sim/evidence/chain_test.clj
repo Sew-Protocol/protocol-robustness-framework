@@ -270,6 +270,9 @@
 
 (def ^:private mock-source
   {:git-commit-sha "deadbeef"
+   :source/hash "cafebabe"
+   :source/hash-algorithm "source-tree-hash.v1.path-content-sha256"
+   :source/hash-roots ["src" "protocols_src" "benchmarks"]
    :code-hash "cafebabe"
    :deps-hash "d1e2f3"
    :input-hash "a1b2c3"
@@ -279,6 +282,11 @@
   (let [result (chain/enrich-cursor-data mock-snapshot mock-source)]
     (is (contains? result :cursor/source))
     (is (= "deadbeef" (get-in result [:cursor/source :git-commit-sha])))
+    (is (= "cafebabe" (get-in result [:cursor/source :source/hash])))
+    (is (= "source-tree-hash.v1.path-content-sha256"
+           (get-in result [:cursor/source :source/hash-algorithm])))
+    (is (= ["src" "protocols_src" "benchmarks"]
+           (get-in result [:cursor/source :source/hash-roots])))
     (is (= "cafebabe" (get-in result [:cursor/source :code-hash])))
     (is (= "d1e2f3" (get-in result [:cursor/source :deps-hash])))
     (is (= "a1b2c3" (get-in result [:cursor/source :input-hash])))
@@ -288,6 +296,9 @@
   (let [result (chain/enrich-cursor-data mock-snapshot mock-source)
         src (:cursor/source result)]
     (is (contains? src :git-commit-sha))
+    (is (contains? src :source/hash))
+    (is (contains? src :source/hash-algorithm))
+    (is (contains? src :source/hash-roots))
     (is (contains? src :code-hash))
     (is (contains? src :deps-hash))
     (is (contains? src :input-hash))
@@ -399,6 +410,9 @@
                                                 :allow-dirty? true)
           content (when path (json/read-str (slurp path)))]
       (when (and content (string? (get content "code-hash")))
+        (is (string? (get content "source/hash")))
+        (is (string? (get content "source/hash-algorithm")))
+        (is (vector? (get content "source/hash-roots")))
         (is (string? (get content "code-hash")))
         (is (string? (get content "deps-hash")))
         (is (string? (get content "input-hash"))))))

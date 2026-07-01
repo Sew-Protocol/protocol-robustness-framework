@@ -119,10 +119,6 @@
   "scenario-id": "s24-resolver-stake-depletion-cascade",
   "title": "s24-resolver-stake-depletion-cascade",
   "id": "scenarios\/s24-resolver-stake-depletion-cascade",
-  "provenance": {
-    "author-id": "@grifma",
-    "author": "Marc Griffiths"
-  },
   "agents": [
     {
       "id": "buyer0",

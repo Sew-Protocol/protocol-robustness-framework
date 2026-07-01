@@ -62,41 +62,4 @@
   :negative-payoff-count 0,
   :escrow/live-state "pending",
   :batch-buckets 0},
- :outcome :pass,
- :theory
- {:equilibrium-reasons {},
-  :diagnostics
-  {:claim-status :not-applicable,
-   :falsification-status :not-applicable,
-   :evidence-completeness :not-required,
-   :grounded? true,
-   :assumption-status :not-declared,
-   :declared-assumptions [],
-   :theory-eval-profile :regression},
-  :equilibrium-summary
-  {:cancellation-dominance
-   {:status :inconclusive,
-    :basis :absent-evidence,
-    :severity :soft,
-    :display-label "Proxy check inconclusive"}},
-  :claim-id :claims/cancellation-timeout-auto-cancel-dominance,
-  :evaluator-version "theory-eval-v2",
-  :theory-result-schema-version "1.2",
-  :reason :no-metric-falsification-claim,
-  :mechanism-summary
-  {:budget-balance
-   {:status :not-applicable,
-    :basis :not-applicable,
-    :severity :soft,
-    :display-label "Proxy check not applicable"},
-   :individual-rationality
-   {:status :pass,
-    :basis :single-trace-metric-proxy,
-    :severity :hard,
-    :display-label "Proxy check passed"}},
-  :status :not-falsified,
-  :falsified? false,
-  :equilibrium-status :inconclusive,
-  :mechanism-reasons {},
-  :mechanism-status :inconclusive,
-  :display-label "Not falsified in this replay"}}
+ :outcome :pass}

@@ -33,7 +33,7 @@ or **DOCUMENT** (acceptable with clear scope notes).
 | `evidence_spoofing.clj` | `research_models/evidence_spoofing.clj` | Qualitative risk bands, no test. | Same. |
 | `escalation_economics.clj` | `research_models/escalation_economics.clj` | Qualitative, no test. | Same. |
 | `contigent_bribery.clj` | `research_models/contingent_bribery.clj` | Has `:passed?` (good) but untested. | Add test or move to `research_models/`. |
-| Financial mock proofs | `financial/solvency.clj:17,34` | `"mock — real proofs not yet implemented"` — produces pass/fail structured output but the underlying proof layer is a placeholder. | Add a `:class :analytic` tag (matching Phase C/E/F/M pattern) so evidence packs can filter it. |
+| ~~Financial mock proofs~~ | ~~`financial/solvency.clj:17,34`~~ | ~~`"mock — real proofs not yet implemented"` — produces pass/fail structured output but the underlying proof layer is a placeholder.~~ | ~~DONE: `:class :analytic` added. Live SHA-256 commitment chain since June 2026. No mock code remains.~~ |
 | Trial router incomplete | `sim/trial_router.clj` | Only `:uniform-random` mode implemented; capacity/reputation weighting is interface-only. | Document the limitation in the namespace docstring. No action required — interface completeness is not a research-grade issue. |
 | XTDB integration tests | `test/resolver_sim/db/telemetry_integration_test.clj` | Requires live XTDB on `localhost:5432`; not in default unit path. | Add `:integration` tag and exclude from `test.sh`; document that a local XTDB instance is required. |
 | `result_display.clj` unused functions | `sim/result_display.clj` | `scenario-entry-ok?`, `yield-expectation-failed?`, `scenario-references-yield?`, `suite-report-lines` — zero references. | Remove unreachable code paths. |
@@ -64,6 +64,6 @@ or **DOCUMENT** (acceptable with clear scope notes).
 | **Remove** 3 deprecated aliases (make-module-snapshot, yield-scenarios, legacy-derived-top-levels) | 15 min | Cleans up deprecated surface area | Dead option surface |
 | **Move** Phase C/E/F/M → `research/sew/analytic/` | 1 hr | Clarifies that these are not protocol-kernel evidence | Taxonomy cleanup |
 | **Move** `correlated_failures.clj` → `research_models/` | 30 min | Clarifies that this is not stochastic evidence | Taxonomy cleanup |
-| **Add** `:class :analytic` to `financial/solvency.clj` | 5 min | Evidence packs can filter mock proofs | Low effort, high signal |
+| **~~Add~~ Added** `:class :analytic` to `financial/solvency.clj` | ~~5 min~~ DONE | ~~Evidence packs can filter mock proofs~~ `:class :analytic` added to `classify-solvency` return map | ~~Low effort, high signal~~ |
 | **Add** archive doc disclaimers | 30 min | Eliminates citation hazard | Prevents misuse |
 | **Upgrade** `normalize-detection-probabilities` :reversal dead code path | 15 min | Removes stale code path divergence risk | Minor but real bug class |

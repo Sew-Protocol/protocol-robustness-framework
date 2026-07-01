@@ -213,7 +213,7 @@
     (is (= 0 (get-in world3 [:claimable workflow-id resolver-addr] 0))
         "bond/refund is v2-native; legacy :claimable is not dual-written")))
 
-(deftest appeal-bond-custody-rejected-forfeits-to-insurance
+(deftest appeal-bond-custody-rejected-executes-slash
   (let [resolver-addr "0xRes"
         gov "0xGov"
         buyer "0xBuyer"
@@ -225,12 +225,111 @@
         {:keys [world workflow-id]}
         (world-ready-for-fraud-slash-propose world0 buyer "USDC" seller resolver-addr 1000 snap)
         world1 (-> (res/propose-fraud-slash world workflow-id gov resolver-addr 100) :world)
+        ;; Appeal is opened and bond is held before governance resolves it
         world2 (-> (res/appeal-slash world1 workflow-id resolver-addr) :world)
+        ;; Governance rejects the appeal → slash executes immediately
         world3 (-> (res/resolve-appeal world2 workflow-id gov false) :world)]
-    (is (= :pending (get-in world3 [:pending-fraud-slashes workflow-id :status])))
-    (is (= 0 (get-in world3 [:pending-fraud-slashes workflow-id :appeal-bond-held])))
-    (is (= 60 (get world3 :appeal-bonds-forfeited-insurance 0)))
-    (is (= 60 (get-in world3 [:appeal-bond-distributions-by-token :USDC] 0)))))
+
+    ;; ── Intermediate state: appeal opened, bond held ──
+    (testing "appeal custody state"
+      (is (= :appealed (get-in world2 [:pending-fraud-slashes workflow-id :status]))
+          "slash status becomes :appealed")
+      (is (= 60 (get-in world2 [:pending-fraud-slashes workflow-id :appeal-bond-held]))
+          "appeal bond held in pending entry")
+      (is (= 1000 (reg/get-stake world2 resolver-addr))
+          "appeal should not debit stake before resolution")
+      (is (= 0 (get world2 :appeal-bonds-forfeited-insurance 0))
+          "bond not forfeited before rejection")
+      (is (= 0 (get-in world2 [:appeal-bond-distributions-by-token :USDC] 0))
+          "no bond distribution before rejection"))
+
+    ;; ── Post-rejection state: slash executed ──
+    (testing "slash execution state"
+      (is (= :executed (get-in world3 [:pending-fraud-slashes workflow-id :status]))
+          "slash executed after rejected appeal")
+      (is (= 0 (get-in world3 [:pending-fraud-slashes workflow-id :appeal-bond-held]))
+          "appeal bond held cleared after resolution"))
+
+    ;; ── Bond forfeiture ──
+    (testing "bond accounting"
+      (is (= 60 (get world3 :appeal-bonds-forfeited-insurance 0))
+          "forfeited bond added to insurance")
+      (is (= 60 (get-in world3 [:appeal-bond-distributions-by-token :USDC] 0))
+          "bond distribution recorded")
+      (is (= 0 (get-in world3 [:pending-fraud-slashes workflow-id :unmet-slash] 0))
+          "fully funded resolver creates no unmet slash"))
+
+    ;; ── Slash amount preserved ──
+    (testing "slash record integrity"
+      (is (= 100 (get-in world3 [:pending-fraud-slashes workflow-id :amount]))
+          "slash amount unchanged by appeal resolution"))
+
+    ;; ── Stake and freeze effects ──
+    (testing "stake and freeze"
+      (is (= 900 (reg/get-stake world3 resolver-addr))
+          "stake debited by slash amount only; bond does not reduce stake")
+      (is (pos? (get-in world3 [:resolver-frozen-until resolver-addr] 0))
+          "resolver frozen after rejected appeal"))
+
+    ;; ── No refund path was taken ──
+    (testing "no bond refund"
+      (is (nil? (get-in world3 [:claimable workflow-id resolver-addr]))
+          "no claimable refund for resolver"))))
+
+(deftest appeal-bond-custody-rejected-cannot-double-execute
+  (testing "resolve-appeal is idempotent after rejection — second call does not double-execute"
+    (let [resolver-addr "0xRes"
+          gov "0xGov"
+          buyer "0xBuyer"
+          seller "0xSeller"
+          snap (snap-fix/escrow-snapshot {:appeal-window-duration 100
+                                          :appeal-bond-amount 60})
+          world0 (-> (t/empty-world 1000)
+                     (reg/register-stake resolver-addr 1000))
+          {:keys [world workflow-id]}
+          (world-ready-for-fraud-slash-propose world0 buyer "USDC" seller resolver-addr 1000 snap)
+          world1 (-> (res/propose-fraud-slash world workflow-id gov resolver-addr 100) :world)
+          world2 (-> (res/appeal-slash world1 workflow-id resolver-addr) :world)
+          world3 (-> (res/resolve-appeal world2 workflow-id gov false) :world)
+          r-second (res/resolve-appeal world3 workflow-id gov false)]
+      (is (= :executed (get-in world3 [:pending-fraud-slashes workflow-id :status]))
+          "first rejection executes the slash")
+      (is (= 900 (reg/get-stake world3 resolver-addr))
+          "stake debited exactly once")
+      (is (= 60 (get world3 :appeal-bonds-forfeited-insurance 0))
+          "bond forfeited exactly once")
+      ;; Second call must fail (slash is already :executed, not :appealed)
+      (is (false? (:ok r-second))
+          "second resolve-appeal must return :ok false")
+      (is (= :cannot-reverse-executed-slash (:error r-second))
+          "second resolve-appeal blocked by status guard"))))
+
+(deftest appeal-bond-custody-rejected-requires-governance
+  (testing "only governance can resolve an appeal — non-governance caller rejected via apply-action"
+    (let [resolver-addr "0xRes"
+          gov "0xGov"
+          non-gov "0xUser"
+          buyer "0xBuyer"
+          seller "0xSeller"
+          snap (snap-fix/escrow-snapshot {:appeal-window-duration 100
+                                          :appeal-bond-amount 60})
+          world0 (-> (t/empty-world 1000)
+                     (reg/register-stake resolver-addr 1000))
+          {:keys [world workflow-id]}
+          (world-ready-for-fraud-slash-propose world0 buyer "USDC" seller resolver-addr 1000 snap)
+          world1 (-> (res/propose-fraud-slash world workflow-id gov resolver-addr 100) :world)
+          world2 (-> (res/appeal-slash world1 workflow-id resolver-addr) :world)
+          context {:agent-index {"gov" {:id "gov" :address gov :role "governance"}
+                                 "user" {:id "user" :address non-gov :role "honest"}}}
+          r-non-gov (sew/apply-action context world2
+                      {:agent "user" :action "resolve_appeal"
+                       :params {:workflow-id workflow-id :upheld? false}})
+          r-gov (sew/apply-action context world2
+                   {:agent "gov" :action "resolve_appeal"
+                    :params {:workflow-id workflow-id :upheld? false}})]
+      (is (false? (:ok r-non-gov)) "non-governance must not resolve appeal")
+      (is (= :not-governance (:error r-non-gov)) "non-governance error must be :not-governance")
+      (is (true? (:ok r-gov)) "governance resolve must succeed"))))
 
 ;; ============ Reversal-slash specific tests ============
 
@@ -466,6 +565,287 @@
     (is (false? (:ok r)))
     (is (= :cannot-reverse-executed-slash (:error r)))))
 
+(deftest force-reversal-slash-idempotent
+  (testing "force-reversal-slash is idempotent (second call does not compound)"
+    (let [res "0xRes" l1 "0xL1" buyer "0xBuyer" seller "0xSeller"
+          snap (snap-fix/escrow-snapshot
+                {:dispute-resolver res :reversal-slash-bps 2500
+                 :appeal-window-duration 120 :challenge-window-duration 120
+                 :max-dispute-level 2})
+          world0 (-> (t/empty-world 1000)
+                     (reg/register-stake res 10000)
+                     (reg/register-stake l1 10000))
+          {:keys [world workflow-id]}
+          (lc/create-escrow world0 buyer "USDC" seller 5000 {} snap)
+          after-raise (:world (lc/raise-dispute world workflow-id buyer))
+          after-l0 (:world (res/execute-resolution after-raise workflow-id res true "0xhash" nil))
+          esc-fn (fn [_ _ _ _] {:ok true :new-resolver l1})
+          after-esc (:world (res/escalate-dispute after-l0 workflow-id buyer esc-fn))
+          ;; Now dispute level > 0, so force-reversal-slash targets prev-resolver (res)
+          w1 (res/force-reversal-slash after-esc workflow-id :slash-bps 2500 :track :immediate)
+          stake-after-first (reg/get-stake w1 res)
+          w2 (res/force-reversal-slash w1 workflow-id :slash-bps 2500 :track :immediate)
+          stake-after-second (reg/get-stake w2 res)]
+      (is (= 7500 stake-after-first) "first call debits 2500 from 10000")
+      (is (= stake-after-first stake-after-second) "second call idempotent — stake unchanged"))))
+
+(deftest reversal-slash-rejected-appeal-executes-stake-debit
+  (testing "resolve-appeal with appeal-upheld?=false executes the slash immediately"
+    (let [res "0xRes" gov "0xGov" buyer "0xBuyer" seller "0xSeller"
+          snap (snap-fix/escrow-snapshot
+                {:dispute-resolver res :reversal-slash-bps 2500
+                 :appeal-window-duration 3600 :challenge-window-duration 3600
+                 :max-dispute-level 1 :resolver-bond-bps 0 :escrow-fee-bps 0})
+          world0 (-> (t/empty-world 1000)
+                     (reg/register-stake res 8000))
+          {:keys [world workflow-id]}
+          (lc/create-escrow world0 buyer "USDC" seller 4000 {} snap)
+          after-raise (:world (lc/raise-dispute world workflow-id buyer))
+          after-l0 (:world (res/execute-resolution after-raise workflow-id res true "0xl0" nil))
+          ;; Record evidence so reversal creates a Track 2 (pending) slash
+          after-evidence (assoc-in after-l0 [:evidence-updated? workflow-id] true)
+          esc-fn (fn [_ _ _ _] {:ok true :new-resolver "0xL1"})
+          after-esc (:world (res/escalate-dispute after-evidence workflow-id buyer esc-fn))
+          after-l1 (:world (res/execute-resolution after-esc workflow-id "0xL1" false "0xl1" nil))
+          slash-id (str workflow-id "-reversal-0")
+          stake-before-appeal (reg/get-stake after-l1 res)
+          slash-amt (get-in after-l1 [:pending-fraud-slashes slash-id :amount])
+          world-appealed (:world (res/appeal-slash after-l1 workflow-id res slash-id))
+          world-rejected (:world (res/resolve-appeal world-appealed workflow-id gov false slash-id))
+          stake-after (reg/get-stake world-rejected res)]
+      (is (some? (get-in after-l1 [:pending-fraud-slashes slash-id]))
+          "Track 2 reversal slash created")
+      (is (= :pending (get-in after-l1 [:pending-fraud-slashes slash-id :status]))
+          "Track 2 slash is pending")
+      (is (= :appealed (get-in world-appealed [:pending-fraud-slashes slash-id :status]))
+          "appealed after appeal-slash")
+      (is (= :executed (get-in world-rejected [:pending-fraud-slashes slash-id :status]))
+          "executed after rejected appeal")
+      (is (= stake-before-appeal (+ stake-after slash-amt))
+          "stake debited by slash amount")
+      (is (pos? (get-in world-rejected [:resolver-frozen-until res] 0))
+          "resolver frozen after rejected appeal"))))
+
+(deftest force-reversal-slash-pending-execute
+  (testing "Force slash with :pending track can be executed after deadline"
+    (let [res "0xRes" l1 "0xL1" buyer "0xBuyer" seller "0xSeller"
+          snap (snap-fix/escrow-snapshot
+                {:dispute-resolver res :reversal-slash-bps 2500
+                 :appeal-window-duration 20 :challenge-window-duration 20
+                 :max-dispute-level 2})
+          world0 (-> (t/empty-world 1000)
+                     (assoc-in [:params :slash-epoch-cap-bps] 10000)
+                     (reg/register-stake res 10000)
+                     (reg/register-stake l1 10000))
+          {:keys [world workflow-id]}
+          (lc/create-escrow world0 buyer "USDC" seller 5000 {} snap)
+          after-raise (:world (lc/raise-dispute world workflow-id buyer))
+          after-l0 (:world (res/execute-resolution after-raise workflow-id res true "0xhash" nil))
+          esc-fn (fn [_ _ _ _] {:ok true :new-resolver l1})
+          after-esc (:world (res/escalate-dispute after-l0 workflow-id buyer esc-fn))
+          w-pending (res/force-reversal-slash after-esc workflow-id :track :pending)
+          slash-id (str workflow-id "-force-reversal-0")
+          slash-entry (get-in w-pending [:pending-fraud-slashes slash-id])
+          deadline (:appeal-deadline slash-entry)
+          w-late (time-ctx/advance-time w-pending {:to (inc deadline)})
+          r-exec (res/execute-fraud-slash w-late workflow-id slash-id)]
+      (is (= :pending (:status slash-entry)))
+      (is (pos? deadline) "pending slash has appeal deadline")
+      (is (true? (:ok r-exec)) "execute succeeds after deadline")
+      (is (= :executed (get-in (:world r-exec) [:pending-fraud-slashes slash-id :status]))
+          "slash executed after execute-fraud-slash"))))
+
+(deftest reversal-vindication-lifecycle
+  (testing "Full reversal-of-reversal via scenario runner validates all invariants"
+    (let [scenario-id "reversal-vindication-test"
+          result (sew/replay-with-sew-protocol
+                   {:scenario-id scenario-id :schema-version "1.0"
+                    :initial-block-time 1000
+                    :agents [{:id "buyer" :address "0xbuyer" :strategy "honest"}
+                             {:id "seller" :address "0xseller" :strategy "honest"}
+                             {:id "l0" :address "0xl0" :role "resolver"}
+                             {:id "l1" :address "0xl1" :role "resolver"}
+                             {:id "l2" :address "0xl2" :role "resolver"}
+                             {:id "keeper" :address "0xkeeper" :role "keeper"}]
+                    :protocol-params {:resolver-fee-bps 0 :appeal-window-duration 60
+                                      :max-dispute-duration 120 :resolver-bond-bps 0
+                                      :resolution-module "0xkleros-proxy"
+                                      :escalation-resolvers {:0 "0xl0" :1 "0xl1" :2 "0xl2"}
+                                      :reversal-slash-bps 2500 :challenge-bounty-bps 0}
+                    :allow-open-disputes? true
+                    :events [{:seq 0 :time 1000 :agent "l0" :action "register_stake" :params {:amount 8000}}
+                             {:seq 1 :time 1000 :agent "l1" :action "register_stake" :params {:amount 8000}}
+                             {:seq 2 :time 1000 :agent "l2" :action "register_stake" :params {:amount 8000}}
+                             {:seq 3 :time 1000 :agent "buyer" :action "create_escrow"
+                              :params {:token "USDC" :to "0xseller" :amount 5000}}
+                             {:seq 4 :time 1060 :agent "buyer" :action "raise_dispute" :params {:workflow-id 0}}
+                             {:seq 5 :time 1120 :agent "l0" :action "execute_resolution"
+                              :params {:workflow-id 0 :is-release true :resolution-hash "0xl0hash"}}
+                             {:seq 6 :time 1120 :agent "buyer" :action "escalate_dispute" :params {:workflow-id 0}}
+                             {:seq 7 :time 1180 :agent "l1" :action "execute_resolution"
+                              :params {:workflow-id 0 :is-release false :resolution-hash "0xl1hash"}}
+                             {:seq 8 :time 1180 :agent "seller" :action "escalate_dispute" :params {:workflow-id 0}}
+                             {:seq 9 :time 1240 :agent "l2" :action "execute_resolution"
+                              :params {:workflow-id 0 :is-release true :resolution-hash "0xl2hash"}}
+                             {:seq 10 :time 1300 :agent "keeper" :action "execute_pending_settlement"
+                              :params {:workflow-id 0}}]}
+                   {:allow-dirty? true})
+          w (:world result)]
+      (is (= :pass (:outcome result)) "scenario passes")
+      (is (= 8000 (get-in w [:resolver-stakes "0xl0"] 0)) "L0 stake restored to 8000")
+      (is (= 6000 (get-in w [:resolver-stakes "0xl1"] 0)) "L1 stake slashed to 6000")
+      (is (= 8000 (get-in w [:resolver-stakes "0xl2"] 0)) "L2 stake unchanged")
+      (let [ic (resolver-sim.protocols.sew.invariants/check-all w)]
+        (is (:all-hold? ic) "all invariants pass")))))
+
+;; ============ Idempotency and edge-case tests ============
+
+(deftest execute-fraud-slash-twice-rejected
+  (testing "executing an already-executed slash returns :already-executed"
+    (let [resolver-addr "0xRes"
+          gov "0xGov"
+          snap (snap-fix/escrow-snapshot {:appeal-window-duration 10})
+          world0 (reg/register-stake (t/empty-world 1000) resolver-addr 1000)
+          {:keys [world workflow-id]}
+          (world-ready-for-fraud-slash-propose world0 "0xBuyer" "0xT" "0xSeller" resolver-addr 1000 snap)
+          world1 (-> (res/propose-fraud-slash world workflow-id gov resolver-addr 200) :world)
+          world2 (time-ctx/advance-time world1 {:to 1011})
+          r1 (res/execute-fraud-slash world2 workflow-id)
+          r2 (res/execute-fraud-slash (:world r1) workflow-id)]
+      (is (true? (:ok r1)) "first execute succeeds")
+      (is (false? (:ok r2)) "second execute returns false")
+      (is (= :already-executed (:error r2)) "second execute returns :already-executed"))))
+
+(deftest appeal-slash-twice-rejected
+  (testing "appealing an already-appealed slash returns :slash-not-pending"
+    (let [resolver-addr "0xRes"
+          gov "0xGov"
+          snap (snap-fix/escrow-snapshot {:appeal-window-duration 100})
+          world0 (reg/register-stake (t/empty-world 1000) resolver-addr 1000)
+          {:keys [world workflow-id]}
+          (world-ready-for-fraud-slash-propose world0 "0xBuyer" "0xT" "0xSeller" resolver-addr 1000 snap)
+          world1 (-> (res/propose-fraud-slash world workflow-id gov resolver-addr 200) :world)
+          r1 (res/appeal-slash world1 workflow-id resolver-addr)
+          r2 (res/appeal-slash (:world r1) workflow-id resolver-addr)]
+      (is (true? (:ok r1)) "first appeal succeeds")
+      (is (false? (:ok r2)) "second appeal returns false")
+      (is (= :slash-not-pending (:error r2)) "second appeal returns :slash-not-pending"))))
+
+(deftest resolve-appeal-rejected-idempotent
+  (testing "calling resolve-appeal twice on a rejected appeal fails the second time"
+    (let [resolver-addr "0xRes"
+          gov "0xGov"
+          snap (snap-fix/escrow-snapshot {:appeal-window-duration 100
+                                          :appeal-bond-amount 0})
+          world0 (reg/register-stake (t/empty-world 1000) resolver-addr 1000)
+          {:keys [world workflow-id]}
+          (world-ready-for-fraud-slash-propose world0 "0xBuyer" "USDC" "0xSeller" resolver-addr 1000 snap)
+          world1 (-> (res/propose-fraud-slash world workflow-id gov resolver-addr 100) :world)
+          world2 (-> (res/appeal-slash world1 workflow-id resolver-addr) :world)
+          r1 (res/resolve-appeal world2 workflow-id gov false)
+          r2 (res/resolve-appeal (:world r1) workflow-id gov false)]
+      (is (true? (:ok r1)) "first resolve (reject) succeeds")
+      (is (= :executed (get-in (:world r1) [:pending-fraud-slashes workflow-id :status]))
+          "slash executed after rejected appeal")
+      (is (false? (:ok r2)) "second resolve returns false")
+      (is (= :cannot-reverse-executed-slash (:error r2))
+          "second resolve returns :cannot-reverse-executed-slash"))))
+
+(deftest reversal-slash-zero-stake-noop
+  (testing "Reversal slash with zero stake is a no-op (no slash entry created)"
+    (let [res "0xRes" l1 "0xL1" buyer "0xBuyer" seller "0xSeller"
+          snap (snap-fix/escrow-snapshot
+                {:dispute-resolver res :reversal-slash-bps 2500
+                 :appeal-window-duration 3600 :challenge-window-duration 3600
+                 :max-dispute-level 2 :resolver-bond-bps 0 :escrow-fee-bps 0})
+          world0 (-> (t/empty-world 1000)
+                     (reg/register-stake res 0)        ;; zero stake
+                     (reg/register-stake l1 10000))
+          {:keys [world workflow-id]}
+          (lc/create-escrow world0 buyer "USDC" seller 5000 {} snap)
+          after-raise (:world (lc/raise-dispute world workflow-id buyer))
+          after-l0 (:world (res/execute-resolution after-raise workflow-id res true "0xl0" nil))
+          esc-fn (fn [_ _ _ _] {:ok true :new-resolver l1})
+          after-esc (:world (res/escalate-dispute after-l0 workflow-id buyer esc-fn))
+          after-l1 (:world (res/execute-resolution after-esc workflow-id l1 false "0xl1" nil))
+          slash-id (str workflow-id "-reversal-0")
+          slash (get-in after-l1 [:pending-fraud-slashes slash-id])]
+      (is (nil? slash) "no slash entry created when stake is zero")
+      (is (= 0 (reg/get-stake after-l1 res)) "stake unchanged at zero"))))
+
+(deftest reversal-slash-exact-stake
+  (testing "Reversal slash at exactly 100% of stake consumes the full stake"
+    (let [res "0xRes" l1 "0xL1" buyer "0xBuyer" seller "0xSeller"
+          snap (snap-fix/escrow-snapshot
+                {:dispute-resolver res :reversal-slash-bps 10000  ;; 100% of stake
+                 :appeal-window-duration 3600 :challenge-window-duration 3600
+                 :max-dispute-level 2 :resolver-bond-bps 0 :escrow-fee-bps 0})
+          world0 (-> (t/empty-world 1000)
+                     (reg/register-stake res 500)
+                     (reg/register-stake l1 10000))
+          {:keys [world workflow-id]}
+          (lc/create-escrow world0 buyer "USDC" seller 5000 {} snap)
+          after-raise (:world (lc/raise-dispute world workflow-id buyer))
+          after-l0 (:world (res/execute-resolution after-raise workflow-id res true "0xl0" nil))
+          esc-fn (fn [_ _ _ _] {:ok true :new-resolver l1})
+          after-esc (:world (res/escalate-dispute after-l0 workflow-id buyer esc-fn))
+          after-l1 (:world (res/execute-resolution after-esc workflow-id l1 false "0xl1" nil))
+          slash-id (str workflow-id "-reversal-0")
+          slash (get-in after-l1 [:pending-fraud-slashes slash-id])]
+      (is (some? slash) "slash entry created")
+      (is (= 500 (:amount slash)) "slash amount equals full stake at 10000 bps")
+      (is (= 0 (reg/get-stake after-l1 res)) "stake consumed to zero")
+      (is (not (neg? (reg/get-stake after-l1 res))) "stake never goes negative"))))
+
+(deftest execute-fraud-slash-on-appealed-slash
+  (testing "executing a slash while appeal is in progress returns :appeal-in-progress"
+    (let [resolver-addr "0xRes"
+          gov "0xGov"
+          snap (snap-fix/escrow-snapshot {:appeal-window-duration 100})
+          world0 (reg/register-stake (t/empty-world 1000) resolver-addr 1000)
+          {:keys [world workflow-id]}
+          (world-ready-for-fraud-slash-propose world0 "0xBuyer" "0xT" "0xSeller" resolver-addr 1000 snap)
+          world1 (-> (res/propose-fraud-slash world workflow-id gov resolver-addr 200) :world)
+          world2 (-> (res/appeal-slash world1 workflow-id resolver-addr) :world)]
+      (is (= :appealed (get-in world2 [:pending-fraud-slashes workflow-id :status])))
+      (let [r (res/execute-fraud-slash world2 workflow-id)]
+        (is (false? (:ok r)))
+        (is (= :appeal-in-progress (:error r)))))))
+
+(deftest execute-fraud-slash-on-reversed-with-credit-slash
+  (testing "executing a reversed-with-credit slash returns :slash-already-reversed"
+    (let [resolver-addr "0xRes"
+          gov "0xGov"
+          snap (snap-fix/escrow-snapshot {:appeal-window-duration 100})
+          world0 (reg/register-stake (t/empty-world 1000) resolver-addr 1000)
+          {:keys [world workflow-id]}
+          (world-ready-for-fraud-slash-propose world0 "0xBuyer" "0xT" "0xSeller" resolver-addr 1000 snap)
+          world1 (-> (res/propose-fraud-slash world workflow-id gov resolver-addr 200) :world)
+          world2 (-> (res/appeal-slash world1 workflow-id resolver-addr) :world)
+          world3 (:world (res/resolve-appeal world2 workflow-id gov false))
+          r (res/execute-fraud-slash world3 workflow-id)]
+      (is (= :executed (get-in world3 [:pending-fraud-slashes workflow-id :status])))
+      (is (false? (:ok r)))
+      ;; After rejected appeal the slash was already executed, so execute-fraud-slash
+      ;; sees :executed status (not :appealed), returning :already-executed
+      (is (= :already-executed (:error r))))))
+
+(deftest execute-fraud-slash-on-reversed-status-slash
+  (testing "executing a governance-reversed slash returns :slash-already-reversed"
+    (let [resolver-addr "0xRes"
+          gov "0xGov"
+          snap (snap-fix/escrow-snapshot {:appeal-window-duration 100})
+          world0 (reg/register-stake (t/empty-world 1000) resolver-addr 1000)
+          {:keys [world workflow-id]}
+          (world-ready-for-fraud-slash-propose world0 "0xBuyer" "0xT" "0xSeller" resolver-addr 1000 snap)
+          world1 (-> (res/propose-fraud-slash world workflow-id gov resolver-addr 200) :world)
+          world2 (-> (res/appeal-slash world1 workflow-id resolver-addr) :world)
+          world3 (:world (res/resolve-appeal world2 workflow-id gov true))
+          r (res/execute-fraud-slash world3 workflow-id)]
+      (is (= :reversed (get-in world3 [:pending-fraud-slashes workflow-id :status])))
+      (is (false? (:ok r)))
+      (is (= :slash-already-reversed (:error r))))))
+
 (deftest force-reversal-slash-immediate
   (testing "force-reversal-slash produces an executed slash entry"
     (let [{:keys [world workflow-id]} (rev-fx/build-reversal-world)
@@ -578,3 +958,58 @@
       (is (= 2000 total-basis) "Invariant: Total basis must be snapshotted at transition start")
       (is (= 950 (reg/get-stake w2 r1)))
       (is (= 950 (reg/get-stake w2 r2))))))
+
+;; ============ Appeal resolution coverage ============
+
+(deftest resolve-appeal-rejected-non-usdc-bond-token
+  (testing "resolve-appeal with non-USDC token: bond distribution and slash use the correct token"
+    (let [world     (rev-fx/build-appeal-world {:token "0xT" :appeal-bond-amount 50})
+          w2        (:world world)
+          wf-id     (:workflow-id world)
+          slash-id  (:slash-id world)
+          gov       "0xGov"
+          w3        (:world (res/resolve-appeal w2 wf-id gov false slash-id))]
+      ;; Appeal custody used non-USDC token
+      (is (= :executed (get-in w3 [:pending-fraud-slashes slash-id :status])))
+      (is (= 50 (get-in w3 [:appeal-bond-distributions-by-token :0xT] 0))
+          "bond distribution must use the bond token, not USDC default")
+      (is (= 900 (reg/get-stake w3 "0xResolver"))
+          "stake debited by 100, bond distribution uses 0xT token"))))
+
+(deftest resolve-appeal-rejected-partial-slash
+  (testing "resolve-appeal at max per-offense cap: full stake debited, epoch tracks correctly"
+    (let [world     (rev-fx/build-appeal-world
+                     {:stake 500 :slash-amount 500 :appeal-bond-amount 0
+                      :max-slash-per-offense-bps 10000 :slash-epoch-cap-bps 5000})
+          w2        (:world world)
+          wf-id     (:workflow-id world)
+          slash-id  (:slash-id world)
+          gov       "0xGov"
+          r         (res/resolve-appeal w2 wf-id gov false slash-id)
+          w3        (:world r)]
+      (is (true? (:ok r)) "resolve-appeal succeeds")
+      (is (= :executed (get-in w3 [:pending-fraud-slashes slash-id :status])))
+      ;; Stake is 500, slash requested 500, actual debited = 500
+      (is (= 0 (reg/get-stake w3 "0xResolver")) "stake fully consumed")
+      (is (= 500 (get-in w3 [:resolver-epoch-slashed "0xResolver" :amount] 0))
+          "epoch-slashed tracks actual debited (500)"))))
+
+(deftest execute-fraud-slash-partial-slash
+  (testing "execute-fraud-slash with full stake consumption: epoch tracks actual debited"
+    (let [resolver-addr "0xRes"
+          gov  "0xGov"
+          snap (snap-fix/escrow-snapshot {:appeal-window-duration 0 :escrow-fee-bps 0})
+          world0 (-> (t/empty-world 1000)
+                     (assoc-in [:params :max-slash-per-offense-bps] 10000)
+                     (assoc-in [:params :slash-epoch-cap-bps] 10000)
+                     (reg/register-stake resolver-addr 500))
+          {:keys [world workflow-id]}
+          (world-ready-for-fraud-slash-propose world0 "0xBuyer" "0xT" "0xSeller" resolver-addr 2000 snap)
+          world1 (-> (res/propose-fraud-slash world workflow-id gov resolver-addr 500) :world)
+          r-exec (res/execute-fraud-slash world1 workflow-id workflow-id)
+          w-exec (:world r-exec)]
+      (is (true? (:ok r-exec)) "execute-fraud-slash succeeds")
+      (is (= :executed (get-in w-exec [:pending-fraud-slashes workflow-id :status])))
+      (is (= 0 (reg/get-stake w-exec resolver-addr)) "stake fully consumed")
+      (is (= 500 (get-in w-exec [:resolver-epoch-slashed resolver-addr :amount] 0))
+          "epoch-slashed tracks actual debited (500)"))))

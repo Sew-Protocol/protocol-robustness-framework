@@ -467,13 +467,21 @@
          (dl/deadline-expired? (time-ctx/block-ts world) (dl/deadline ts max-dur)))))
 
 (defn pending-settlement-executable?
-  "True when pending-settlement exists (or eligible superseded pending exists),
-   state is :disputed, and appeal-deadline has passed."
+  "True when a pending-settlement exists and its appeal-deadline has passed
+   (or eligible superseded pending exists when no active pending exists),
+   and state is :disputed.
+
+   Only superseded pendings at the current dispute level are considered:
+   a superseded pending from a lower level was archived by an escalation
+   and should not be executed until the higher-level resolver acts."
   [world workflow-id]
-  (let [pending (t/get-pending world workflow-id)
-        state   (t/escrow-state world workflow-id)
-        now-ts  (time-ctx/block-ts world)]
+  (let [pending       (t/get-pending world workflow-id)
+        state         (t/escrow-state world workflow-id)
+        now-ts        (time-ctx/block-ts world)
+        current-level (t/dispute-level world workflow-id)]
     (and (= :disputed state)
-         (or (:exists pending)
-             (some #(dl/deadline-expired? now-ts (:appeal-deadline (:pending %)))
-                   (get-in world [:superseded-pending-settlements workflow-id] []))))))
+         (if (:exists pending)
+           (dl/deadline-expired? now-ts (:appeal-deadline pending))
+           (some #(and (= (:level %) current-level)
+                       (dl/deadline-expired? now-ts (:appeal-deadline (:pending %))))
+                 (get-in world [:superseded-pending-settlements workflow-id] []))))))

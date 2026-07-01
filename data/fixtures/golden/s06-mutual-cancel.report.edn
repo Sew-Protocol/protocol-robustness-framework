@@ -62,46 +62,4 @@
   :negative-payoff-count 0,
   :escrow/live-state "refunded",
   :batch-buckets 0},
- :outcome :pass,
- :theory
- {:equilibrium-reasons {},
-  :diagnostics
-  {:claim-status :not-applicable,
-   :falsification-status :not-applicable,
-   :evidence-completeness :not-required,
-   :grounded? true,
-   :assumption-status :not-declared,
-   :declared-assumptions [],
-   :theory-eval-profile :regression},
-  :equilibrium-summary
-  {:cancellation-dominance
-   {:status :pass,
-    :basis :single-trace-cancel-proxy,
-    :severity :hard,
-    :display-label "Proxy check passed"}},
-  :claim-id :claims/cancellation-mutual-cancel-dominance,
-  :evaluator-version "theory-eval-v2",
-  :theory-result-schema-version "1.2",
-  :reason :no-metric-falsification-claim,
-  :mechanism-summary
-  {:budget-balance
-   {:status :pass,
-    :basis :single-trace-terminal-proxy,
-    :severity :hard,
-    :display-label "Proxy check passed"},
-   :incentive-compatibility
-   {:status :inconclusive,
-    :reason :untested-no-adversary,
-    :reason-detail
-    "no adversarial actors in trace; property vacuously consistent but untested",
-    :basis :single-trace-metric-proxy,
-    :severity :soft,
-    :required [:attack-attempts :attack-successes],
-    :available [:metrics],
-    :display-label "Proxy check inconclusive"}},
-  :status :not-falsified,
-  :falsified? false,
-  :equilibrium-status :pass,
-  :mechanism-reasons {:incentive-compatibility :untested-no-adversary},
-  :mechanism-status :inconclusive,
-  :display-label "Not falsified in this replay"}}
+ :outcome :pass}

@@ -242,8 +242,9 @@
 (defn- execute-path-run-request
   [{:scenario-run/keys [request]} opts]
   (let [entries (:entries request)]
-    (doseq [{:keys [name protocol]} entries]
-      (println (format "[run:scenario] %s -> protocol %s" name protocol)))
+    (when-not (:parallel? opts)
+      (doseq [{:keys [name protocol]} entries]
+        (println (format "[run:scenario] %s -> protocol %s" name protocol))))
     (runner/run-collection
      {:entries   entries
       :replay-fn (fn [scenario]
@@ -761,7 +762,8 @@
      :scenario       — file path
      :output-file    — JSON path when running a single scenario
      :protocol       — protocol id (default sew-v1)
-     opts are forwarded to report/runner.
+   `opts` may include:
+     :parallel?      — when true, run scenarios concurrently via pmap
 
    Returns {:exit-code <int> :bundle-root <map> :execution-node <map>}."
   [dispatch opts]
@@ -859,4 +861,3 @@
                 {:exit-code (:exit-code thunk-result)
                  :bundle-root enriched-root
                  :execution-node execution-node}))))))))
-

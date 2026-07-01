@@ -1,33 +1,11 @@
 {
-  "schema-version": "1.1",
-  "scenario-id": "s-auto-cancel-time-boundary",
-  "id": "scenarios/s-auto-cancel-time-boundary",
-  "title": "s-auto-cancel-time-boundary",
-  "scenario-author": "@research",
-  "purpose": "equilibrium-validation",
-  "initial-block-time": 1000,
-  "agents": [
-    {
-      "id": "buyer",
-      "address": "0xbuyer",
-      "type": "honest"
-    },
-    {
-      "id": "seller",
-      "address": "0xseller",
-      "type": "honest"
-    },
-    {
-      "id": "keeper",
-      "address": "0xkeeper",
-      "type": "keeper"
-    }
-  ],
   "protocol-params": {
     "resolver-fee-bps": 150,
     "appeal-window-duration": 0,
     "max-dispute-duration": 2592000
   },
+  "threat-tags": [],
+  "purpose": "regression",
   "events": [
     {
       "seq": 0,
@@ -60,17 +38,27 @@
       }
     }
   ],
-  "theory": {
-    "claim-id": "claims/cancellation-auto-time-boundary",
-    "claim": "Auto-cancel-time boundary is enforced deterministically. At t-1 (1999) automate-timed-actions produces no action. At t (2000) the same call triggers auto-cancel because deadline-expired? uses >= semantics.",
-    "equilibrium-concept": [
-      "cancellation-dominance"
-    ],
-    "mechanism-properties": [
-      "budget-balance",
-      "individual-rationality"
-    ],
-    "assumptions": [],
-    "falsifies-if": []
-  }
+  "schema-version": "1.1",
+  "scenario-author": "@research",
+  "scenario-id": "s-auto-cancel-time-boundary",
+  "title": "s-auto-cancel-time-boundary",
+  "id": "scenarios\/s-auto-cancel-time-boundary",
+  "agents": [
+    {
+      "id": "buyer",
+      "address": "0xbuyer",
+      "type": "honest"
+    },
+    {
+      "id": "seller",
+      "address": "0xseller",
+      "type": "honest"
+    },
+    {
+      "id": "keeper",
+      "address": "0xkeeper",
+      "type": "keeper"
+    }
+  ],
+  "initial-block-time": 1000
 }

@@ -4,24 +4,8 @@
     "appeal-window-duration": 0,
     "max-dispute-duration": 2592000
   },
-  "schema-version": "1.1",
   "threat-tags": [],
-  "initial-block-time": 1000,
-  "scenario-author": "@grifma",
-  "id": "scenarios/s06-mutual-cancel",
-  "agents": [
-    {
-      "id": "buyer",
-      "address": "0xbuyer",
-      "type": "honest"
-    },
-    {
-      "id": "seller",
-      "address": "0xseller",
-      "type": "honest"
-    }
-  ],
-  "scenario-id": "s06-mutual-cancel",
+  "purpose": "regression",
   "events": [
     {
       "seq": 0,
@@ -53,19 +37,22 @@
       }
     }
   ],
+  "schema-version": "1.1",
+  "scenario-author": "@grifma",
+  "scenario-id": "s06-mutual-cancel",
   "title": "s06-mutual-cancel",
-  "purpose": "equilibrium-validation",
-  "theory": {
-    "claim-id": "claims/cancellation-mutual-cancel-dominance",
-    "claim": "Mutual cancel path does not create profitable deviations for buyer or seller.",
-    "equilibrium-concept": [
-      "cancellation-dominance"
-    ],
-    "mechanism-properties": [
-      "budget-balance",
-      "incentive-compatibility"
-    ],
-    "assumptions": [],
-    "falsifies-if": []
-  }
+  "id": "scenarios\/s06-mutual-cancel",
+  "agents": [
+    {
+      "id": "buyer",
+      "address": "0xbuyer",
+      "type": "honest"
+    },
+    {
+      "id": "seller",
+      "address": "0xseller",
+      "type": "honest"
+    }
+  ],
+  "initial-block-time": 1000
 }

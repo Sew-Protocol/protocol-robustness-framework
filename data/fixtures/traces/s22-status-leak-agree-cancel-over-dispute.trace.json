@@ -4,24 +4,12 @@
     "appeal-window-duration": 0,
     "max-dispute-duration": 2592000
   },
-  "schema-version": "1.1",
-  "threat-tags": [],
-  "initial-block-time": 1000,
-  "scenario-author": "@grifma",
-  "id": "scenarios/s22-status-leak-agree-cancel-over-dispute",
-  "agents": [
-    {
-      "id": "buyer",
-      "address": "0xbuyer",
-      "type": "honest"
-    },
-    {
-      "id": "seller",
-      "address": "0xseller",
-      "type": "honest"
-    }
+  "allow-open-disputes?": true,
+  "threat-tags": [
+    "state-transition",
+    "concurrent-disputes"
   ],
-  "scenario-id": "s22-status-leak-agree-cancel-over-dispute",
+  "purpose": "regression",
   "events": [
     {
       "seq": 0,
@@ -53,19 +41,22 @@
       }
     }
   ],
-  "allow-open-disputes?": true,
-  "title": "s22-status-leak-agree-cancel-over-dispute",
-  "purpose": "equilibrium-validation",
-  "theory": {
-    "claim-id": "claims/cancellation-status-leak-regression",
-    "claim": "Agree-to-cancel status is properly cleared when dispute is raised after a cancel attempt.",
-    "equilibrium-concept": [
-      "cancellation-dominance"
-    ],
-    "mechanism-properties": [
-      "force-refund-path-integrity"
-    ],
-    "assumptions": [],
-    "falsifies-if": []
-  }
+  "schema-version": "1.1",
+  "scenario-author": "@grifma",
+  "scenario-id": "s22-status-leak-agree-cancel-over-dispute",
+  "title": "Status Leak: Agree-Cancel Over Dispute",
+  "id": "scenarios\/s22-status-leak-agree-cancel-over-dispute",
+  "agents": [
+    {
+      "id": "buyer",
+      "address": "0xbuyer",
+      "type": "honest"
+    },
+    {
+      "id": "seller",
+      "address": "0xseller",
+      "type": "honest"
+    }
+  ],
+  "initial-block-time": 1000
 }

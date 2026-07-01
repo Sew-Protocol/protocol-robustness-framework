@@ -42,19 +42,10 @@
       :else :json)))
 
 (defn load-scenario-file
-  "Load and parse a scenario file. EDN is preferred; JSON is deprecated.
-   Handles both proper EDN format and JSON-style EDN files during migration."
+  "Load and parse a scenario file. EDN is preferred; JSON is deprecated."
   [path]
   (case (scenario-format path)
-    :edn (try
-          (edn/read-string (slurp path))
-          (catch Exception _
-            ;; Fallback: try to parse as JSON-style EDN content
-            (log/warn! :scenario-edn-json-style
-                       {:path path
-                        :message "EDN file contains JSON-style content; prefer proper EDN format with keywords"})
-            (with-open [r (io/reader path)]
-              (json/read r :key-fn json-key->kw))))
+    :edn (edn/read-string (slurp path))
     :json (do
             (log/warn! :scenario-json-deprecated
                        {:path path

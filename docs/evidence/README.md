@@ -11,6 +11,7 @@ These are **not theoretical vulnerabilities**. Each scenario is a deterministic,
 | File | Failure class | Scenario | Raw output |
 |------|--------------|----------|-----------|
 | [summary.md](summary.md) | All three classes | Overview | — |
+| [EVIDENCE_DAG_OVERVIEW.md](EVIDENCE_DAG_OVERVIEW.md) | Evidence architecture | Forensic DAG and researcher navigation | `evidence-dag/`, bundle root |
 | [RESEARCHER_EVIDENCE_PACK.md](RESEARCHER_EVIDENCE_PACK.md) | Reproducibility pack | Baseline-vs-scenario workflow | `results/trace-compare/*` |
 | [S80_MOSTLY_LIQUID_END_TO_END_DEMO.md](S80_MOSTLY_LIQUID_END_TO_END_DEMO.md) | Yield liquidity edge-case | `s80-yield-mostly-liquid-partial-liquidity` | `results/s80-mostly-liquid.result.json`, `results/trace-compare/s68-vs-s80/*` |
 | [detailed/F3-governance-sandwich.md](detailed/F3-governance-sandwich.md) | Governance | Resolver rotation mid-dispute | [f3-run.json](../../results/evidence/f3-run.json) |

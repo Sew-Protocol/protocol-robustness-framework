@@ -1,9 +1,17 @@
 {:claim-registry/version 1
  :claim-registry/description
- "Global claim definitions for all benchmark packs. Each entry declares
-  the purpose, property types, related concepts, invariants, and evaluator
-  reference for one claim keyword. The evaluator implementation lives in
-  resolver-sim.benchmark.claims/evaluator-registry."
+  "Global claim definitions for all benchmark packs. Each entry declares
+   the purpose, property types, related concepts, invariants, and evaluator
+   reference for one claim keyword. The evaluator implementation lives in
+   resolver-sim.benchmark.claims/evaluator-registry.
+
+   EVALUATOR NAMING CONVENTION:
+   Level 1 mechanical claims (evidence-root-present, replay-result-present,
+   etc.) use the claim's keyword as the evaluator keyword directly — no
+   :claim/ prefix. Level 2+ claims (with invariant-backed evaluators) use
+   the full :claim/<id> keyword as the evaluator keyword. In both cases,
+   the evaluator keyword is identical to the claim ID. This is a deliberate
+   convention: evaluator ID = claim ID, not a separate namespace."
 
  :claims
  [{:claim/id :evidence-root-present
@@ -158,10 +166,58 @@
    :claim/invariants [:slash-distribution-consistent :bond-slash-bounded]
    :claim/evaluator :claim/no-over-slashing}
 
-  {:claim/id :claim/appeal-bond-adequacy
-   :claim/title "Appeal bond adequacy"
-   :claim/description "Appeal bonds are sufficient to cover challenge costs."
+   {:claim/id :claim/appeal-bond-adequacy
+    :claim/title "Appeal bond adequacy"
+    :claim/description "Appeal bonds are sufficient to cover challenge costs."
+    :claim/property-types #{:safety}
+    :claim/concepts #{:consensus/legitimacy}
+    :claim/invariants [:appeal-bond-conserved :challenge-bond-proportional]
+    :claim/evaluator :claim/appeal-bond-adequacy}
+
+  {:claim/id :claim/solvency-status
+   :claim/title "Solvency status"
+   :claim/description "Escrow solvency is maintained across all state transitions."
    :claim/property-types #{:safety}
-   :claim/concepts #{:consensus/legitimacy}
-   :claim/invariants [:appeal-bond-conserved :challenge-bond-proportional]
-   :claim/evaluator :claim/appeal-bond-adequacy}]}
+   :claim/concepts #{:decision-quality/solvency-status}
+   :claim/invariants [:solvency :conservation-of-funds]
+   :claim/evaluator :claim/solvency-status}
+
+  {:claim/id :claim/reversal-reviewer-due-process
+   :claim/title "Reversal reviewer due process"
+   :claim/description "A reversing resolver who is themselves reversed may appeal their own reversal slash. The slash lifecycle includes proposed, executed, appeal/opened, appeal/resolved, and (when upheld) reversed."
+   :claim/property-types #{:safety :fairness}
+   :claim/concepts #{:allocation/slash-obligation :consensus/legitimacy :consensus/escalation}
+   :claim/invariants [:slash-distribution-consistent :resolver/balances-conserved]
+   :claim/evaluator :claim/reversal-reviewer-due-process}
+
+  {:claim/id :claim/reversal-slash-conservation
+   :claim/title "Reversal slash conservation"
+   :claim/description "Reversal slash accounting satisfies requested = debited + unmet + reversed."
+   :claim/property-types #{:safety}
+   :claim/concepts #{:allocation/slash-obligation}
+   :claim/invariants [:slash-distribution-consistent :conservation-of-funds]
+   :claim/evaluator :claim/reversal-slash-conservation}
+
+  {:claim/id :claim/vindication-stability
+   :claim/title "Vindication stability"
+   :claim/description "Multi-level vindication credits each vindicated resolver exactly once with no duplicate credit, no slash drift, and no missed vindication."
+   :claim/property-types #{:safety :fairness}
+   :claim/concepts #{:allocation/slash-obligation :consensus/finality}
+   :claim/invariants [:slash-distribution-consistent :resolver/balances-conserved]
+   :claim/evaluator :claim/vindication-stability}
+
+  {:claim/id :claim/challenge-bounty-correctness
+   :claim/title "Challenge bounty correctness"
+   :claim/description "Challenge bounty is paid to the challenger (not keeper/caller), bounded by max rate. When no challenger is recorded, no bounty is paid and no nil deref occurs."
+   :claim/property-types #{:fairness}
+   :claim/concepts #{:allocation/slash-obligation :consensus/legitimacy}
+   :claim/invariants [:slash-distribution-consistent :resolver/balances-conserved]
+   :claim/evaluator :claim/challenge-bounty-correctness}
+
+  {:claim/id :claim/governance-force-reversal-authorized
+   :claim/title "Governance force reversal slash authorization"
+   :claim/description "Governance can issue force-reversal-slash bypassing the appeal window. Duplicate force slash is rejected (idempotent). Only authorized governance may issue."
+   :claim/property-types #{:safety :liveness}
+   :claim/concepts #{:consensus/authority :allocation/slash-obligation}
+   :claim/invariants [:slash-distribution-consistent :resolver/balances-conserved]
+   :claim/evaluator :claim/governance-force-reversal-authorized}]}

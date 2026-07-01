@@ -67,33 +67,60 @@
 ;; ---------------------------------------------------------------------------
 
 ^{:nextjournal.clerk/visibility {:code :hide :result :hide}}
-(def test-summary (speds-data/load-summary))
+(def test-summary
+  (delay (speds-data/load-summary)))
 
 ^{:nextjournal.clerk/visibility {:code :hide :result :hide}}
-(def coverage-data (speds-data/load-coverage))
+(def coverage-data
+  (delay (speds-data/load-coverage)))
 
 ^{:nextjournal.clerk/visibility {:code :hide :result :hide}}
-(def golden-reports (speds-data/load-all-golden-reports))
+(def golden-reports
+  (delay (speds-data/load-all-golden-reports)))
 
 ^{:nextjournal.clerk/visibility {:code :hide :result :hide}}
 (def all-traces
-  (map (fn [d]
-         {:id          (or (:scenario-id d)
-                           (str/replace (:_filename d) ".trace.json" ""))
-          :title       (or (:title d) "")
-          :description (or (:description d) "")
-          :purpose     (or (:purpose d) "")
-          :threat-tags (or (:threat-tags d) [])})
-       (speds-data/load-all-traces)))
+  (delay
+    (map (fn [d]
+           {:id          (or (:scenario-id d)
+                             (str/replace (:_filename d) ".trace.json" ""))
+            :title       (or (:title d) "")
+            :description (or (:description d) "")
+            :purpose     (or (:purpose d) "")
+            :threat-tags (or (:threat-tags d) [])})
+         (speds-data/load-all-traces))))
 
 ;; Live invariant suite run — executes all S01–S67 scenarios in-process.
-;; Cached by Clerk across re-evaluations unless `:nextjournal.clerk/no-cache true` is set.
+;; Wrapped in delay so namespace loading (via `require`) does not trigger
+;; expensive computation. Deref occurs at Clerk render time (first access).
+;; Clerk caches across re-evaluations unless `:nextjournal.clerk/no-cache true`.
 ^{:nextjournal.clerk/visibility {:code :hide :result :hide}}
 (def live-suite-results
-  (try (runner/run-all)
-       (catch Exception e
-         {:passed 0 :total 0 :elapsed-ms 0 :results []
-          :error (.getMessage e)})))
+  (delay
+    (try (runner/run-all)
+         (catch Exception e
+           {:passed 0 :total 0 :elapsed-ms 0 :results []
+            :error (.getMessage e)}))))
+
+;; Realize the delay in a background thread so namespace `require` completes fast.
+;; The future is daemon — killed on JVM exit; fine for `bb test:notebooks`.
+;; Clerk: re-evaluate the notebook after a few seconds to see results.
+^{:nextjournal.clerk/visibility {:code :hide :result :hide}
+  :nextjournal.clerk/no-cache true}
+(defonce _loader
+  (future (deref live-suite-results)))
+
+;; ---
+;; Render helper — shows placeholder until delay is realized
+;; ---------------------------------------------------------------------------
+
+(defn- suite-section [label render-fn]
+  (common/safe-render label
+    (fn []
+      (if (realized? live-suite-results)
+        (render-fn @live-suite-results)
+        [:div {:style {:padding "12px" :color "#64748b" :fontStyle "italic"}}
+         "⏳ Computing invariant suite results (S01–S107)…"]))))
 
 ;; ---------------------------------------------------------------------------
 ;; Canonical state machine diagram generator
@@ -292,10 +319,10 @@
 ;; ===========================================================================
 
 (clerk/html
- (common/safe-render
+ (suite-section
   "Executive Overview"
-  (fn []
-    (let [{:keys [passed total elapsed-ms error]} live-suite-results
+  (fn [suite]
+    (let [{:keys [passed total elapsed-ms error]} suite
           suite-rag  (cond error :amber (= passed total) :green :else :red)
           inv-count  (count invariants/canonical-ids)
           sc-count   (count sc/all-scenarios)
@@ -305,9 +332,9 @@
                                                                (:scenario-id (second %))
                                                                (:scenario-id (first (second %)))))))
                                     sc/all-scenarios))
-          gate-rag   (if test-summary
-                       (if (= "pass" (str (:overall_status test-summary))) :green :red)
-                       :amber)]
+           gate-rag   (if @test-summary
+                        (if (= "pass" (str (:overall_status @test-summary))) :green :red)
+                        :amber)]
       [:div
        (section-header
         "Executive Overview"
@@ -561,11 +588,10 @@ Scenario S12 (governance snapshot isolation) provides deterministic regression c
 ;; ===========================================================================
 
 (clerk/html
- (common/safe-render
+ (suite-section
   "Invariant Coverage"
-  (fn []
+  (fn [suite]
     (let [inv-ids (sort (map name invariants/canonical-ids))
-          suite   live-suite-results
           results (:results suite)
           ;; Map invariant-id → set of scenario names that exercise it
           ;; (derived from scenario IDs that are tagged with known invariant coverage)
@@ -678,15 +704,15 @@ Scenario S12 (governance snapshot isolation) provides deterministic regression c
 (defonce !selected-scenario (atom nil))
 
 (clerk/html
- (common/safe-render
+ (suite-section
   "Scenario Matrix"
-  (fn []
-    (let [results      (:results live-suite-results [])
+  (fn [suite]
+    (let [results      (:results suite [])
           selected-id  @!selected-scenario
           type-counts  (frequencies (map :scenario/type results))
           adv-results  (filter #(= :adversarial (:scenario/type %)) results)
-          pass-count   (:passed live-suite-results 0)
-          total-count  (:total live-suite-results 0)
+          pass-count   (:passed suite 0)
+          total-count  (:total suite 0)
           suite-rag    (if (= pass-count total-count) :green :red)]
       [:div
        (section-header
@@ -848,10 +874,10 @@ Scenario S12 (governance snapshot isolation) provides deterministic regression c
                   scenarios))]]]))
 
 (clerk/html
- (common/safe-render
+ (suite-section
   "Adversarial Breakdown"
-  (fn []
-    (let [results     (:results live-suite-results [])
+  (fn [suite]
+    (let [results     (:results suite [])
           adv-results (filter #(= :adversarial (:scenario/type %)) results)
           by-adversary (group-by :adversary/type adv-results)
           adversary-descriptions
@@ -909,10 +935,10 @@ Scenario S12 (governance snapshot isolation) provides deterministic regression c
 ;; ===========================================================================
 
 (clerk/html
- (common/safe-render
+ (suite-section
   "Failure Triage Summary"
-  (fn []
-    (let [results (:results live-suite-results [])
+  (fn [suite]
+    (let [results (:results suite [])
           by-name (into {} (map (juxt :name identity) results))
           scenario-row
           (fn [name criticality ease action root]
@@ -1077,10 +1103,10 @@ Kleros protocol team before production deployment.")
 
 ;; Live Kleros scenario results panel
 (clerk/html
- (common/safe-render
+ (suite-section
   "Kleros Scenario Results"
-  (fn []
-    (let [results      (:results live-suite-results [])
+  (fn [suite]
+    (let [results      (:results suite [])
           kleros-ids   #{"S18  dr3-kleros-l0-resolves"
                          "S19  dr3-kleros-escalation-rejected-l0-resolves"
                          "S20  dr3-kleros-max-escalation-guard"
@@ -1127,12 +1153,12 @@ Kleros protocol team before production deployment.")
 ;; ===========================================================================
 
 (clerk/html
- (common/safe-render
+ (suite-section
   "Confidence Summary"
-  (fn []
-    (let [results  (:results live-suite-results [])
-          pass-n   (:passed live-suite-results 0)
-          total-n  (:total live-suite-results 0)
+  (fn [suite]
+    (let [results  (:results suite [])
+          pass-n   (:passed suite 0)
+          total-n  (:total suite 0)
           areas
           [{:area        "State machine correctness"
             :confidence  "High"
@@ -1367,17 +1393,16 @@ Kleros protocol team before production deployment.")
 ;; ===========================================================================
 
 (clerk/html
- (common/safe-render
+ (suite-section
   "Artifact Provenance"
-  (fn []
-    (let [suite       live-suite-results
-          inv-count   (count invariants/canonical-ids)
+  (fn [suite]
+    (let [inv-count   (count invariants/canonical-ids)
           sc-count    (count sc/all-scenarios)
-          golden-n    (count (or golden-reports {}))
-          trace-n     (count (or all-traces []))
-          gate-rag    (if test-summary
-                        (if (= "pass" (str (:overall_status test-summary))) :green :red)
-                        :amber)]
+          golden-n    (count (or @golden-reports {}))
+          trace-n     (count (or @all-traces []))
+           gate-rag    (if @test-summary
+                         (if (= "pass" (str (:overall_status @test-summary))) :green :red)
+                         :amber)]
       [:div
        (section-header
         "Artifact Provenance"
@@ -1414,16 +1439,16 @@ Kleros protocol team before production deployment.")
                "resolver-sim.protocols.sew.state-machine/allowed-transitions"
                "🟢 loaded"
                "§2"]
-              ["Test summary (CI gate)"
-               "results/test-artifacts/test-summary.json"
-               (if test-summary
-                 (str "🟢 loaded — "
-                      (or (:overall_status test-summary) "unknown"))
-                 "🟠 not found (optional)")
+               ["Test summary (CI gate)"
+                "results/test-artifacts/test-summary.json"
+                (if @test-summary
+                  (str "🟢 loaded — "
+                       (or (:overall_status @test-summary) "unknown"))
+                  "🟠 not found (optional)")
                "§1"]
               ["Coverage data"
                "results/test-artifacts/coverage.json"
-               (if coverage-data "🟢 loaded" "🟠 not found (optional)")
+               (if @coverage-data "🟢 loaded" "🟠 not found (optional)")
                "§3"]
               ["Golden reports"
                "data/fixtures/golden/*.report.edn"
@@ -1466,10 +1491,10 @@ This section documents the deterministic stress-testing of appeal windows, dispu
 
 ^{:nextjournal.clerk/visibility {:code :hide :result :show}}
 (clerk/html
- (common/safe-render
+ (suite-section
   "Appeal Status"
-  (fn []
-    (let [results      (:results live-suite-results [])
+  (fn [suite]
+    (let [results      (:results suite [])
           appeal-ids   #{"S05  pending-settlement-execute"
                          "S13  pending-settlement-refund"
                          "S21  dr3-kleros-pending-cleared-on-escalation"

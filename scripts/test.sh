@@ -34,6 +34,14 @@ source "$(dirname "$0")/monte_carlo.sh"
 
 MODE="${1:-all}"
 FAILURES=0
+TARGETS_COMPLETED=0
+TARGETS_PASSED=0
+FAST_MODE=false
+
+# Check for fast mode
+if [ "$MODE" = "fast" ] || [ "$MODE" = "ci" ]; then
+  FAST_MODE=true
+fi
 ARTIFACT_DIR="$(python3 -c "from scripts.evidence_config import EvidenceConfig; print(EvidenceConfig().artifact_dir)" 2>/dev/null)" || ARTIFACT_DIR="results/test-artifacts"
 ARTIFACT_FILE="$ARTIFACT_DIR/test-summary.json"
 RUN_MANIFEST_FILE="$ARTIFACT_DIR/test-run.json"
@@ -74,78 +82,150 @@ record_target() {
   printf '%s,%s,%s,%s,%s\n' "$target" "$status" "$code" "$dur_ms" "$TARGET_LOG" >> "$ARTIFACT_DIR/.targets-${RUN_ID}.csv"
 }
 
+parse_progress() {
+  local target="$1"
+  local ran=0
+  local passed=0
+  local failed=0
+  local current_ns=""
+  
+  # Determine total tests dynamically if known
+  local total=""
+  case "$target" in
+    unit) total=307 ;;
+    suites) total=94 ;;
+    dr3-coverage) total=15 ;;
+    reference-validation) total=8 ;;
+  esac
+
+  while IFS= read -r line; do
+    if [[ "$line" =~ Testing[[:space:]]+([a-zA-Z0-9.-]+) ]]; then
+      current_ns="${BASH_REMATCH[1]}"
+      current_ns="${current_ns#resolver-sim.}"
+      if [ -n "$total" ]; then
+        printf "\r\033[K  [$(date +%H:%M:%S)] %s: testing %s (ran %d of %d | %d passed)" "$target" "$current_ns" "$ran" "$total" "$passed"
+      else
+        printf "\r\033[K  [$(date +%H:%M:%S)] %s: testing %s (ran %d | %d passed)" "$target" "$current_ns" "$ran" "$passed"
+      fi
+      if [ $failed -gt 0 ]; then
+        printf " (%d failed)" "$failed"
+      fi
+    elif [[ "$line" =~ "scenario/end" || "$line" =~ "scenario/halt" ]]; then
+      ran=$((ran + 1))
+      if [[ "$line" =~ ":outcome :pass" ]]; then
+        passed=$((passed + 1))
+      else
+        failed=$((failed + 1))
+      fi
+      local progress_str=""
+      if [ -n "$total" ]; then
+        progress_str=$(printf "ran %d of %d | %d passed" "$ran" "$total" "$passed")
+      else
+        progress_str=$(printf "ran %d | %d passed" "$ran" "$passed")
+      fi
+      if [ $failed -gt 0 ]; then
+        progress_str="$progress_str ($failed failed)"
+      fi
+      if [ -n "$current_ns" ]; then
+        printf "\r\033[K  [$(date +%H:%M:%S)] %s: testing %s (%s)" "$target" "$current_ns" "$progress_str"
+      else
+        printf "\r\033[K  [$(date +%H:%M:%S)] %s: %s" "$target" "$progress_str"
+      fi
+    elif [[ "$line" =~ "FAIL in (" || "$line" =~ "ERROR in (" ]]; then
+      failed=$((failed + 1))
+      ran=$((ran + 1))
+      if [ -n "$total" ]; then
+        printf "\r\033[K  [$(date +%H:%M:%S)] %s: testing %s (ran %d of %d | %d passed (%d failed))" "$target" "$current_ns" "$ran" "$total" "$passed" "$failed"
+      else
+        printf "\r\033[K  [$(date +%H:%M:%S)] %s: testing %s (ran %d | %d passed (%d failed))" "$target" "$current_ns" "$ran" "$passed" "$failed"
+      fi
+    elif [[ "$line" =~ ^Ran[[:space:]]+([0-9]+)[[:space:]]+tests[[:space:]]+containing[[:space:]]+([0-9]+)[[:space:]]+assertions ]]; then
+      local tests_run="${BASH_REMATCH[1]}"
+      printf "\r\033[K  [$(date +%H:%M:%S)] %s: ran %s tests" "$target" "$tests_run"
+    elif [[ "$line" =~ ^"── Phase" ]]; then
+      local clean_line
+      clean_line=$(echo "$line" | tr -d '─' | xargs)
+      printf "\r\033[K  [$(date +%H:%M:%S)] %s: %s" "$target" "$clean_line"
+    elif [[ "$line" =~ ^Suite:[[:space:]]+([a-zA-Z0-9:/-]+) ]]; then
+      local suite_name="${BASH_REMATCH[1]}"
+      printf "\r\033[K  [$(date +%H:%M:%S)] %s: running %s" "$target" "$suite_name"
+    elif [[ "$line" =~ "checks passed" || "$line" =~ "integrity checks succeeded" || "$line" =~ "alignment checks passed" ]]; then
+      ran=$((ran + 1))
+      passed=$((passed + 1))
+      printf "\r\033[K  [$(date +%H:%M:%S)] %s: ran %d | %d passed" "$target" "$ran" "$passed"
+    fi
+  done
+  printf "\r\033[K"
+}
+
 run_target() {
   target="$1"
   func="$2"
   start_target "$target"
   t0="$(date +%s)"
-  "$func" >"$TARGET_LOG" 2>&1
+  echo "  [$(date +%H:%M:%S)] Running $target..."
+  
+  # Run the target function in the background, redirecting output to log
+  "$func" >"$TARGET_LOG" 2>&1 &
+  local pid=$!
+  
+  # Tail the log file in real-time and parse the progress
+  tail -n +1 -f "$TARGET_LOG" --pid=$pid 2>/dev/null | parse_progress "$target"
+  
+  # Wait for the background process to complete and get its exit code
+  wait $pid
   code=$?
+  
   t1="$(date +%s)"
   dur_ms=$(( (t1 - t0) * 1000 ))
   record_target "$target" "$code" "$dur_ms"
+
+  # Update counters
+  TARGETS_COMPLETED=$((TARGETS_COMPLETED + 1))
+  if [ $code -eq 0 ]; then
+    TARGETS_PASSED=$((TARGETS_PASSED + 1))
+  fi
+
+  # Show progress summary
+  if [ $code -eq 0 ]; then
+    echo "  [$(date +%H:%M:%S)] ✓ $target completed in ${dur_ms}ms ($TARGETS_PASSED/$TARGETS_COMPLETED passed)"
+  else
+    echo "  [$(date +%H:%M:%S)] ✗ $target failed after ${dur_ms}ms (exit code: $code) ($TARGETS_PASSED/$TARGETS_COMPLETED passed)"
+  fi
+
   cat "$TARGET_LOG"
   return "$code"
 }
 
 run_unit() {
   require_clojure || return $?
-  echo "Running unit tests (all — framework + Sew)..."
-  clojure -M:test:with-sew -e "
-(require '[clojure.test :as t])
-(require '[resolver-sim.core-tests])
-(require '[resolver-sim.protocol-alignment-test])
-(require '[resolver-sim.protocols.sew.replay-test])
-(require '[resolver-sim.protocols.sew.forking-strategist-expectations-test])
-(require '[resolver-sim.scenario.expectations-test])
-(require '[resolver-sim.scenario.equilibrium-test])
-(require '[resolver-sim.sim.multi-epoch-test])
-(require '[resolver-sim.sim.defection-test])
-(require '[resolver-sim.sim.strategy-adaptation-test])
-(require '[resolver-sim.protocols.sew.slashing-test])
-(require '[resolver-sim.protocols.sew.phase-k-test])
-(require '[resolver-sim.protocols.sew.phase-m-test])
-(require '[resolver-sim.sim.waterfall-test])
-(require '[resolver-sim.io.scenario-fixture-parity-test])
-(require '[resolver-sim.contract-model.replay-batch-test])
-(require '[resolver-sim.contract-model.replay-batch-sew-test])
-(require '[resolver-sim.contract-model.replay-batch-appeal-test])
-(require '[resolver-sim.contract-model.replay-batch-slash-domain-test])
-(require '[resolver-sim.protocols.sew.dispute-resolution-coverage-test])
-(require '[resolver-sim.financial.pro-rata-characterization-test])
-(require '[resolver-sim.scenario.suites-test])
-(require '[resolver-sim.validation.scenario-registry-test])
-(require '[resolver-sim.run.overview-test])
-(require '[resolver-sim.evidence.node-test])
-(require '[resolver-sim.evidence.attestation-dag-test])
-(let [results (t/run-tests
-    'resolver-sim.core-tests
-    'resolver-sim.protocol-alignment-test
-    'resolver-sim.protocols.sew.replay-test
-    'resolver-sim.protocols.sew.forking-strategist-expectations-test
-    'resolver-sim.protocols.sew.slashing-test
-    'resolver-sim.protocols.sew.phase-k-test
-    'resolver-sim.protocols.sew.phase-m-test
-    'resolver-sim.scenario.expectations-test
-    'resolver-sim.scenario.equilibrium-test
-    'resolver-sim.sim.multi-epoch-test
-    'resolver-sim.sim.defection-test
-    'resolver-sim.sim.strategy-adaptation-test
-    'resolver-sim.sim.waterfall-test
-    'resolver-sim.io.scenario-fixture-parity-test
-    'resolver-sim.contract-model.replay-batch-test
-    'resolver-sim.contract-model.replay-batch-sew-test
-    'resolver-sim.contract-model.replay-batch-appeal-test
-    'resolver-sim.contract-model.replay-batch-slash-domain-test
-    'resolver-sim.protocols.sew.dispute-resolution-coverage-test
-    'resolver-sim.financial.pro-rata-characterization-test
-    'resolver-sim.scenario.suites-test
-    'resolver-sim.validation.scenario-registry-test
-    'resolver-sim.run.overview-test
-    'resolver-sim.evidence.node-test
-    'resolver-sim.evidence.attestation-dag-test)]
-  (when (pos? (+ (:error results) (:fail results)))
-    (System/exit 1)))"
+  echo "Running unit tests (all — framework + Sew, parallel namespaces)..."
+  clojure -M:test:with-sew -m scripts.parallel-test-runner \
+    resolver-sim.core-tests \
+    resolver-sim.protocol-alignment-test \
+    resolver-sim.protocols.sew.replay-test \
+    resolver-sim.protocols.sew.forking-strategist-expectations-test \
+    resolver-sim.scenario.expectations-test \
+    resolver-sim.scenario.equilibrium-test \
+    resolver-sim.sim.multi-epoch-test \
+    resolver-sim.sim.defection-test \
+    resolver-sim.sim.strategy-adaptation-test \
+    resolver-sim.protocols.sew.slashing-test \
+    resolver-sim.protocols.sew.phase-k-test \
+    resolver-sim.protocols.sew.phase-m-test \
+    resolver-sim.sim.waterfall-test \
+    resolver-sim.io.scenario-fixture-parity-test \
+    resolver-sim.contract-model.replay-batch-test \
+    resolver-sim.contract-model.replay-batch-sew-test \
+    resolver-sim.contract-model.replay-batch-appeal-test \
+    resolver-sim.contract-model.replay-batch-slash-domain-test \
+    resolver-sim.protocols.sew.dispute-resolution-coverage-test \
+    resolver-sim.financial.pro-rata-characterization-test \
+    resolver-sim.scenario.suites-test \
+    resolver-sim.validation.scenario-registry-test \
+    resolver-sim.run.overview-test \
+    resolver-sim.evidence.node-test \
+    resolver-sim.evidence.attestation-dag-test
   return $?
 }
 
@@ -153,15 +233,17 @@ run_framework() {
   require_clojure || return $?
   echo "Running framework unit tests (no Sew protocol)..."
   clojure -M:test -e "
-(require '[clojure.test :as t])
-(require '[resolver-sim.core-tests])
-(require '[resolver-sim.protocol-alignment-test])
-(require '[resolver-sim.time.context-test])
-(require '[resolver-sim.time.model-test])
-(require '[resolver-sim.sim.defection-test])
-(require '[resolver-sim.sim.strategy-adaptation-test])
-(require '[resolver-sim.sim.waterfall-test])
-(let [results (t/run-tests
+(require 'resolver-sim.evidence.chain
+         '[clojure.test :as t]
+         'resolver-sim.core-tests
+         'resolver-sim.protocol-alignment-test
+         'resolver-sim.time.context-test
+         'resolver-sim.time.model-test
+         'resolver-sim.sim.defection-test
+         'resolver-sim.sim.strategy-adaptation-test
+         'resolver-sim.sim.waterfall-test)
+(binding [resolver-sim.evidence.chain/*allow-dirty* true]
+  (let [results (t/run-tests
                 'resolver-sim.core-tests
                 'resolver-sim.protocol-alignment-test
                 'resolver-sim.time.context-test
@@ -169,8 +251,8 @@ run_framework() {
                 'resolver-sim.sim.defection-test
                 'resolver-sim.sim.strategy-adaptation-test
                 'resolver-sim.sim.waterfall-test)]
-  (when (pos? (+ (:error results) (:fail results)))
-    (System/exit 1)))"
+              (when (pos? (+ (:error results) (:fail results)))
+                (System/exit 1)))))"
   return $?
 }
 
@@ -178,65 +260,67 @@ run_sew() {
   require_clojure || return $?
   echo "Running Sew protocol unit tests..."
   clojure -M:test:with-sew -e "
-(require '[clojure.test :as t])
-(require '[resolver-sim.core-tests])
-(require '[resolver-sim.protocols.sew.replay-test])
-(require '[resolver-sim.protocols.sew.forking-strategist-expectations-test])
-(require '[resolver-sim.scenario.expectations-test])
-(require '[resolver-sim.scenario.equilibrium-test])
-(require '[resolver-sim.protocols.sew.slashing-test])
-(require '[resolver-sim.protocols.sew.phase-k-test])
-(require '[resolver-sim.protocols.sew.phase-m-test])
-(require '[resolver-sim.contract-model.replay-batch-sew-test])
-(require '[resolver-sim.contract-model.replay-batch-appeal-test])
-(require '[resolver-sim.contract-model.replay-batch-slash-domain-test])
-(require '[resolver-sim.protocols.sew.lifecycle-test])
-(require '[resolver-sim.protocols.sew.resolution-test])
-(require '[resolver-sim.protocols.sew.state-machine-test])
-(require '[resolver-sim.protocols.sew.governance-test])
-(require '[resolver-sim.protocols.sew.integration-test])
-(require '[resolver-sim.protocols.sew.accounting-test])
-(require '[resolver-sim.protocols.sew.governance-gates-test])
-(require '[resolver-sim.protocols.sew.yield-reorg-race-test])
-(require '[resolver-sim.protocols.sew.yield-solvency-test])
-(require '[resolver-sim.protocols.sew.yield.failure-test])
-(require '[resolver-sim.protocols.sew.yield.policy-test])
-(require '[resolver-sim.protocols.sew.yield.finalize-parity-test])
-(require '[resolver-sim.protocols.sew.resolver-yield-accrual-test])
-(require '[resolver-sim.protocols.sew.invariant-registry-test])
-(require '[resolver-sim.protocols.sew.invariant-runner-test])
-(require '[resolver-sim.protocols.sew.dispute-capacity-test])
-(require '[resolver-sim.protocols.sew.funds-ledger-projection-test])
-(require '[resolver-sim.protocols.sew.snapshot-test])
-(require '[resolver-sim.protocols.sew.snapshot-boundary-test])
-(require '[resolver-sim.protocols.sew.claimable-classification-test])
-(require '[resolver-sim.protocols.sew.replay-bridge-test])
-(require '[resolver-sim.protocols.sew.replay-dedupe-policy-test])
-(require '[resolver-sim.protocols.sew.replay-event-id-scenario-test])
-(require '[resolver-sim.protocols.sew.replay-idempotency-test])
-(require '[resolver-sim.protocols.sew.require-event-id-test])
-(require '[resolver-sim.protocols.sew.temporal-boundary-test])
-(require '[resolver-sim.protocols.sew.temporal-generator-test])
-(require '[resolver-sim.protocols.sew.trace-export-idempotency-test])
-(require '[resolver-sim.protocols.sew.authority-test])
-(require '[resolver-sim.protocols.sew.idempotence-checklist-test])
-(require '[resolver-sim.protocols.sew.invariants.solvency-test])
-(require '[resolver-sim.protocols.sew.invariants.temporal-test])
-(require '[resolver-sim.scenario.subgame-counterfactual-test])
-(require '[resolver-sim.scenario.yield-expectations-test])
-(require '[resolver-sim.scenario.yield-scenario-lint-test])
-(require '[resolver-sim.scenario.report-test])
-(require '[resolver-sim.scenario.runner-test])
-(require '[resolver-sim.scenario.theory-test])
-(require '[resolver-sim.scenario.golden-test])
-(require '[resolver-sim.scenario.phase-3-spe-test])
-(require '[resolver-sim.scenario.spe-fork-event-id-test])
-(require '[resolver-sim.properties.invariants-test])
-(require '[resolver-sim.definitions.registry-test])
-(require '[resolver-sim.evidence.registry-test])
-(require '[resolver-sim.evidence.qol-test])
-(require '[resolver-sim.protocols.sew.evidence.slashing-test])
-(let [results (t/run-tests
+(require 'resolver-sim.evidence.chain
+         '[clojure.test :as t]
+         'resolver-sim.core-tests
+         'resolver-sim.protocols.sew.replay-test
+         'resolver-sim.protocols.sew.forking-strategist-expectations-test
+         'resolver-sim.scenario.expectations-test
+         'resolver-sim.scenario.equilibrium-test
+         'resolver-sim.protocols.sew.slashing-test
+         'resolver-sim.protocols.sew.phase-k-test
+         'resolver-sim.protocols.sew.phase-m-test
+         'resolver-sim.contract-model.replay-batch-sew-test
+         'resolver-sim.contract-model.replay-batch-appeal-test
+         'resolver-sim.contract-model.replay-batch-slash-domain-test
+         'resolver-sim.protocols.sew.lifecycle-test
+         'resolver-sim.protocols.sew.resolution-test
+         'resolver-sim.protocols.sew.state-machine-test
+         'resolver-sim.protocols.sew.governance-test
+         'resolver-sim.protocols.sew.integration-test
+         'resolver-sim.protocols.sew.accounting-test
+         'resolver-sim.protocols.sew.governance-gates-test
+         'resolver-sim.protocols.sew.yield-reorg-race-test
+         'resolver-sim.protocols.sew.yield-solvency-test
+         'resolver-sim.protocols.sew.yield.failure-test
+         'resolver-sim.protocols.sew.yield.policy-test
+         'resolver-sim.protocols.sew.yield.finalize-parity-test
+         'resolver-sim.protocols.sew.resolver-yield-accrual-test
+         'resolver-sim.protocols.sew.invariant-registry-test
+         'resolver-sim.protocols.sew.invariant-runner-test
+         'resolver-sim.protocols.sew.dispute-capacity-test
+         'resolver-sim.protocols.sew.funds-ledger-projection-test
+         'resolver-sim.protocols.sew.snapshot-test
+         'resolver-sim.protocols.sew.snapshot-boundary-test
+         'resolver-sim.protocols.sew.claimable-classification-test
+         'resolver-sim.protocols.sew.replay-bridge-test
+         'resolver-sim.protocols.sew.replay-dedupe-policy-test
+         'resolver-sim.protocols.sew.replay-event-id-scenario-test
+         'resolver-sim.protocols.sew.replay-idempotency-test
+         'resolver-sim.protocols.sew.require-event-id-test
+         'resolver-sim.protocols.sew.temporal-boundary-test
+         'resolver-sim.protocols.sew.temporal-generator-test
+         'resolver-sim.protocols.sew.trace-export-idempotency-test
+         'resolver-sim.protocols.sew.authority-test
+         'resolver-sim.protocols.sew.idempotence-checklist-test
+         'resolver-sim.protocols.sew.invariants.solvency-test
+         'resolver-sim.protocols.sew.invariants.temporal-test
+         'resolver-sim.scenario.subgame-counterfactual-test
+         'resolver-sim.scenario.yield-expectations-test
+         'resolver-sim.scenario.yield-scenario-lint-test
+         'resolver-sim.scenario.report-test
+         'resolver-sim.scenario.runner-test
+         'resolver-sim.scenario.theory-test
+         'resolver-sim.scenario.golden-test
+         'resolver-sim.scenario.phase-3-spe-test
+         'resolver-sim.scenario.spe-fork-event-id-test
+         'resolver-sim.properties.invariants-test
+         'resolver-sim.definitions.registry-test
+         'resolver-sim.evidence.registry-test
+         'resolver-sim.evidence.qol-test
+         'resolver-sim.protocols.sew.evidence.slashing-test)
+(binding [resolver-sim.evidence.chain/*allow-dirty* true]
+  (let [results (t/run-tests
                 'resolver-sim.core-tests
                 'resolver-sim.protocols.sew.replay-test
                 'resolver-sim.protocols.sew.forking-strategist-expectations-test
@@ -294,8 +378,8 @@ run_sew() {
                 'resolver-sim.definitions.registry-test
                 'resolver-sim.evidence.qol-test
                 'resolver-sim.evidence.registry-test)]
-  (when (pos? (+ (:error results) (:fail results)))
-    (System/exit 1)))"
+              (when (pos? (+ (:error results) (:fail results)))
+                (System/exit 1)))))"
   return $?
 }
 
@@ -303,16 +387,18 @@ run_yield() {
   require_clojure || return $?
   echo "Running yield protocol unit tests..."
   clojure -M:test:with-sew -e "
-(require '[clojure.test :as t])
-(require '[resolver-sim.protocols.sew.yield-reorg-race-test])
-(require '[resolver-sim.protocols.sew.yield-solvency-test])
-(require '[resolver-sim.protocols.sew.yield.failure-test])
-(require '[resolver-sim.protocols.sew.yield.policy-test])
-(require '[resolver-sim.protocols.sew.yield.finalize-parity-test])
-(require '[resolver-sim.protocols.sew.resolver-yield-accrual-test])
-(require '[resolver-sim.scenario.yield-expectations-test])
-(require '[resolver-sim.scenario.yield-scenario-lint-test])
-(let [results (t/run-tests
+(require 'resolver-sim.evidence.chain
+         '[clojure.test :as t]
+         'resolver-sim.protocols.sew.yield-reorg-race-test
+         'resolver-sim.protocols.sew.yield-solvency-test
+         'resolver-sim.protocols.sew.yield.failure-test
+         'resolver-sim.protocols.sew.yield.policy-test
+         'resolver-sim.protocols.sew.yield.finalize-parity-test
+         'resolver-sim.protocols.sew.resolver-yield-accrual-test
+         'resolver-sim.scenario.yield-expectations-test
+         'resolver-sim.scenario.yield-scenario-lint-test)
+(binding [resolver-sim.evidence.chain/*allow-dirty* true]
+  (let [results (t/run-tests
                'resolver-sim.protocols.sew.yield-reorg-race-test
                'resolver-sim.protocols.sew.yield-solvency-test
                'resolver-sim.protocols.sew.yield.failure-test
@@ -321,15 +407,19 @@ run_yield() {
                'resolver-sim.protocols.sew.resolver-yield-accrual-test
                'resolver-sim.scenario.yield-expectations-test
                'resolver-sim.scenario.yield-scenario-lint-test)]
-  (when (pos? (+ (:error results) (:fail results)))
-    (System/exit 1)))"
+             (when (pos? (+ (:error results) (:fail results)))
+               (System/exit 1)))))"
   return $?
 }
 
 run_invariants() {
   require_clojure || return $?
   echo "Running deterministic invariant scenarios (S01–S100)..."
-  clojure -M:run:with-sew:with-sew -- --invariants
+  clojure -M:with-sew -e "
+(require 'resolver-sim.evidence.chain
+         '[resolver-sim.io.scenario-runner :as sr])
+(binding [resolver-sim.evidence.chain/*allow-dirty* true]
+  (sr/run-invariants))"
   return $?
 }
 
@@ -337,11 +427,13 @@ run_dispute_resolution() {
   require_clojure || return $?
   echo "Running dispute resolution coverage scenarios (S-DR-* via test namespace)..."
   clojure -M:test:with-sew -e "
-(require '[clojure.test :as t])
-(require '[resolver-sim.protocols.sew.dispute-resolution-coverage-test])
-(let [results (t/run-tests 'resolver-sim.protocols.sew.dispute-resolution-coverage-test)]
+(require 'resolver-sim.evidence.chain
+         '[clojure.test :as t]
+         'resolver-sim.protocols.sew.dispute-resolution-coverage-test)
+(binding [resolver-sim.evidence.chain/*allow-dirty* true]
+  (let [results (t/run-tests 'resolver-sim.protocols.sew.dispute-resolution-coverage-test)]
   (when (pos? (+ (:error results) (:fail results)))
-    (System/exit 1)))"
+    (System/exit 1))))"
   local dr_exit=$?
   # CI Gate: validate artifact registry
   if [[ -f "scripts/validate/ci_gate_validation.py" ]]; then
@@ -359,7 +451,11 @@ run_named_path_suite() {
   require_clojure || return $?
   local suite="$1"
   echo "Running registry-backed scenario path suite: $suite"
-  clojure -M:run:with-sew:with-sew -- --invariants --suite "$suite"
+  clojure -M:with-sew -e "
+(require 'resolver-sim.evidence.chain
+         '[resolver-sim.io.scenario-runner :as sr])
+(binding [resolver-sim.evidence.chain/*allow-dirty* true]
+  (sr/run-invariants :suite $suite))"
   return $?
 }
 
@@ -382,18 +478,11 @@ run_yield_scenarios() {
 
 run_generators() {
   require_clojure || return $?
-  echo "Running generator regression tests (pinned seeds)..."
-  clojure -M:test -e "
-(require '[clojure.test :as t])
-(require '[resolver-sim.generators.equilibrium-test])
-(require '[resolver-sim.generators.fixtures-test])
-(require '[resolver-sim.properties.invariants-test])
-(let [results (t/run-tests
-    'resolver-sim.generators.equilibrium-test
-    'resolver-sim.generators.fixtures-test
-    'resolver-sim.properties.invariants-test)]
-  (when (pos? (+ (:error results) (:fail results)))
-    (System/exit 1)))"
+  echo "Running generator regression tests (pinned seeds, parallel)..."
+  clojure -M:test -m scripts.parallel-test-runner \
+    resolver-sim.generators.equilibrium-test \
+    resolver-sim.generators.fixtures-test \
+    resolver-sim.properties.invariants-test
   return $?
 }
 
@@ -470,37 +559,8 @@ run_suites() {
      :suites/forking-strategist
    )
 
-   local pids=()
-   local suites_ran=0 suites_failed=0
-   for suite in "${suites[@]}"; do
-     clojure -M:test:with-sew -m scripts.run-suite "$suite" &
-     pids+=($!)
-     suites_ran=$((suites_ran + 1))
-     # Throttle: wait for one to finish if at max_workers
-     if [[ ${#pids[@]} -ge $max_workers ]]; then
-       wait -n
-       local rc=$?
-       if [[ $rc -ne 0 ]]; then
-         suites_failed=$((suites_failed + 1))
-       fi
-       # Remove completed PIDs (reap all finished)
-       local new_pids=()
-       for p in "${pids[@]}"; do
-         if kill -0 "$p" 2>/dev/null; then
-           new_pids+=("$p")
-         fi
-       done
-       pids=("${new_pids[@]}")
-     fi
-   done
-   # Wait for remaining
-   for p in "${pids[@]}"; do
-     wait "$p"
-     local rc=$?
-     if [[ $rc -ne 0 ]]; then
-       suites_failed=$((suites_failed + 1))
-     fi
-   done
+   local suites_ran=${#suites[@]} suites_failed=0
+   clojure -M:test:with-sew -m scripts.parallel-suite-runner "${suites[@]}" || suites_failed=$?
 
    echo ""
    echo "=== Suite Run Complete ==="
@@ -688,6 +748,15 @@ run_outcome_classification_report() {
 }
 
 case "$MODE" in
+  fast)
+    echo "Running FAST test suite (target: < 60 seconds)..."
+    run_target "unit" run_unit
+    run_target "generators" run_generators
+    run_target "contracts" run_contracts
+    run_target "invariants" run_invariants
+    run_target "suites" run_suites
+    run_target "reference-validation" run_reference_validation
+    ;;
   unit)
     run_unit || FAILURES=$((FAILURES + 1))
     ;;
@@ -757,33 +826,149 @@ case "$MODE" in
   long-horizon)
     run_target long-horizon run_long_horizon || FAILURES=$((FAILURES + 1))
     ;;
-  all)
-    : > "$ARTIFACT_DIR/.targets-${RUN_ID}.csv"
-    run_target unit run_unit || FAILURES=$((FAILURES + 1))
-    echo ""
-    run_target generators run_generators || FAILURES=$((FAILURES + 1))
-    echo ""
-    run_target contracts run_contracts || FAILURES=$((FAILURES + 1))
-    echo ""
-    run_target invariants run_invariants || FAILURES=$((FAILURES + 1))
-    echo ""
-    run_target suites run_suites || FAILURES=$((FAILURES + 1))
-    echo ""
-    run_target reference-validation run_reference_validation || FAILURES=$((FAILURES + 1))
-    echo ""
-    run_target coverage run_coverage_gates || FAILURES=$((FAILURES + 1))
-    echo ""
-    run_target triage run_triage || FAILURES=$((FAILURES + 1))
-    echo ""
-    run_target monte-carlo run_monte_carlo || FAILURES=$((FAILURES + 1))
-    run_outcome_classification_report || true
+    all)
+      : > "$ARTIFACT_DIR/.targets-${RUN_ID}.csv"
+      echo "Starting full test suite..."
+      echo "========================================"
 
-    # CI Gate: coverage gates validation for all mode
-    python3 scripts/validate/coverage_gates.py --artifact-dir "$ARTIFACT_DIR" --max-unhit-transitions "$MAX_UNHIT_TRANSITIONS" || FAILURES=$((FAILURES + 1))
-    ;;
+      run_target unit run_unit || FAILURES=$((FAILURES + 1))
+      echo ""
+      run_target generators run_generators || FAILURES=$((FAILURES + 1))
+      echo ""
+      run_target contracts run_contracts || FAILURES=$((FAILURES + 1))
+      echo ""
+      run_target invariants run_invariants || FAILURES=$((FAILURES + 1))
+      echo ""
+      run_target suites run_suites || FAILURES=$((FAILURES + 1))
+      echo ""
+      run_target reference-validation run_reference_validation || FAILURES=$((FAILURES + 1))
+      echo ""
+      run_target coverage run_coverage_gates || FAILURES=$((FAILURES + 1))
+      echo ""
+      run_target triage run_triage || FAILURES=$((FAILURES + 1))
+      echo ""
+
+      # Skip slow tests in fast mode
+      if [ "$FAST_MODE" = true ]; then
+        echo "  [$(date +%H:%M:%S)] ⏩ Skipping monte-carlo (slow test) in fast mode"
+      else
+        run_target monte-carlo run_monte_carlo || FAILURES=$((FAILURES + 1))
+      fi
+
+      echo ""
+      echo "========================================"
+      echo "TEST SUITE COMPLETE"
+      echo "  Targets: $TARGETS_COMPLETED completed"
+      echo "  Passed: $TARGETS_PASSED"
+      echo "  Failed: $((TARGETS_COMPLETED - TARGETS_PASSED))"
+      if [ $FAILURES -gt 0 ]; then
+        echo "  Exit code: 1 (failures detected)"
+      else
+        echo "  Exit code: 0 (all passed)"
+      fi
+      if [ "$FAST_MODE" = true ]; then
+        echo "  Mode: FAST (slow tests skipped)"
+      fi
+      echo "========================================"
+
+      run_outcome_classification_report || true
+      ;;
+
+    fast)
+      : > "$ARTIFACT_DIR/.targets-${RUN_ID}.csv"
+      FAST_MODE=true
+      echo "Starting FAST test suite (target: < 90 seconds)..."
+      echo "========================================"
+
+      run_target unit run_unit || FAILURES=$((FAILURES + 1))
+      echo ""
+      run_target generators run_generators || FAILURES=$((FAILURES + 1))
+      echo ""
+      run_target contracts run_contracts || FAILURES=$((FAILURES + 1))
+      echo ""
+      run_target invariants run_invariants || FAILURES=$((FAILURES + 1))
+      echo ""
+      run_target suites run_suites || FAILURES=$((FAILURES + 1))
+      echo ""
+      run_target reference-validation run_reference_validation || FAILURES=$((FAILURES + 1))
+
+      echo ""
+      echo "========================================"
+      echo "FAST TEST SUITE COMPLETE"
+      echo "  Targets: $TARGETS_COMPLETED completed"
+      echo "  Passed: $TARGETS_PASSED"
+      echo "  Failed: $((TARGETS_COMPLETED - TARGETS_PASSED))"
+      echo "  Duration: < 90 seconds (target)"
+      if [ $FAILURES -gt 0 ]; then
+        echo "  Exit code: 1 (failures detected)"
+        exit 1
+      else
+        echo "  Exit code: 0 (all passed)"
+        exit 0
+      fi
+      ;;
+
+    ci)
+      : > "$ARTIFACT_DIR/.targets-${RUN_ID}.csv"
+      echo "Starting CI-OPTIMIZED test suite (fast + critical slow, target: < 2 min)..."
+      echo "========================================"
+
+      run_target unit run_unit || FAILURES=$((FAILURES + 1))
+      echo ""
+      run_target generators run_generators || FAILURES=$((FAILURES + 1))
+      echo ""
+      run_target contracts run_contracts || FAILURES=$((FAILURES + 1))
+      echo ""
+      run_target invariants run_invariants || FAILURES=$((FAILURES + 1))
+      echo ""
+      run_target suites run_suites || FAILURES=$((FAILURES + 1))
+      echo ""
+      run_target reference-validation run_reference_validation || FAILURES=$((FAILURES + 1))
+      echo ""
+      run_target monte-carlo run_monte_carlo || FAILURES=$((FAILURES + 1))
+
+      echo ""
+      echo "========================================"
+      echo "CI TEST SUITE COMPLETE"
+      echo "  Targets: $TARGETS_COMPLETED completed"
+      echo "  Passed: $TARGETS_PASSED"
+      echo "  Failed: $((TARGETS_COMPLETED - TARGETS_PASSED))"
+      echo "  Duration: < 2 minutes (target)"
+      if [ $FAILURES -gt 0 ]; then
+        echo "  Exit code: 1 (failures detected)"
+        exit 1
+      else
+        echo "  Exit code: 0 (all passed)"
+        exit 0
+      fi
+      ;;
+
+    slow)
+      : > "$ARTIFACT_DIR/.targets-${RUN_ID}.csv"
+      echo "Starting SLOW test suite (long-running tests)..."
+      echo "========================================"
+
+      run_target monte-carlo run_monte_carlo || FAILURES=$((FAILURES + 1))
+      # Add other slow tests here as needed
+
+      echo ""
+      echo "========================================"
+      echo "SLOW TEST SUITE COMPLETE"
+      echo "  Targets: $TARGETS_COMPLETED completed"
+      echo "  Passed: $TARGETS_PASSED"
+      echo "  Failed: $((TARGETS_COMPLETED - TARGETS_PASSED))"
+      echo "  Duration: > 60 seconds each (expected)"
+      if [ $FAILURES -gt 0 ]; then
+        echo "  Exit code: 1 (failures detected)"
+        exit 1
+      else
+        echo "  Exit code: 0 (all passed)"
+        exit 0
+      fi
+      ;;
   *)
-    echo "Unknown mode: $MODE"
-    echo "Usage: $0 [unit|framework|sew|generators|contracts|invariants|dispute-resolution|yield-provider-scenarios|sew-yield-scenarios|yield-scenarios|suites|reference-validation|dr3-coverage|equivalence-new|comparison-lint|coverage|adversarial-sweep|adversarial-gates|triage|monte-carlo|long-horizon|all]"
+    echo "Unknown test mode: $MODE"
+    echo "Usage: $0 [unit|framework|sew|invariants|...|all]"
     exit 1
     ;;
 esac

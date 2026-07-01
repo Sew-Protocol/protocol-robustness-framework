@@ -8,23 +8,18 @@
   (:require [clojure.edn :as edn]
             [clojure.java.io :as io]
             [clojure.string :as str]
+            [resolver-sim.concepts.benchmark :as benchmark-concepts]
             [resolver-sim.benchmark.claims :refer [normalize-claim-refs]]))
 
 ;; ── Path resolution ────────────────────────────────────────────────────────────
-;; Maps from benchmark/scoring IDs to filesystem paths for auto-resolution.
-
-(def benchmark-concept-paths
-  "Benchmark ID → concept file path."
-  {:benchmark/prf-protocol-robustness-v0 "benchmarks/concepts/protocol-robustness-v0.edn"
-   :benchmark/prf-shortfall-allocation-v0 "benchmarks/concepts/shortfall-allocation-v0.edn"
-   :benchmark/prf-evidence-integrity-v1 "benchmarks/concepts/evidence-integrity-v1.edn"})
+;; Maps from scoring IDs to filesystem paths for auto-resolution.
 
 (def benchmark-scoring-paths
   "Scoring rule ID → scoring file path."
   {:scoring/robustness-dimensions-v0 "benchmarks/scoring/robustness-dimensions-v0.edn"
    :scoring/binary-claims-v1 "benchmarks/scoring/binary-claims-v1.edn"
-   :scoring/severity-weighted-robustness-v1 "benchmarks/scoring/severity-weighted-v1.edn"
-   :scoring/severity-weighted-v1 "benchmarks/scoring/severity-weighted-v1.edn"
+   :scoring/severity-weighted-robustness-v1 "benchmarks/scoring/severity-weighted-robustness-v1.edn"
+   :scoring/severity-weighted-v1 "benchmarks/scoring/severity-weighted-robustness-v1.edn"
    :scoring/shortfall-allocation-v0 "benchmarks/scoring/shortfall-allocation-v0.edn"})
 
 ;; ── Data loading ──────────────────────────────────────────────────────────────
@@ -42,7 +37,8 @@
 
 (defn load-benchmark-concepts
   [path]
-  (:concepts (load-edn path)))
+  (when (and path (.exists (io/file path)))
+    (benchmark-concepts/load-benchmark-local-concepts [path])))
 
 (defn load-scoring
   [path]
@@ -307,17 +303,27 @@
 
 ;; ── Report assembly ──────────────────────────────────────────────────────────
 
+(defn- resolve-report-concepts
+  [manifest concepts-path]
+  (let [local-concepts (when (and concepts-path (.exists (io/file concepts-path)))
+                         (benchmark-concepts/load-benchmark-local-concepts [concepts-path]))]
+    (:report-concepts
+     (benchmark-concepts/resolve-benchmark-concepts
+      (:benchmark/concepts manifest)
+      (cond-> {}
+        local-concepts (assoc :local-concepts local-concepts))))))
+
 (defn build-report
   "Build a complete report data structure from:
      evidence-path    — EDN evidence bundle produced by bb benchmark:run
-     concepts-path    — benchmark concepts EDN (e.g. benchmarks/concepts/protocol-robustness-v0.edn)
+     concepts-path    — optional benchmark-local concepts EDN override
      scoring-path     — scoring definition EDN (e.g. benchmarks/scoring/robustness-dimensions-v0.edn)
    
    Returns a plain map suitable for Clerk rendering."
   [evidence-path concepts-path scoring-path]
   (let [evidence (load-evidence evidence-path)
         manifest (:benchmark evidence)
-        concepts (load-benchmark-concepts concepts-path)
+        concepts (resolve-report-concepts manifest concepts-path)
         scoring (load-scoring scoring-path)
         metrics (:metrics evidence)
         results (:results evidence)
@@ -363,11 +369,6 @@
 
 ;; ── Auto-resolution ───────────────────────────────────────────────────────────
 
-(defn resolve-concept-path
-  "Resolve the concept file path for a benchmark ID, or nil if unknown."
-  [benchmark-id]
-  (get benchmark-concept-paths benchmark-id))
-
 (defn resolve-scoring-path
   "Resolve the scoring file path for a scoring rule ID, or nil if unknown."
   [scoring-id]
@@ -376,19 +377,22 @@
 (defn resolve-report
   "Build a complete report from an evidence bundle path alone.
    Auto-resolves concept and scoring file paths from the bundle's
-   benchmark manifest. Throws if either path cannot be resolved."
+   benchmark manifest.
+
+   Concept resolution uses the shared benchmark concept resolver.
+
+   Scoring resolution is required — throws if the scoring rule ID
+   is not in the registered map."
   [evidence-path]
   (let [evidence (load-evidence evidence-path)
         manifest (:benchmark evidence)
-        benchmark-id (:benchmark/id manifest)
         scoring-id (:benchmark/scoring-rule manifest)
-        concepts-path (resolve-concept-path benchmark-id)
         scoring-path (resolve-scoring-path scoring-id)]
-    (if (and concepts-path scoring-path)
-      (build-report evidence-path concepts-path scoring-path)
+    (if scoring-path
+      (build-report evidence-path nil scoring-path)
       (throw (ex-info "Cannot resolve report paths from evidence bundle"
                       {:evidence-path evidence-path
-                       :benchmark-id benchmark-id
+                       :benchmark-id (:benchmark/id manifest)
                        :scoring-id scoring-id
-                       :resolved-concept (boolean concepts-path)
-                       :resolved-scoring (boolean scoring-path)})))))
+                       :resolved-scoring (boolean scoring-path)
+                       :reason "Unknown scoring rule — add to benchmark-scoring-paths in report.clj"})))))

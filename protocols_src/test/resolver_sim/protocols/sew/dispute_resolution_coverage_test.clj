@@ -71,6 +71,21 @@
                 (map #(str "scenarios/" %)
                      (.list (io/file "scenarios"))))))
 
+(def reversal-scenario-ids
+  "DR-N/O/P/Q/R reversal-reviewer slashing scenario IDs."
+  ["dr-n-001-reversal-slash-appeal-lifecycle"
+   "dr-n-002-reversal-slash-appeal-rejected"
+   "dr-n-003-reversal-slash-appeal-window-expired"
+   "dr-n-004-reversal-slash-appeal-wrong-party"
+   "dr-o-001-vindication-4-level"
+   "dr-o-002-vindication-minimum-stake"
+   "dr-o-003-vindication-zero-stake"
+   "dr-p-001-force-reversal-slash"
+   "dr-p-002-force-reversal-slash-idempotent"
+   "dr-q-001-challenge-bounty-reversal"
+   "dr-q-002-challenge-bounty-no-challenger"
+   "dr-r-001-reversal-slash-insufficient-stake"])
+
 (defn- load-scenario [path]
   (-> path sc/load-scenario-file norm/normalize-scenario))
 
@@ -202,6 +217,31 @@
 ;; ---------------------------------------------------------------------------
 ;; Coverage: minimum threshold per category
 ;; ---------------------------------------------------------------------------
+
+(deftest test-reversal-slashing-coverage
+  (testing "Reversal-slashing scenarios exist and have required structure"
+    (let [scenarios (for [sid reversal-scenario-ids]
+                      (try (load-scenario (str "scenarios/edn/" sid ".edn"))
+                           (catch java.io.FileNotFoundException _
+                             (println "MISSING:" sid) nil)))]
+      (is (pos? (count (remove nil? scenarios)))
+          (str "At least one reversal-slashing scenario should exist, found "
+               (count (remove nil? scenarios)) " of " (count reversal-scenario-ids)))
+      (doseq [s scenarios]
+        (when s
+          (testing (str (:scenario-id s) " structure")
+            (is (string? (:scenario-id s)))
+            (is (map? (:claim s)))
+            (is (string? (:title s)))
+            (is (or (nil? (:expected/events s)) (vector? (:expected/events s)))
+                "expected/events should be a vector or nil")
+            (is (or (nil? (:expected/invariants s)) (vector? (:expected/invariants s)))
+                "expected/invariants should be a vector or nil")
+            (is (map? (:threat s)))
+            (is (map? (:accounting s)))
+            (is (pos? (count (:events s)))))))
+      (is (>= (count (remove nil? scenarios)) 8)
+          "At least 8 of 12 reversal-slashing scenarios must load successfully"))))
 
 (deftest test-dr-coverage-minimums
   (testing "Dispute resolution coverage meets minimum thresholds"

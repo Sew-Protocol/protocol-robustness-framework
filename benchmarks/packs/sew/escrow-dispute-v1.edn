@@ -1,7 +1,8 @@
 {:benchmark/id              :benchmark/sew-escrow-dispute-v1
- :benchmark/domain          :domain/escrow-dispute-resolution
- :benchmark/protocol        :protocol/sew
-  :benchmark/scenario-suite  :suite/sew-dispute-safety-v1
+  :benchmark/version         1
+  :benchmark/domain          :domain/escrow-dispute-resolution
+  :benchmark/protocol        :protocol/sew
+   :benchmark/scenario-suite  :suite/sew-dispute-safety-v1
   :benchmark/scenario-suite-description
   "44 Sew dispute-resolution scenarios covering basic release/refund,
    evidence lifecycle, resolver incentives, escalation paths, capacity
@@ -9,11 +10,19 @@
   :benchmark/runner-policy   :runner-policy/deterministic-local-v1
  :benchmark/evidence-policy :evidence-policy/forensic-standard-v1
    :benchmark/scoring-rule    :scoring/severity-weighted-robustness-v1
-  :benchmark/property-types  #{:safety :liveness}
+   :benchmark/property-types  #{:safety :liveness}
+    :benchmark/description
+   "A lens over :suite/sew-dispute-safety-v1 focusing on end-to-end
+    dispute safety: unauthorized release prevention, fund conservation,
+    dispute liveness, slashing integrity, and governance non-interference.
+    Shares the same 44-scenario suite with dispute-liveness-v1 and
+    resolver-slashing-v1 — a single suite run provides evidence for all
+    three benchmarks, but each applies a different scoring rule and
+    different claim weights."
    :benchmark/purpose
-  "Evaluate Sew escrow dispute resolution across unauthorized release
-   prevention, fund conservation, dispute liveness, slashing integrity,
-   and governance non-interference."
+   "Evaluate Sew escrow dispute resolution across unauthorized release
+    prevention, fund conservation, dispute liveness, slashing integrity,
+    and governance non-interference."
   :benchmark/concepts        [:ecommerce/purchase
                               :event/deposit
                               :decision-quality/solvency-status
@@ -40,8 +49,12 @@
                               :claim/role :supporting
                               :claim/rationale "Slashing must distribute amounts consistently and conserve value."
                               :claim/failure-meaning "Slashed amounts violated conservation or distribution rules."}
-                             {:claim/id :claim/governance-non-interference
-                              :claim/role :supporting
-                              :claim/rationale "Governance actions must not interfere with active escrow state."
-                              :claim/failure-meaning "Governance interfered with an active escrow."}]}
+                              {:claim/id :claim/governance-non-interference
+                               :claim/role :supporting
+                               :claim/rationale "Governance actions must not interfere with active escrow state."
+                               :claim/failure-meaning "Governance interfered with an active escrow."}
+                              {:claim/id :claim/solvency-status
+                               :claim/role :supporting
+                               :claim/rationale "Escrow solvency is maintained across all dispute resolution transitions."
+                               :claim/failure-meaning "Solvency invariant failed — escrow total-held did not equal liabilities."}]}
 

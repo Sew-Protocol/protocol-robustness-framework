@@ -292,8 +292,8 @@ without code changes.
 
 | Variable | Default | Controls |
 |---|---|---|
-| `PRF_SOURCE_ROOTS` | `src,protocols_src` | Comma-separated source directories for `code-hash` and `byte-size` |
-| `PRF_CODE_HASH_ALGORITHM` | `source-tree-hash.v0.shell-sha256sum` | Algorithm name recorded in bundle metadata |
+| `PRF_SOURCE_ROOTS` | `src,protocols_src` | Comma-separated source directories for content-based `source-hash` / `code-hash` alias and `byte-size` |
+| `PRF_CODE_HASH_ALGORITHM` | `source-tree-hash.v1.path-content-sha256` | Canonical source hash algorithm recorded in bundle metadata |
 | `PRF_RUNS_ROOT` | `~/prf-runs` | Base output directory for forensic runs |
 | `PRF_ARTIFACT_DIR` | `results/test-artifacts` | Clojure pipeline artifact directory (relative to repo root) |
 | `PRF_EVIDENCE_USER` | `evidence_runner` | Expected user for UID check |
@@ -301,6 +301,7 @@ without code changes.
 | `PRF_ORCHESTRATION_RUNNER_ID` | *per-script* | Runner identity recorded in metadata |
 | `PRF_SOURCE_TREE_HASH` | *(set by runner)* | Source hash passed to Clojure attribution bridge |
 | `PRF_SOURCE_TREE_HASH_ALGORITHM` | *(set by runner)* | Source hash algorithm passed to Clojure |
+| `PRF_SOURCE_TREE_HASH_ROOTS` | *(set by runner)* | Comma-separated source hash roots passed to Clojure |
 | `PRF_SOURCE_COMMIT` | *(set by runner)* | Git commit passed to Clojure attribution bridge |
 | `PRF_SOURCE_DIRTY` | *(set by runner)* | Dirty-state flag passed to Clojure |
 | `PRF_BUNDLE_ID` | *(set by runner)* | Run identifier passed to Clojure |

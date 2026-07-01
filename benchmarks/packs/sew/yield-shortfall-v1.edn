@@ -1,7 +1,8 @@
 {:benchmark/id              :benchmark/sew-yield-shortfall-v1
- :benchmark/domain          :domain/yield-shortfall
- :benchmark/protocol        :protocol/sew
-  :benchmark/scenario-suite  :suite/sew-yield-safety-v1
+  :benchmark/version         1
+  :benchmark/domain          :domain/yield-shortfall
+  :benchmark/protocol        :protocol/sew
+   :benchmark/scenario-suite  :suite/sew-yield-safety-v1
   :benchmark/scenario-suite-description
   "15 Sew yield integration scenarios covering AAVE partial liquidity,
    negative yield, shortfall recovery, reorg races, and governance
@@ -9,8 +10,14 @@
   :benchmark/runner-policy   :runner-policy/deterministic-local-v1
  :benchmark/evidence-policy :evidence-policy/forensic-standard-v1
   :benchmark/scoring-rule    :scoring/severity-weighted-robustness-v1
-  :benchmark/property-types  #{:safety :fairness}
-  :benchmark/concepts        [:ecommerce/purchase
+   :benchmark/property-types  #{:safety :fairness}
+   :benchmark/description
+  "Evaluates Sew yield shortfall behavior across 15 yield-integration
+   scenarios: yield preservation during shortfall, partial fill fairness
+   under liquidity constraints, and prevention of value leakage beyond
+   declared shortfall bounds. This is an independent benchmark (does not
+   share a suite with the other Sew benchmarks)."
+   :benchmark/concepts        [:ecommerce/purchase
                               :event/deposit
                               :yield/yield-bearing
                               :consensus/authority

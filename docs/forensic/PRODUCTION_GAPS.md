@@ -50,9 +50,9 @@ runner that could produce externally-reliable output.
 |---|---|---|
 | Git commit + dirty state | ✅ | `source-snapshot.json` |
 | Source byte size | ✅ | `byte-size` in `run-overview.json` |
-| Deterministic code hash | ✅ | `code-hash` (SHA-256 over all source files) |
-| Hash algorithm declared | ✅ | `code-hash-algorithm` field |
-| Included source roots declared | ✅ | `included-roots: ["src", "protocols_src"]` |
+| Deterministic source hash | ✅ | `source-hash` (with `code-hash` compatibility alias) over sorted `path:content-sha256` entries |
+| Hash algorithm declared | ✅ | `source-hash-algorithm` field |
+| Included source roots declared | ✅ | `source-hash-roots` field |
 | Clojure-side provenance bridge | ✅ | `PRF_*` env vars, `resolver-sim.forensic.provenance` |
 | Source provenance in execution node | ✅ | Merged into `:inputs` in `with-execution-node` |
 | Source/request/node hashes in bundle root | ❌ | Not yet in Clojure `build-bundle-root` output |
@@ -108,7 +108,7 @@ runner that could produce externally-reliable output.
 |---|---|---|
 | Run request validated preflight | ✅ | EDN/JSON parsing, required fields |
 | Registry snapshot captured | ✅ | Copied into output |
-| Source snapshot | ✅ | `source-snapshot.json` with git_commit, dirty, byte-size, code-hash |
+| Source snapshot | ✅ | `source-snapshot.json` with git_commit, dirty, byte-size, source-hash, source-hash-algorithm, source-hash-roots |
 | Environment snapshot | ✅ | `environment.json` with OS, Python, Clojure versions |
 | Input manifest | ✅ | `input-manifest.json` |
 | Runner identity | ✅ | From run request |

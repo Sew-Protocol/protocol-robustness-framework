@@ -301,7 +301,15 @@ cli-args (cond-> ["-M:run:with-sew" "--invariants" "--scenario" scenario]
              :task (shell "scripts/with-test-artifact-lock.sh" "./scripts/test.sh" "unit")}
 
   test:framework {:doc "Run framework unit tests only (no Sew protocol)"
-                  :task (shell "scripts/with-test-artifact-lock.sh" "./scripts/test.sh" "framework")}
+                   :task (shell "scripts/with-test-artifact-lock.sh" "./scripts/test.sh" "framework")}
+
+  test:benchmark:e2e
+  {:doc "Run benchmark report end-to-end tests using fixture evidence bundles.
+         Tests the full pipeline: evidence bundle → resolve-report → report map validation.
+         Does not require bb benchmark:run — uses pre-generated .evidence.edn fixtures."
+   :task (clojure {:dir "."} "-M:test" "-e"
+                  "(require (quote resolver-sim.benchmark.report-test))
+                   (clojure.test/run-tests (quote resolver-sim.benchmark.report-test))")}
 
   test:framework:parallel
   {:doc "Run framework unit tests in parallel (uses future dispatch for ~2x speedup)"
@@ -452,6 +460,18 @@ cli-args (cond-> ["-M:run:with-sew" "--invariants" "--scenario" scenario]
   test:suites:parallel
   {:doc "Run canonical fixture suites in parallel (default 4 workers, set PARALLEL_WORKERS to tune)"
    :task (shell "env" "PARALLEL_WORKERS=4" "scripts/with-test-artifact-lock.sh" "./scripts/test.sh" "suites")}
+
+  test:fast
+  {:doc "Run fast tests only (< 60 seconds, excludes slow tests like monte-carlo, long-horizon)"
+   :task (shell "scripts/with-test-artifact-lock.sh" "./scripts/test.sh" "fast")}
+
+  test:slow
+  {:doc "Run slow tests only (monte-carlo, long-horizon, etc.)"
+   :task (shell "scripts/with-test-artifact-lock.sh" "./scripts/test.sh" "slow")}
+
+  test:ci
+  {:doc "CI-optimized test suite (fast tests + monte-carlo, < 2 minutes total)"
+   :task (shell "scripts/with-test-artifact-lock.sh" "./scripts/test.sh" "ci")}
 
   test:parallel:smoke
   {:doc "Smoke test: verify parallel suite dispatch matches serial results (4 suites)"
@@ -1078,7 +1098,7 @@ Usage: bb forensic:mailbox:keygen --runner-id <id> --out <dir>"
   sign
   {:doc "Sign both uberjars."
    :depends [sign:core sign:sew]}
-  
+
   monitor
   {:doc "Start JMX monitoring system"
    :task (shell "clojure -M:test -m resolver-sim.monitoring")}

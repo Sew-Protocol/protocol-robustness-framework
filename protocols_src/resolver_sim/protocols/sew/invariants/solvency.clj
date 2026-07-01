@@ -68,10 +68,19 @@
                      bond-sum   (get-bond-held-sum world token)
                      slash-bond-sum (get-slash-appeal-bond-sum world token)
                      yield-sum  (get-yield-held-sum world token t/live-states)
-                     stake-sum  (if (= token :USDC) (reduce + 0 (vals (:resolver-stakes world {}))) 0)
+                      stake-sum  (if (= token :USDC) (reduce + 0 (vals (:resolver-stakes world {}))) 0)
+                     vindication-credit-sum
+                                (if (= token :USDC)
+                                  (reduce + 0
+                                    (for [[_id entry] (:pending-fraud-slashes world {})
+                                          :when (= :reversed-with-credit (:status entry))]
+                                      (long (:amount entry 0))))
+                                  0)
                      losses     (yield-evi/sum-recognized-losses world token)
 
-                     liabilities (+ (+ escrow-sum bond-sum slash-bond-sum yield-sum stake-sum) losses)
+                     liabilities (+ (+ escrow-sum bond-sum slash-bond-sum yield-sum
+                                       (- stake-sum vindication-credit-sum))
+                                    losses)
 
                      ext-bal    (when token-balances (get token-balances token 0))
                      internal-ok? (= liabilities held)
