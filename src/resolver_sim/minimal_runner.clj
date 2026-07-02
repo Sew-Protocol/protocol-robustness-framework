@@ -6,7 +6,7 @@
      java -jar prf-runner-sew.jar -m resolver-sim.minimal-runner \\
        --fixtures ./fixtures --scenario scenario.trace.json
      java -jar prf-runner-sew.jar -m resolver-sim.minimal-runner \\
-       --suite :sew-invariants --self-test"
+       --suite :dispute-resolution-scenarios --self-test"
   (:require [clojure.java.io :as io]
             [clojure.tools.cli :as cli])
   (:gen-class))
@@ -40,10 +40,10 @@
   (println "    --fixtures ./data/fixtures/traces --scenario s-auto-cancel-time-via-keeper.trace.json")
   (println)
   (println "  Suite replay:")
-  (println "    --suite :sew-invariants")
+  (println "    --suite :dispute-resolution-scenarios")
   (println)
   (println "  Self-test (determinism check):")
-  (println "    --suite :sew-invariants --self-test")
+  (println "    --suite :dispute-resolution-scenarios --self-test")
   0)
 
 (defn- resolve-scenario-path

@@ -37,7 +37,8 @@
      - The stub is correct for authorization-flow testing only.  Any
        evidence pack that cites Kleros-level economic security must
        replace this stub with a full court model."
-  (:require [resolver-sim.protocols.sew.types :as t]))
+  (:require [resolver-sim.protocols.sew.types :as t]
+            [resolver-sim.time.context :as time-ctx]))
 
 ;; ---------------------------------------------------------------------------
 ;; Module stubs
@@ -133,6 +134,60 @@
 
       :else
       :direct)))
+
+;; ---------------------------------------------------------------------------
+;; Resolver overflow authorization
+;;
+;; A resolver-overflow record is created by governance when a primary resolver
+;; is overcapacity.  Listed failover resolvers can then resolve disputes that
+;; would normally be assigned to the overloaded primary.
+;;
+;; Authorization is scoped by:
+;;   :overflow-id        — explicit record lookup (no search-based auth)
+;;   :failover-resolvers — only listed actors
+;;   :resolver           — only workflows whose primary matches
+;;   :expires-at         — time-bounded
+;;   :max-workflows      — quantity-bounded
+;;   :used-workflows     — single-use per workflow
+;; ---------------------------------------------------------------------------
+
+(defn authorized-overflow-resolver?
+  "True when caller is authorized to resolve workflow-id under a specific
+   resolver-overflow record.  Returns the overflow record or nil."
+  [world workflow-id caller overflow-id]
+  (let [record  (get-in world [:resolver-overflows overflow-id])
+        now     (time-ctx/block-ts world)
+        et      (t/get-transfer world workflow-id)
+        primary (:dispute-resolver et)]
+    (when (and record
+               (= :active (:status record))
+               (<= (:starts-at record 0) now)
+               (< now (:expires-at record))
+               (< (count (:used-workflows record #{}))
+                  (:max-workflows record 0))
+               (not (contains? (:used-workflows record #{}) workflow-id))
+               (contains? (:failover-resolvers record) caller)
+               (= (:resolver record) primary)
+               (= :disputed (:escrow-state et)))
+      record)))
+
+(defn active-overflows-for
+  "Return all active resolver-overflow records that apply to workflow-id.
+   Used for invariant checks, liveness display, and available-actions surfacing."
+  [world workflow-id]
+  (let [now     (time-ctx/block-ts world)
+        et      (t/get-transfer world workflow-id)
+        primary (:dispute-resolver et)]
+    (when (= :disputed (:escrow-state et))
+      (vec (for [[_ record] (:resolver-overflows world)
+                 :when (and (= :active (:status record))
+                            (<= (:starts-at record 0) now)
+                            (< now (:expires-at record))
+                            (< (count (:used-workflows record #{}))
+                               (:max-workflows record 0))
+                            (not (contains? (:used-workflows record #{}) workflow-id))
+                            (= (:resolver record) primary))]
+              record)))))
 
 ;; ---------------------------------------------------------------------------
 ;; ModuleSnapshot immutability assertion

@@ -133,3 +133,133 @@
     (is (true?  (:authorized? (mod-fn 0 "0xJuror1"))) "level 0 juror authorized for wf 0")
     (is (false? (:authorized? (mod-fn 0 "0xJuror2"))) "level 1 juror not authorized at level 0")
     (is (true?  (:authorized? (mod-fn 1 "0xJuror2"))) "level 1 juror authorized for wf 1")))
+
+;; ---------------------------------------------------------------------------
+;; Resolver overflow authorization
+;; ---------------------------------------------------------------------------
+
+(def gov-addr    "0xGovernance")
+(def overflow-resolver "0xOverflow")
+(def primary-addr "0xPrimary")
+
+(defn- make-overflow-record
+  "Build a resolver-overflow record for testing."
+  [& {:keys [status starts-at expires-at max-workflows used resolvers reason
+             primary]
+      :or   {status :active, starts-at 0, expires-at 99999, max-workflows 5
+             used #{}, resolvers #{overflow-resolver}, reason :resolver-overcapacity
+             primary primary-addr}}]
+  {:overflow-id        0
+   :scope              :resolver
+   :resolver           primary
+   :reason             reason
+   :authorized-by      gov-addr
+   :created-at         0
+   :starts-at          starts-at
+   :expires-at         expires-at
+   :max-workflows      max-workflows
+   :failover-resolvers resolvers
+   :used-workflows     used
+   :status             status})
+
+(defn- world-with-overflow-escrow
+  "World with one :disputed escrow under primary-addr and an overflow record."
+  [& {:keys [record overrides]
+      :or   {record (make-overflow-record)}}]
+  (let [snap  (snap-fix/escrow-snapshot {:escrow-fee-bps 50 :max-dispute-duration 3600})
+        sett  (t/make-escrow-settings {})
+        r     (lc/create-escrow (t/empty-world 1000) alice "0xUSDC" bob 1000 sett snap)
+        w     (:world r)]
+    (-> w
+        (assoc-in [:escrow-transfers 0 :escrow-state] :disputed)
+        (assoc-in [:escrow-transfers 0 :dispute-resolver] primary-addr)
+        (assoc-in [:resolver-overflows 0] record))))
+
+;; authorized-overflow-resolver? — basic success path
+
+(deftest overflow-authorizes-listed-resolver
+  (let [w (world-with-overflow-escrow)]
+    (is (some? (auth/authorized-overflow-resolver? w 0 overflow-resolver 0))
+        "listed failover resolver is authorized under overflow")))
+
+(deftest overflow-rejects-unlisted-resolver
+  (let [w (world-with-overflow-escrow)]
+    (is (nil? (auth/authorized-overflow-resolver? w 0 carol 0))
+        "unlisted actor is not authorized")))
+
+(deftest overflow-rejects-expired
+  (let [w (world-with-overflow-escrow :record (make-overflow-record :expires-at 500))]
+    (is (nil? (auth/authorized-overflow-resolver? w 0 overflow-resolver 0))
+        "expired overflow does not authorize")))
+
+(deftest overflow-rejects-not-yet-started
+  (let [w (world-with-overflow-escrow :record (make-overflow-record :starts-at 9999))]
+    (is (nil? (auth/authorized-overflow-resolver? w 0 overflow-resolver 0))
+        "overflow not yet started does not authorize")))
+
+(deftest overflow-rejects-cap-exhausted
+  (let [w (world-with-overflow-escrow
+            :record (make-overflow-record :max-workflows 2 :used #{0 1}))]
+    (is (nil? (auth/authorized-overflow-resolver? w 0 overflow-resolver 0))
+        "cap-exhausted overflow does not authorize")))
+
+(deftest overflow-rejects-duplicate-workflow
+  (let [w (world-with-overflow-escrow
+            :record (make-overflow-record :used #{0}))]
+    (is (nil? (auth/authorized-overflow-resolver? w 0 overflow-resolver 0))
+        "already-resolved workflow is not authorized")))
+
+(deftest overflow-rejects-wrong-resolver
+  (let [w (world-with-overflow-escrow
+            :record (make-overflow-record :primary "0xOther"))]
+    (is (nil? (auth/authorized-overflow-resolver? w 0 overflow-resolver 0))
+        "workflow with different primary resolver is rejected")))
+
+(deftest overflow-rejects-non-disputed
+  (let [w (-> (world-with-overflow-escrow)
+              (assoc-in [:escrow-transfers 0 :escrow-state] :pending))]
+    (is (nil? (auth/authorized-overflow-resolver? w 0 overflow-resolver 0))
+        "non-disputed workflow is rejected")))
+
+(deftest overflow-rejects-revoked
+  (let [w (world-with-overflow-escrow
+            :record (make-overflow-record :status :revoked))]
+    (is (nil? (auth/authorized-overflow-resolver? w 0 overflow-resolver 0))
+        "revoked overflow does not authorize")))
+
+(deftest overflow-returns-record-on-success
+  (let [w (world-with-overflow-escrow)
+        result (auth/authorized-overflow-resolver? w 0 overflow-resolver 0)]
+    (is (map? result) "returns record on success")
+    (is (= 0 (:overflow-id result)))))
+
+;; active-overflows-for — search-based lookup
+
+(deftest active-overflows-returns-active
+  (let [w (world-with-overflow-escrow)]
+    (is (= 1 (count (auth/active-overflows-for w 0)))
+        "finds the active overflow")))
+
+(deftest active-overflows-empty-for-terminal
+  (let [w (-> (world-with-overflow-escrow)
+              (assoc-in [:escrow-transfers 0 :escrow-state] :released))]
+    (is (empty? (auth/active-overflows-for w 0))
+        "terminal workflow has no active overflows")))
+
+(deftest active-overflows-empty-for-different-resolver
+  (let [w (world-with-overflow-escrow
+            :record (make-overflow-record :primary "0xOther"))]
+    (is (empty? (auth/active-overflows-for w 0))
+        "overflow for different resolver is not returned")))
+
+(deftest active-overflows-excludes-expired
+  (let [w (world-with-overflow-escrow
+            :record (make-overflow-record :expires-at 500))]
+    (is (empty? (auth/active-overflows-for w 0))
+        "expired overflow excluded")))
+
+(deftest active-overflows-excludes-cap-exhausted
+  (let [w (world-with-overflow-escrow
+            :record (make-overflow-record :max-workflows 1 :used #{0}))]
+    (is (empty? (auth/active-overflows-for w 0))
+        "cap-exhausted overflow excluded")))

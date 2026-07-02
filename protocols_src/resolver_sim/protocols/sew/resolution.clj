@@ -508,64 +508,41 @@
           (assoc-in [:pending-settlements workflow-id] t/empty-pending-settlement))
       world)))
 
-(defn execute-resolution
-  "Submit a resolution decision for a :disputed escrow.
-
-   caller              — address of msg.sender (must be authorized resolver)
-   is-release          — true = release to recipient, false = refund to sender
-   resolution-hash     — bytes32 (opaque string in the model)
-   resolution-module-fn — (fn [wf caller] → {:authorized? bool}) or nil"
-  [world workflow-id caller is-release resolution-hash resolution-module-fn]
+(defn apply-resolution-transition
+  "Core resolution state transition once authorization is confirmed.
+   Skips the authorized-resolver? check — caller must gate it separately.
+   resolution-source is a keyword like :resolver-overflow for provenance."
+  [world workflow-id caller is-release resolution-hash resolution-module-fn
+   & {:keys [resolution-source]}]
   (let [ctx (attr/make-context {:workflow-id workflow-id})]
     (attr/log-annotated! :debug "Submitting resolution" ctx {:caller caller})
     (cond
       (not (t/valid-workflow-id? world workflow-id))
       (guard-fail :invalid-workflow-id :workflow-id workflow-id)
 
-    ;; State is checked before auth so any caller—authorized or not—receives
-    ;; :transfer-not-in-dispute on a terminal escrow rather than a misleading
-    ;; :not-authorized-resolver that obscures the real cause of failure.
       (not= :disputed (t/escrow-state world workflow-id))
       (guard-fail :transfer-not-in-dispute
                   :escrow-state (t/escrow-state world workflow-id)
-                  :workflow-id workflow-id)
-
-      (not (auth/authorized-resolver? world workflow-id caller resolution-module-fn))
-      (guard-fail :not-authorized-resolver
-                  :caller caller
-                  :dispute-level (t/dispute-level world workflow-id)
                   :workflow-id workflow-id)
 
       :else
       (let [world          (clear-pending-settlement world workflow-id)
             world          (lc/accrue-yield world workflow-id)
             snap           (t/get-snapshot world workflow-id)
-          ;; Phase L extension: window is the MAX of appeal-window and challenge-window
             window-dur     (max (:appeal-window-duration snap 0)
                                 (:challenge-window-duration snap 0))
             now            (time-ctx/block-ts world)
-          ;; Mirrors SettlementOps.computeResolutionExecution:
-          ;; if isFinalRound (currentRound >= MAX_ROUND) → shouldExecute = true
-          ;; (no appeal window, decision is immediately final)
             final-round?   (t/final-round? world workflow-id)
-          ;; Phase K: handle reversal slashing (Track 1 auto-slash OR Track 2 pending).
-          ;; Called BEFORE the final-round check below so that the prior resolver's
-          ;; stake is deducted before the current decision is recorded — the current
-          ;; resolver cannot be slashed for their own decision.
             world' (-> world
                         (handle-reversal-slashing workflow-id is-release)
                         (reverse-reversal-slash-on-vindication workflow-id is-release))
-
-          ;; Record current decision for future reversal checks
             world''        (assoc-in world' [:previous-decisions workflow-id (t/dispute-level world workflow-id)]
                                      {:resolver caller :is-release is-release})
-
-          ;; Store resolution metadata on the escrow-transfer so terminal-world
-          ;; consumers can query who resolved, what the outcome was, and the hash
             world'''       (assoc-in world'' [:escrow-transfers workflow-id :resolution]
                                      {:resolved-by caller
                                       :is-release is-release
-                                      :resolution-hash resolution-hash})
+                                      :resolution-hash resolution-hash
+                                      :resolution-source (or resolution-source :normal)})
             decision-info {:decision-id (str "resolve-" workflow-id "-" (t/dispute-level world workflow-id))
                            :step (time-ctx/block-ts world)
                            :alternatives [:release :refund]
@@ -576,12 +553,9 @@
                            :workflow-id workflow-id}]
         (emit-decision-evidence! decision-info)
         (if (or final-round? (not (pos? window-dur)))
-        ;; Final round or no windows: execute immediately
           (t/ok (if is-release
                   (finalize world''' workflow-id :released)
                   (finalize world''' workflow-id :refunded)))
-
-        ;; Window active: defer settlement
           (let [pending (t/make-pending-settlement
                          {:exists          true
                           :is-release      is-release
@@ -589,6 +563,29 @@
                           :resolution-hash resolution-hash})
                 world'''' (assoc-in world''' [:pending-settlements workflow-id] pending)]
             (t/ok world'''')))))))
+
+(defn execute-resolution
+  "Submit a resolution decision for a :disputed escrow.
+   Gates on authorized-resolver? then delegates to apply-resolution-transition."
+  [world workflow-id caller is-release resolution-hash resolution-module-fn]
+  (cond
+    (not (t/valid-workflow-id? world workflow-id))
+    (guard-fail :invalid-workflow-id :workflow-id workflow-id)
+
+    (not= :disputed (t/escrow-state world workflow-id))
+    (guard-fail :transfer-not-in-dispute
+                :escrow-state (t/escrow-state world workflow-id)
+                :workflow-id workflow-id)
+
+    (not (auth/authorized-resolver? world workflow-id caller resolution-module-fn))
+    (guard-fail :not-authorized-resolver
+                :caller caller
+                :dispute-level (t/dispute-level world workflow-id)
+                :workflow-id workflow-id)
+
+    :else
+    (apply-resolution-transition world workflow-id caller is-release
+                                 resolution-hash resolution-module-fn)))
 
 ;; ---------------------------------------------------------------------------
 ;; execute-pending-settlement
@@ -1152,16 +1149,23 @@
       (reject! :invalid-slash-amount)
 
       :else
-      (let [dispute-resolver (get-in world [:escrow-transfers wf-id :dispute-resolver])]
+      (let [dispute-resolver (get-in world [:escrow-transfers wf-id :dispute-resolver])
+            resolved-by      (get-in world [:escrow-transfers wf-id :resolution :resolved-by])]
         (cond
           (or (nil? dispute-resolver) (= "" dispute-resolver))
           (reject! :invalid-resolver-addr :dispute-resolver dispute-resolver)
 
-          (not= dispute-resolver resolver-addr)
+          ;; Accept if the address matches either the current dispute-resolver
+          ;; (normal resolution path) or the resolution's resolved-by field
+          ;; (overflow/failover path).  The failover resolver is whoever
+          ;; actually executed the resolution, regardless of who the current
+          ;; dispute-resolver is.
+          (not (or (= dispute-resolver resolver-addr)
+                   (= resolved-by resolver-addr)))
           (reject! :slash-resolver-mismatch :dispute-resolver dispute-resolver :expected resolver-addr)
 
           :else
-          (let [current-stake (reg/get-stake world dispute-resolver)
+          (let [current-stake (reg/get-stake world resolver-addr)
                 max-bps       (get-in world [:params :max-slash-per-offense-bps] 5000)]
             (cond
               (<= current-stake 0)
@@ -1343,12 +1347,14 @@
   "Fallback for reversal slash-ids: if slash-id is an integer workflow-id
    and no pending entry exists, try the Level 1 reversal key format.
    This handles the common case where callers pass workflow-id instead of
-   the string-format reversal slash-id."
+   the string-format reversal slash-id.
+   Returns the matching key string or the original slash-id, never a value."
   [world slash-id workflow-id]
   (if (and (integer? slash-id)
            (nil? (get-in world [:pending-fraud-slashes slash-id])))
-    (or (get-in world [:pending-fraud-slashes (str workflow-id "-reversal-0")])
-        (get-in world [:pending-fraud-slashes (str workflow-id "-force-reversal-0")])
+    (or (first (filter #(get-in world [:pending-fraud-slashes %])
+                       [(str workflow-id "-reversal-0")
+                        (str workflow-id "-force-reversal-0")]))
         slash-id)
     slash-id))
 

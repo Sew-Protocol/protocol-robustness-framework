@@ -339,6 +339,74 @@
                                 :new-resolver (:new-resolver result)})
           result)))))
 
+(defmethod apply-action "activate-resolver-overflow"
+  [{:keys [agent-index resolver-overflow-policy] :as context} world event]
+  (actx/with-governance-actor
+    agent-index event
+    (governance-pred context)
+    (fn [addr _agent]
+      (let [pp       (:params event)
+            now      (time-ctx/block-ts world)
+            policy   resolver-overflow-policy
+            allowed  (:allowed-reasons policy #{:resolver-overcapacity})
+            reason   (:reason pp)
+            resolver (:resolver pp)
+            max-wf   (:default-max-workflows policy 100)
+            resolvers (seq (:failover-resolvers policy))
+            overflow-id (get world :next-overflow-id 0)]
+        (cond
+          (not resolver)
+          (t/fail :missing-resolver-address)
+          (not (contains? allowed reason))
+          (t/fail :unauthorized-overflow-reason)
+          (not resolvers)
+          (t/fail :no-failover-resolvers)
+          :else
+          (let [cap (get-in world [:resolver-capacities resolver])]
+            (when (and cap (< (:current-active cap 0) (:max-concurrent cap 1)))
+              (attr/log-with-attr :warn "activate-resolver-overflow"
+                {:resolver resolver :reason reason
+                 :message "Resolver is not at capacity — activation may be premature"}))
+            (let [record {:overflow-id        overflow-id
+                          :resolver           resolver
+                          :reason             reason
+                          :authorized-by      addr
+                          :created-at         now
+                          :starts-at          now
+                          :expires-at         (+ now (:default-duration policy 3600))
+                          :max-workflows      max-wf
+                          :failover-resolvers (set resolvers)
+                          :used-workflows     #{}
+                          :status             :active}
+                  world' (-> world
+                             (assoc-in [:resolver-overflows overflow-id] record)
+                             (update :next-overflow-id inc))]
+              (assoc (t/ok world') :extra {:overflow-id overflow-id}))))))))
+
+(defmethod apply-action "execute-overflow-resolution"
+  [{:keys [agent-index]} world event]
+  (actx/with-resolved-actor
+    agent-index event
+    (fn [addr]
+      (let [pp          (:params event)
+            workflow-id (:workflow-id pp)
+            overflow-id (:overflow-id pp)
+            is-release  (get pp :is-release true)
+            resolution-hash (get pp :resolution-hash "0xoverflow")
+            failover    (auth/authorized-overflow-resolver?
+                          world workflow-id addr overflow-id)]
+        (if failover
+          (let [used' (conj (:used-workflows failover) workflow-id)
+                cap   (:max-workflows failover)
+                status' (if (>= (count used') cap) :exhausted :active)
+                world' (-> world
+                           (assoc-in [:resolver-overflows overflow-id :used-workflows] used')
+                           (assoc-in [:resolver-overflows overflow-id :status] status'))]
+            (res/apply-resolution-transition
+              world' workflow-id addr is-release resolution-hash nil
+              :resolution-source :resolver-overflow))
+          (t/fail :not-authorized-resolver))))))
+
 (defmethod apply-action "unfreeze-resolver"
   [{:keys [agent-index] :as context} world event]
   (actx/with-governance-actor
@@ -625,7 +693,7 @@
         (res/resolve-appeal world
                             (event-workflow-id event)
                             addr
-                             (boolean (:upheld? p))
+                            (boolean (:upheld? p))
                             (event-slash-id event))))))
 
 (defmethod apply-action "execute-fraud-slash"
@@ -842,13 +910,23 @@
                            (if new-resolver
                              {:ok true :new-resolver new-resolver}
                              {:ok false :error :escalation-not-allowed}))))]
-      {:agent-index          (into {} (map (juxt :id identity) agents))
-       :snapshot             snapshot
-       :escalation-fn        esc-fn
-       :resolution-module-fn rm-fn
-       :resolution-level-map level-map
-       :temporal-rules       (sew-temporal-rules)
-       :governance-mode      (get pp :governance-mode :restricted)}))
+        (let [of-policy  (get pp :resolver-overflow-policy {})
+              def-policy {:enabled?            true
+                          :governance-address  nil
+                          :default-duration    3600
+                          :max-duration        86400
+                          :default-max-workflows 100
+                          :max-workflows       500
+                          :failover-resolvers  #{}
+                          :allowed-reasons     #{:resolver-overcapacity}}]
+          {:agent-index          (into {} (map (juxt :id identity) agents))
+           :snapshot             snapshot
+           :escalation-fn        esc-fn
+           :resolution-module-fn rm-fn
+           :resolution-level-map level-map
+           :temporal-rules       (sew-temporal-rules)
+           :governance-mode      (get pp :governance-mode :restricted)
+           :resolver-overflow-policy (merge def-policy of-policy)})))
 
   (dispatch-action [_ context world event]
     (let [flags       (:replay-flags context {})
@@ -915,8 +993,17 @@
                                       (or (= actor (:from et)) (= actor (:to et)))
                                       (conj {:action "escalate-dispute" :params {:workflow-id wf}})
 
-                               ;; Anyone can challenge (Phase L)
-                                      true (conj {:action "challenge-resolution" :params {:workflow-id wf}}))))))))))))
+                                ;; Anyone can challenge (Phase L)
+                                       true (conj {:action "challenge-resolution" :params {:workflow-id wf}})))
+
+                        ;; Resolver overflow: failover actors can resolve under active overflow
+                               :always
+                               (into (for [o (auth/active-overflows-for world wf)
+                                           :when (contains? (:failover-resolvers o) actor)]
+                                       [{:action "execute-overflow-resolution"
+                                         :params {:workflow-id wf :overflow-id (:overflow-id o) :is-release true}}
+                                        {:action "execute-overflow-resolution"
+                                         :params {:workflow-id wf :overflow-id (:overflow-id o) :is-release false}}])))))))))))
 
   (created-id [_ action extra]
     (when (= (compat/canonical-action {:action action}) "create-escrow")

@@ -79,26 +79,64 @@
                 (is (.exists (java.io.File. path)))
                 (println "Exported to" path)))))))))
 
-(deftest governance-override-test
-  (let [session (ir/start-session sample-fixture initial-events)
-        ;; No governance agent — normal denial
+(def overflow-fixture
+  "Same as sample-fixture but with resolver-overflow-policy configured."
+  (update-in sample-fixture [:protocol-params]
+             assoc :resolver-overflow-policy
+             {:default-duration    3600
+              :max-duration        86400
+              :default-max-workflows 10
+              :max-workflows       50
+              :failover-resolvers  #{"0xfailover"}
+              :allowed-reasons     #{:resolver-overcapacity}}))
+
+(def overflow-agents
+  [{:id "buyer"      :address "0xbuyer"      :strategy "honest"}
+   {:id "governance" :address "0xgovernance" :role "governance"}
+   {:id "resolver"   :address "0xresolver"   :role "resolver"}
+   {:id "failover"   :address "0xfailover"   :role "resolver"}])
+
+(deftest resolver-overflow-test
+  (let [session (ir/start-session
+                 (assoc overflow-fixture :agents overflow-agents)
+                 [{:seq 0 :time 1000 :agent "buyer" :action "create-escrow"
+                   :params {:token "USDC" :to "0xseller" :amount 5000}}
+                  {:seq 1 :time 1060 :agent "buyer" :action "raise-dispute"
+                   :params {:workflow-id 0}}])
+        _ (is (= :disputed (t/escrow-state (:world session) 0)))
+        ;; Normal execute-resolution by unauthorized buyer fails
         session-fail (ir/apply-event session
                                      {:action "execute-resolution"
                                       :params {:workflow-id 0 :is-release true}
                                       :agent "buyer"})
         _ (is (= :disputed (t/escrow-state (:world session-fail) 0)))
         _ (is (not (:exists (t/get-pending (:world session-fail) 0)))
-              "buyer not authorized without governance")
-        ;; Governance agent is available but resolver is healthy — override accepted
-        ;; (:governed-by is the auth, resolver-unavailable-reason is just informational)
-        session-override (ir/apply-event session
-                                         {:action "execute-resolution"
-                                          :params {:workflow-id 0 :is-release true}
-                                          :agent "buyer"}
-                                         {:governed-by "resolver"})
-        world (:world session-override)]
+              "unauthorized buyer cannot resolve")
+        ;; Governance (governance agent) activates overflow mode
+        session (ir/apply-event session
+                                {:action "activate-resolver-overflow"
+                                 :agent "governance"
+                                 :params {:resolver "0xresolver"
+                                          :reason :resolver-overcapacity}})
+        world (:world session)
+        _ (is (get world :resolver-overflows)
+              "overflow record created")
+        _ (is (= 1 (get world :next-overflow-id))
+              "overflow-id counter incremented")
+        ;; Failover resolver executes under the overflow
+        overflow-id (-> world :resolver-overflows keys first)
+        session (ir/apply-event session
+                                {:action "execute-overflow-resolution"
+                                 :agent "failover"
+                                 :params {:workflow-id 0
+                                          :overflow-id overflow-id
+                                          :is-release true}})
+        world (:world session)]
     (is (= :disputed (t/escrow-state world 0)))
-    (is (:exists (t/get-pending world 0)) "pending exists after governance override")
-    ;; Step should record which agent approved the override
-    (is (= "0xresolver" (-> session-override :steps last :governance-override))
-        "governance agent address recorded in step")))
+    (is (:exists (t/get-pending world 0)) "pending after overflow resolution")
+    ;; Overflow record tracks usage
+    (let [record (get-in world [:resolver-overflows overflow-id])]
+      (is (= #{0} (:used-workflows record))
+          "workflow tracked in overflow record")
+      (is (= :active (:status record))
+          "overflow still active (cap not reached)"))))

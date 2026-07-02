@@ -269,6 +269,8 @@
      :resolver-epoch-slashed {} ; {addr {:epoch-start nat-int :amount nat-int}} — per-epoch slash cap
      :resolver-capacities   {} ; {addr {:max-concurrent nat-int :current-active nat-int}} — mirrors DRM.resolverCapacity
      :resolver-unavailable #{} ; #{resolver-addr} currently marked unavailable
+     :resolver-overflows   {} ; {overflow-id -> overflow-record} — scoped resolver overflow failover
+     :next-overflow-id     0 ; counter for resolver-overflow records
      :unavailability-stats {:total-resolvers 0 :unavailable-count 0 :last-update block-time}
      :circuit-breaker {:active? false :last-trigger 0 :cooldown 3600 :threshold-bps 3000}
      :token-fot-bps          {} ; {token-addr nat-int} — Fee-on-Transfer BPS per token (0 = normal ERC20)

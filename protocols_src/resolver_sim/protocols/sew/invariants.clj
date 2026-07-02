@@ -15,6 +15,7 @@
      4. bond-boundedness (single)    — slash amount <= posted bond per workflow (vacuous until bonds added)
      5. no-double-finalize           — each workflow-id finalizes at most once (structural guarantee)"
   (:require [clojure.set :as set]
+            [resolver-sim.protocols.sew.authority     :as auth]
             [resolver-sim.protocols.sew.types         :as t]
             [resolver-sim.yield.accounting            :as yield-acct]
             [resolver-sim.protocols.sew.state-machine :as sm]
@@ -1137,7 +1138,8 @@
                     has-path? (or (some? (:dispute-resolver et))
                                   (some? (:resolution-module snap))
                                   (pos? (get snap :max-dispute-duration 0))
-                                  (:exists (t/get-pending world wf)))]
+                                  (:exists (t/get-pending world wf))
+                                  (seq (auth/active-overflows-for world wf)))]
               :when (not has-path?)]
           {:workflow-id wf})]
     {:holds?     (empty? violations)

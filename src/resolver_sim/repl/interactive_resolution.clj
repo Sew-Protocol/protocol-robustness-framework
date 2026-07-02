@@ -52,7 +52,8 @@
 
 (defn- workflow-stuck?
   "True when a :disputed escrow has no termination mechanism — no resolver
-   assigned, no resolution module, no timeout path, no pending settlement."
+   assigned, no resolution module, no timeout path, no pending settlement,
+   and no active resolver overflow."
   [world wf]
   (when (= :disputed (t/escrow-state world wf))
     (let [et   (t/get-transfer world wf)
@@ -60,7 +61,8 @@
       (not (or (:dispute-resolver et)
                (:resolution-module snap)
                (pos? (get snap :max-dispute-duration 0))
-               (:exists (t/get-pending world wf)))))))
+               (:exists (t/get-pending world wf))
+               (seq (:resolver-overflows world)))))))
 
 (defn- next-keeper-deadline
   "Earliest future timestamp when a keeper action could fire for this workflow.
@@ -193,53 +195,25 @@
                     :level (t/dispute-level world wf)}]))
         (:escrow-transfers world)))
 
-(defn- governance-approve
-  "Context override that makes any resolver authorization check pass.
-   Records which governance agent approved the override.
-   Only usable through apply-event with a :governed-by option."
-  [gov-addr]
-  {:resolution-level-map nil
-   :resolution-module-fn (fn [& _] {:authorized? true
-                                    :governance-override gov-addr})
-   :governance-override  gov-addr})
-
-(defn- governance-patch-world
-  "Patch the world so that authorized-resolver? enters its resolution-module
-   priority (tier 2) and the override fn can authorize any caller."
-  [world wf-id]
-  (assoc-in world [:module-snapshots wf-id :resolution-module] ":gov-override"))
-
 (defn- apply-choice
-  "Apply a choice action, return updated session.
-   When context-override is supplied, it is merged into the session context
-   for this action only."
-  [session choice & [context-override]]
+  "Apply a choice action, return updated session."
+  [session choice]
   (let [event  {:action (:action choice)
                 :params (:params choice)
                 :agent  (when (= :agent (:type choice)) (:actor choice))}
-        ctx    (if context-override
-                 (merge (:context session) context-override)
-                 (:context session))
-        world  (if context-override
-                 (governance-patch-world (:world session)
-                                         (get (:params choice) :workflow-id))
-                 (:world session))
-        gov    (:governance-override context-override)
-        result (sew/apply-action ctx world event)]
+        result (sew/apply-action (:context session) (:world session) event)]
     (if (:ok result)
       (let [world' (:world result)
-            step   (cond-> {:seq    (count (:steps session))
-                            :action (:action choice)
-                            :params (:params choice)
-                            :actor  (:actor choice)
-                            :time   (:block-time world')
-                            :result :applied
-                            :type   (:type choice)}
-                     gov (assoc :governance-override gov))]
+            step   {:seq    (count (:steps session))
+                    :action (:action choice)
+                    :params (:params choice)
+                    :actor  (:actor choice)
+                    :time   (:block-time world')
+                    :result :applied
+                    :type   (:type choice)}]
         (println (str "Step " (:seq step) ": " (:action choice)
                       (when (= :agent (:type choice))
                         (str " (" (:actor choice) ")"))
-                      (when gov (str " [gov: " gov "]"))
                       " -> ok"))
         (let [before (format-escrow-state (:world session))
               after  (format-escrow-state world')]
@@ -271,69 +245,16 @@
     (do (println "No choice" n "available")
         session)))
 
-(defn- resolver-unavailable-reason
-  "Return a reason string if the designated resolver for workflow-id is
-   genuinely unavailable — over capacity, frozen, or opted out.
-   Returns nil when the resolver is available."
-  [world wf]
-  (let [et       (t/get-transfer world wf)
-        resolver (:dispute-resolver et)
-        now      (time-ctx/block-ts world)]
-    (when resolver
-      (or (when-let [cap (get-in world [:resolver-capacities resolver])]
-            (when (>= (:current-active cap 0) (:max-concurrent cap 1))
-              (str "resolver " resolver " at capacity ("
-                   (:current-active cap) "/" (:max-concurrent cap) ")")))
-          (when-let [frozen-until (get-in world [:resolver-frozen-until resolver] 0)]
-            (when (> frozen-until now)
-              (str "resolver " resolver " frozen until t=" frozen-until)))
-          (when (contains? (get world :resolver-unavailable #{}) resolver)
-            (str "resolver " resolver " marked unavailable"))
-          (when (get-in world [:circuit-breaker :active?])
-            "circuit breaker active")))))
-
-(defn- resolve-gov-agent
-  "Resolve a governance agent name or address to an address.
-   Returns the address string or nil if not found."
-  [session agent-id]
-  (let [agent-index (get-in session [:context :agent-index])]
-    (some (fn [[id agent]]
-            (when (or (= id agent-id)
-                      (= (:address agent) agent-id))
-              (:address agent)))
-          agent-index)))
-
 (defn apply-event
   "Directly apply an action event without going through available-choices.
-   Event: {:action \"...\" :params {...} :agent \"...\"}
-
-   Options:
-     :governed-by <agent-id> — governance override of resolver authorization.
-       The named agent must exist in the session's agent list and is recorded
-       as the governance actor that approved the override.  Override is only
-       accepted when the designated resolver is genuinely unavailable
-       (overcapacity, frozen, or opted out).  The resolver-unavailability
-       check is a safeguard, not a governance gate — :governed-by is the
-       actual authorization for the override."
-  [session event & [{:keys [governed-by]}]]
-  (let [choice       {:action (:action event)
-                      :params (:params event)
-                      :actor  (:agent event)
-                      :type   (if (:agent event) :agent :keeper)
-                      :summary (str "direct: " (:action event))}
-        gov-addr    (when governed-by (resolve-gov-agent session governed-by))]
-    (if (and governed-by (not gov-addr))
-      (do (println (str "[GOV] unknown governance agent: " governed-by
-                        " — must be one of "
-                        (keys (get-in session [:context :agent-index]))))
-          (apply-choice session choice nil))
-      (let [reason (resolver-unavailable-reason (:world session)
-                                                (get (:params event) :workflow-id))]
-        (if gov-addr
-          (do (println (str "[GOV] " governed-by " overrides resolver authorization"
-                            (when reason (str " (" reason ")"))))
-              (apply-choice session choice (governance-approve gov-addr)))
-          (apply-choice session choice nil))))))
+   Event: {:action \"...\" :params {...} :agent \"...\"}"
+  [session event]
+  (let [choice {:action (:action event)
+                :params (:params event)
+                :actor  (:agent event)
+                :type   (if (:agent event) :agent :keeper)
+                :summary (str "direct: " (:action event))}]
+    (apply-choice session choice)))
 
 (defn auto-until-decision
   "Run keeper/timed actions until no automated actions remain.
@@ -381,7 +302,15 @@
           (let [resolver (:dispute-resolver et)
                 mod      (:resolution-module snap)
                 max-dur  (get snap :max-dispute-duration 0)
-                dispute-ts (get-in world [:dispute-timestamps wf] 0)]
+                dispute-ts (get-in world [:dispute-timestamps wf] 0)
+                overflows (vals (:resolver-overflows world))
+                active-of (first (filter #(and (= :active (:status %))
+                                               (<= (:starts-at % 0) now)
+                                               (< now (:expires-at %))
+                                               (< (count (:used-workflows % #{}))
+                                                  (:max-workflows % 0))
+                                               (= (:resolver %) resolver))
+                                         overflows))]
             (println (str "    resolve         "
                           (if resolver "yes" "no")
                           (when resolver (str " (" resolver ")"))))
@@ -400,7 +329,14 @@
                             (str " (appeal deadline t=" (:appeal-deadline pending)
                                  (when (dl/deadline-expired? now (:appeal-deadline pending))
                                    " EXECUTABLE")
-                                 ")"))))))
+                                 ")"))))
+            (if active-of
+              (println (str "    overflow        available via overflow-id "
+                            (:overflow-id active-of) " until t=" (:expires-at active-of)
+                            " (resolver " (:resolver active-of)
+                            ", actors: " (str/join ", " (:failover-resolvers active-of)) ")"))
+              (when resolver
+                (println "    overflow        not authorized")))))
         (when deadline
           (println (str "  Next keeper action: " (name (:action deadline))
                         " at t=" (:deadline-ts deadline)
