@@ -33,7 +33,7 @@ Core Python package for interfacing with the gRPC simulation server.
 
 ```bash
 # Start the gRPC simulation server
-nohup clojure -M:run -- -S --port 7070 > grpc-server.log 2>&1 &
+nohup clojure -M:run -- -S --port 50051 > grpc-server.log 2>&1 &
 sleep 10
 
 # Run all adversarial scenarios (S24–S35)

@@ -19,7 +19,8 @@
    :decision-quality "decision-quality"
    :assurance "assurance"
    :allocation "allocation"
-   :yield "yield"})
+   :yield "yield"
+   :framework "framework"})
 
 (defn edn-files [dir]
   (filter #(and (.endsWith (.getName %) ".edn") (not (.isDirectory %)))

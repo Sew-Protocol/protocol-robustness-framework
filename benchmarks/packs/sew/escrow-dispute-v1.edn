@@ -32,7 +32,10 @@
                               :consensus/finality
                               :consensus/escalation
                               :consensus/liveness
-                              :consensus/legitimacy]
+                              :consensus/legitimacy
+                              :concept/conservation
+                              :concept/confidence
+                              :concept/configuration]
   :benchmark/claims          [{:claim/id :claim/no-unauthorized-release
                               :claim/role :primary
                               :claim/rationale "Escrow funds must only move through authorized settlement paths."

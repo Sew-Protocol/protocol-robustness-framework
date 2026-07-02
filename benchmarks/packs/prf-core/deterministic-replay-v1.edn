@@ -23,7 +23,9 @@
    :benchmark/concepts        [:verifiable-assurance/forensic-confidence
                                :attestation/verification
                                :robustness/evidence-integrity
-                               :forensic/evidence-chain]
+                               :forensic/evidence-chain
+                               :concept/confidence
+                               :concept/configuration]
   :benchmark/claims          [{:claim/id :claim/replay-identical-results
                               :claim/role :primary
                               :claim/rationale "Replaying the same scenario must produce identical outcomes."

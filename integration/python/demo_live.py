@@ -4,7 +4,7 @@ demo_live.py — Live gRPC simulation demo (three scenarios).
 Usage:
     python python/demo_live.py
 
-Requires the Clojure gRPC server running on localhost:7070:
+Requires the Clojure gRPC server running on localhost:50051:
     clojure -M:run -- -S
 """
 

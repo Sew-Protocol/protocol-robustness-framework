@@ -611,7 +611,7 @@ cli-args (cond-> ["-M:run:with-sew" "--invariants" "--scenario" scenario]
             :task (shell "python3 python/adversarial_agent.py --target-effective-steps 80 --max-attempts 800 --guided-ratio 0.80 --rejected-step-weight 0.05")}
 
   adv:server {:doc "Start gRPC simulation server on 50051 in background"
-              :task (shell "nohup clojure -M -e \"(require 'resolver-sim.server.grpc) (resolver-sim.server.grpc/start! 50051) (resolver-sim.server.grpc/await-termination)\" > grpc-server.log 2>&1 &" "sleep 2" "ss -ltnp | grep 50051 || true")}
+              :task (shell "nohup clojure -M:with-sew -e \"(require 'resolver-sim.server.grpc) (resolver-sim.server.grpc/start! 50051) (resolver-sim.server.grpc/await-termination)\" > grpc-server.log 2>&1 &" "sleep 2" "ss -ltnp | grep 50051 || true")}
 
   adv:all:broad {:doc "Start server (if needed) then run broad adversarial preset"
                  :task (do (run 'adv:server)

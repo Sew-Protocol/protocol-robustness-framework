@@ -30,7 +30,9 @@
                              :consensus/finality
                              :consensus/escalation
                              :consensus/liveness
-                             :consensus/legitimacy]
+                             :consensus/legitimacy
+                             :concept/confidence
+                             :concept/configuration]
   :benchmark/claims          [{:claim/id :claim/dispute-liveness
                               :claim/role :primary
                               :claim/rationale "Dispute resolution must make progress under adversarial load."

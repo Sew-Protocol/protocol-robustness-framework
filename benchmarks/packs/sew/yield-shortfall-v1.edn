@@ -22,7 +22,10 @@
                               :yield/yield-bearing
                               :consensus/authority
                               :consensus/evidence
-                              :consensus/legitimacy]
+                              :consensus/legitimacy
+                              :concept/conservation
+                              :concept/confidence
+                              :concept/configuration]
   :benchmark/purpose
   "Evaluate Sew yield shortfall behavior: yield preservation during
    shortfall, partial fill fairness under liquidity constraints, and

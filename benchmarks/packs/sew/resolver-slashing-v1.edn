@@ -31,7 +31,10 @@
                               :consensus/finality
                               :consensus/escalation
                               :consensus/liveness
-                              :consensus/legitimacy]
+                              :consensus/legitimacy
+                              :concept/conservation
+                              :concept/confidence
+                              :concept/configuration]
   :benchmark/claims          [{:claim/id :claim/slashing-conservation
                               :claim/role :primary
                               :claim/rationale "Slashing must distribute amounts consistently and conserve total value."

@@ -30,5 +30,5 @@ packages = ["sim_api"]
 testpaths = ["tests"]
 addopts = "-p no:cov -m 'not integration'"
 markers = [
-    "integration: requires running Clojure gRPC server on localhost:7070",
+    "integration: requires running Clojure gRPC server on localhost:50051",
 ]

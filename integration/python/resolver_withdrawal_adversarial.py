@@ -10,7 +10,7 @@ Notes:
   - The current action surface has stake registration/slashing but no explicit
     withdraw-stake action. We still probe by attempting a synthetic
     "withdraw_stake" action and assert it is rejected.
-  - Requires the Clojure gRPC server on localhost:7070.
+  - Requires the Clojure gRPC server on localhost:50051.
 
 Run:
   cd integration/python && python resolver_withdrawal_adversarial.py
@@ -43,7 +43,7 @@ def _print_step(event: dict[str, Any], resp: dict[str, Any]) -> None:
 def main() -> int:
     print("\n=== Adversarial Scenario: Resolver Withdrawal Pressure ===")
 
-    with SimulationClient(host="localhost", port=7070) as client:
+    with SimulationClient(host="localhost", port=50051) as client:
         sid = f"adv-withdraw-{uuid.uuid4()}"
         with managed_session(
             client,

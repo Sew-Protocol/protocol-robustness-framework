@@ -33,7 +33,10 @@
                              :robustness/liveness-under-load
                              :robustness/escrow-fund-safety
                              :robustness/evidence-integrity
-                             :forensic/evidence-chain]
+                             :forensic/evidence-chain
+                             :concept/conservation
+                             :concept/confidence
+                             :concept/configuration]
  :benchmark/scenarios
  [{:scenario/id "malicious-resolver-verdict-v1"
    :dimension   :robustness/resolver-accountability

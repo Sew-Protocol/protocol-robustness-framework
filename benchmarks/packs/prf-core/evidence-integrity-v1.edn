@@ -26,7 +26,9 @@
    nondeterminism. Each scenario is replayed and the evidence
    bundle hash is verified to be reproducible."
    :benchmark/concepts        [:robustness/evidence-integrity
-                               :forensic/evidence-chain]
+                               :forensic/evidence-chain
+                               :concept/confidence
+                               :concept/configuration]
    :benchmark/claims          [{:claim/id :claim/replay-identical-results
                                :claim/role :primary
                                :claim/rationale "Replay must produce identical results for evidence integrity."

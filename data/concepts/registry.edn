@@ -156,10 +156,34 @@
    :concept/status :draft
    :concept/protocols #{:protocol/sew-v1 :protocol/prf}}
 
-  {:concept/id    :forensic/evidence-chain
-   :concept/type  :assurance
-   :concept/layer :stakeholder
-   :concept/file  "data/concepts/assurance/evidence_chain.edn"
-   :concept/name  "Forensic evidence chain"
+   {:concept/id    :forensic/evidence-chain
+    :concept/type  :assurance
+    :concept/layer :stakeholder
+    :concept/file  "data/concepts/assurance/evidence_chain.edn"
+    :concept/name  "Forensic evidence chain"
+    :concept/status :draft
+    :concept/protocols #{:protocol/sew-v1 :protocol/prf}}
+
+  {:concept/id    :concept/conservation
+   :concept/type  :framework
+   :concept/layer :framework-explanation
+   :concept/file  "data/concepts/framework/conservation.edn"
+   :concept/name  "Conservation"
    :concept/status :draft
-   :concept/protocols #{:protocol/sew-v1 :protocol/prf}}]}
+   :concept/protocols #{:protocol/sew-v1}}
+
+  {:concept/id    :concept/confidence
+   :concept/type  :framework
+   :concept/layer :framework-explanation
+   :concept/file  "data/concepts/framework/confidence.edn"
+   :concept/name  "Confidence"
+   :concept/status :draft
+   :concept/protocols #{:protocol/sew-v1}}
+
+  {:concept/id    :concept/configuration
+   :concept/type  :framework
+   :concept/layer :framework-explanation
+   :concept/file  "data/concepts/framework/configuration.edn"
+   :concept/name  "Configuration"
+   :concept/status :draft
+   :concept/protocols #{:protocol/sew-v1}}]}

@@ -60,7 +60,7 @@ class SimulationClient:
             assert r["result"] == "ok"
     """
 
-    def __init__(self, host: str = "127.0.0.1", port: int = 7070, timeout: int = 30):
+    def __init__(self, host: str = "127.0.0.1", port: int = 50051, timeout: int = 30):
         self._channel = grpc.insecure_channel(f"{host}:{port}")
         self._timeout = timeout
         
