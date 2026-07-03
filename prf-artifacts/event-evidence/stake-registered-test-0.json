@@ -1,0 +1,38 @@
+{
+  "evidence\/schema-version": "event-evidence.v1",
+  "scenario\/id": "test",
+  "evidence\/chain-prev-hash": "a64c0c91d10f786fa86198c577a7d031dadc249df638c8c587359ed53be20719",
+  "evidence\/importance": "core",
+  "run\/id": "test-run",
+  "world\/before-full-hash": "c1dd2c2fb202305bd808efaea574a6e4468d83dc06ef6fd399661b56b0e0f25b",
+  "evidence\/context": {
+    "ctx\/scenario-id": "test",
+    "ctx\/run-id": "test-run",
+    "ctx\/event-index": 0,
+    "ctx\/event-type": "register_stake",
+    "subject\/type": "resolver",
+    "subject\/id": "0xResolver",
+    "action\/type": "register",
+    "evidence\/reason": "stake-registered"
+  },
+  "post-state": {
+    "stake\/after": 10000
+  },
+  "evidence\/chain-self-hash": "a64c0c91d10f786fa86198c577a7d031dadc249df638c8c587359ed53be20719",
+  "inputs": {
+    "stake\/resolver": "0xResolver",
+    "stake\/amount": 10000,
+    "stake\/yield-profile-id": null
+  },
+  "world\/after-hash": "c13451de80c2dc1c08e056bb1f9439a8053e4f7bb7e7c0071a0a25c0a11374ef",
+  "evidence\/type": "stake-registered",
+  "evidence\/chain-seq": 1,
+  "calculation": null,
+  "pre-state": {
+    "stake\/before": 0
+  },
+  "world\/before-hash": "8f1fc5d7e614057ff660d90384c8528e0ebbd7242c3c4b19b2c2ce164d260a28",
+  "world\/after-full-hash": "335500e48a647b6839298eb9ac4b5d531cf3dcd77ae3ae0dc162ff7696f6efe2",
+  "evidence\/hash": "a64c0c91d10f786fa86198c577a7d031dadc249df638c8c587359ed53be20719",
+  "event\/seq": 0
+}

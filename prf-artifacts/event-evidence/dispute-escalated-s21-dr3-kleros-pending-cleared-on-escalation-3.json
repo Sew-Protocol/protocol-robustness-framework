@@ -1,0 +1,48 @@
+{
+  "evidence\/schema-version": "event-evidence.v1",
+  "scenario\/id": "s21-dr3-kleros-pending-cleared-on-escalation",
+  "evidence\/chain-prev-hash": "7061c5f3a814c8420364c11cc142c5726afbf2d7ded6a3e200cda57381e0a636",
+  "evidence\/importance": "core",
+  "run\/id": "s21-dr3-kleros-pending-cleared-on-escalation-run",
+  "world\/before-full-hash": "a741a9185488ed370bb01d6f82d23e85d0f72ef4eaf3db56122ab656d0a277e4",
+  "evidence\/context": {
+    "ctx\/scenario-id": "s21-dr3-kleros-pending-cleared-on-escalation",
+    "ctx\/run-id": "s21-dr3-kleros-pending-cleared-on-escalation-run",
+    "ctx\/event-index": 3,
+    "ctx\/event-type": "escalate_dispute",
+    "subject\/type": "dispute",
+    "subject\/id": 0,
+    "action\/type": "escalate",
+    "evidence\/reason": "dispute-escalated"
+  },
+  "post-state": {
+    "escalation\/after": {
+      "dispute-level": 1,
+      "resolver": "0xl1"
+    }
+  },
+  "evidence\/chain-self-hash": "7061c5f3a814c8420364c11cc142c5726afbf2d7ded6a3e200cda57381e0a636",
+  "inputs": {
+    "escalation\/workflow-id": 0,
+    "escalation\/caller": "0xbuyer",
+    "escalation\/from-level": 0,
+    "escalation\/to-level": 1,
+    "escalation\/new-resolver": "0xl1",
+    "escalation\/bond-amount": 0,
+    "escalation\/escalation-count": 0
+  },
+  "world\/after-hash": "0e6d2fcf52b3b1aef02e3f2cb455b9e8ba4edb4183499a1a4ac5f90b40d4a958",
+  "evidence\/type": "dispute-escalated",
+  "evidence\/chain-seq": 3,
+  "calculation": null,
+  "pre-state": {
+    "escalation\/before": {
+      "dispute-level": 0,
+      "resolver": null
+    }
+  },
+  "world\/before-hash": "7fefbb846ee55c301167d260eb0c0d3312cf0dbf82e4ae3a9891c601733f6ff6",
+  "world\/after-full-hash": "6d964daa04db077475b30fc644b7d3944ba8de3b5e869fe9d61df054166826f1",
+  "evidence\/hash": "7061c5f3a814c8420364c11cc142c5726afbf2d7ded6a3e200cda57381e0a636",
+  "event\/seq": 3
+}

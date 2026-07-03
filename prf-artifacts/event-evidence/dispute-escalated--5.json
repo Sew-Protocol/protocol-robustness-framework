@@ -1,0 +1,46 @@
+{
+  "evidence\/schema-version": "event-evidence.v1",
+  "evidence\/chain-prev-hash": "288eeff73eafb03fe651683ca0c94becfc42e2fb8f5ebe2cf90daf16323d45cb",
+  "evidence\/importance": "core",
+  "world\/before-full-hash": "349afe2ca72edd48b26caab231df760e3a83bc1216e2ab1561a4a7ef25eda9dc",
+  "evidence\/context": {
+    "ctx\/scenario-id": null,
+    "ctx\/run-id": null,
+    "ctx\/event-index": 5,
+    "ctx\/event-type": "escalate_dispute",
+    "subject\/type": "dispute",
+    "subject\/id": 0,
+    "action\/type": "escalate",
+    "evidence\/reason": "dispute-escalated"
+  },
+  "post-state": {
+    "escalation\/after": {
+      "dispute-level": 2,
+      "resolver": "0xResolver2"
+    }
+  },
+  "evidence\/chain-self-hash": "288eeff73eafb03fe651683ca0c94becfc42e2fb8f5ebe2cf90daf16323d45cb",
+  "inputs": {
+    "escalation\/workflow-id": 0,
+    "escalation\/caller": "0xAlice",
+    "escalation\/from-level": 1,
+    "escalation\/to-level": 2,
+    "escalation\/new-resolver": "0xResolver2",
+    "escalation\/bond-amount": 0,
+    "escalation\/escalation-count": 1
+  },
+  "world\/after-hash": "791b50bd8d3885c9d4a6443d1b1aeecdc195169033111d5f8e850a2888eb0f72",
+  "evidence\/type": "dispute-escalated",
+  "evidence\/chain-seq": 16,
+  "calculation": null,
+  "pre-state": {
+    "escalation\/before": {
+      "dispute-level": 1,
+      "resolver": "0xResolver1"
+    }
+  },
+  "world\/before-hash": "f0f8deefb12aaf3fb4adbfeb72f212831922e16117185e6c3ad59cc5a07e398a",
+  "world\/after-full-hash": "6aa64021eb0f0d81a041894cf35395c553615eb50b8bf830f6e2b0a59740dbc1",
+  "evidence\/hash": "288eeff73eafb03fe651683ca0c94becfc42e2fb8f5ebe2cf90daf16323d45cb",
+  "event\/seq": 5
+}

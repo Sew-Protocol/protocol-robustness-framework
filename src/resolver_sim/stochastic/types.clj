@@ -1,6 +1,7 @@
 (ns resolver-sim.stochastic.types
   "Parameter schemas and types for the Sew Protocol dispute resolution simulation."
   (:require [resolver-sim.stochastic.detection :as detection]
+            [resolver-sim.stochastic.economics :as econ]
             [malli.core :as m]
             [malli.error :as me]))
 
@@ -154,49 +155,52 @@
             params])
 
 ;; Defaults
+;; Slash-bps values reference detection/default-slash-bps (canonical fallback).
+;; Escalation values reference econ/default-escalation-assumptions :base band.
 (def default-params
-  {:resolver-bond-bps 1000         ; DR3: 10% bond (DR1=0, DR2=500)
-   :panel-size 3
-   :majority-ratio (/ 2.0 3.0)
-   :appeal-threshold 0.6
-   :fraud-detection-probability 0.0              ; Phase I: fraud detection disabled by default
-   :fraud-slash-bps 0                           ; Phase I: fraud slashing disabled (0 bps)
-   :reversal-detection-probability 1.0          ; Keep historical deterministic reversal behavior
-   :reversal-slash-bps 0                        ; Phase I: reversal slashing disabled (0 bps)
-   :timeout-slash-bps 200                       ; Phase I: timeout penalty (2% = 200 bps, from contracts)
-   :l1-honest-detection-probability 0.01        ; L1 false-positive catch rate for honest resolvers
-   :l1-lazy-detection-probability 0.02          ; L1 catch rate for lazy resolvers
-   :l1-collusive-detection-probability 0.05     ; L1 catch rate for collusive resolvers
-   :l1-unknown-strategy-detection-probability 0.0 ; L1 catch rate for unrecognized strategies
-   :fraud-model :single-stage-ev                ; legacy default for backward compatibility
-   :escalation-assumption-band :base            ; for :sequential-escalation mode
-   :p-appeal-wrong 0.40
-   :p-l1-reversal 0.75
-   :p-l2-escalation 0.55
-   :p-l2-reversal 0.88
-   :n-trials 1000
-   :n-seeds 1
-   :parallelism :auto
-   :slashing-detection-delay-weeks 0      ; Phase G: delay before slashing hits
-   :force-strategy nil                    ; Phase G: override strategy-mix (for control baselines)
-   :allow-slashing? true                  ; Phase G: if false, never slash (control baseline)
-   :unstaking-delay-days 14               ; Phase H: days to unstake (RESOLVER_UNBOND_DELAY)
-   :freeze-on-detection? true             ; Phase H: immediate freeze when detected?
-   :freeze-duration-days 3                ; Phase H: 72 hours freeze duration
-   :appeal-window-days 7                  ; Phase H: days before slash executes
-   :detection-type :fraud                 ; Phase H: :fraud (explicit), :timeout (automatic), :reversal (on appeal)
-   :timeout-detection-probability 0.0     ; Phase H: detection on appeal (separate from fraud)
-   :oracle-fixture {:mode :stochastic}    ; Stochastic default oracle behavior
-   :oracle-roll-trace-enabled? false
-   :evidence-quality? false
-   :circuit-breaker-threshold-bps 3000
-   :circuit-breaker-cooldown 3600
-   :max-slash-per-offense-bps 5000
-   :slash-epoch-cap-bps 2000
-   :bond-mix-min-stable-bps 8000
-   :escalation-bond-bps 1000
-   :minimum-challenge-bond 100
-   :max-dispute-level 2})
+  (let [base-band (:base econ/default-escalation-assumptions)]
+    {:resolver-bond-bps 1000         ; DR3: 10% bond (DR1=0, DR2=500)
+     :panel-size 3
+     :majority-ratio (/ 2.0 3.0)
+     :appeal-threshold 0.6
+     :fraud-detection-probability 0.0              ; Phase I: fraud detection disabled by default
+     :fraud-slash-bps (:fraud detection/default-slash-bps)         ; Phase I: fraud slashing disabled
+     :reversal-detection-probability 1.0          ; Keep historical deterministic reversal behavior
+     :reversal-slash-bps (:reversal detection/default-slash-bps)   ; Phase I: reversal slashing disabled
+     :timeout-slash-bps (:timeout detection/default-slash-bps)     ; Phase I: timeout penalty (2% = 200 bps)
+     :l1-honest-detection-probability 0.01        ; L1 false-positive catch rate for honest resolvers
+     :l1-lazy-detection-probability 0.02          ; L1 catch rate for lazy resolvers
+     :l1-collusive-detection-probability 0.05     ; L1 catch rate for collusive resolvers
+     :l1-unknown-strategy-detection-probability 0.0 ; L1 catch rate for unrecognized strategies
+     :fraud-model :single-stage-ev                ; legacy default for backward compatibility
+     :escalation-assumption-band :base            ; for :sequential-escalation mode
+     :p-appeal-wrong (:p-appeal-wrong base-band)
+     :p-l1-reversal (:p-l1-reversal base-band)
+     :p-l2-escalation (:p-l2-escalation base-band)
+     :p-l2-reversal (:p-l2-reversal base-band)
+     :n-trials 1000
+     :n-seeds 1
+     :parallelism :auto
+     :slashing-detection-delay-weeks 0      ; Phase G: delay before slashing hits
+     :force-strategy nil                    ; Phase G: override strategy-mix (for control baselines)
+     :allow-slashing? true                  ; Phase G: if false, never slash (control baseline)
+     :unstaking-delay-days 14               ; Phase H: days to unstake (RESOLVER_UNBOND_DELAY)
+     :freeze-on-detection? true             ; Phase H: immediate freeze when detected?
+     :freeze-duration-days 3                ; Phase H: 72 hours freeze duration
+     :appeal-window-days 7                  ; Phase H: days before slash executes
+     :detection-type :fraud                 ; Phase H: :fraud (explicit), :timeout (automatic), :reversal (on appeal)
+     :timeout-detection-probability 0.0     ; Phase H: detection on appeal (separate from fraud)
+     :oracle-fixture {:mode :stochastic}    ; Stochastic default oracle behavior
+     :oracle-roll-trace-enabled? false
+     :evidence-quality? false
+     :circuit-breaker-threshold-bps 3000
+     :circuit-breaker-cooldown 3600
+     :max-slash-per-offense-bps 5000
+     :slash-epoch-cap-bps 2000
+     :bond-mix-min-stable-bps 8000
+     :escalation-bond-bps 1000
+     :minimum-challenge-bond 100
+     :max-dispute-level 2}))
 
 (defn validate-scenario
   "Validate scenario params against schema. Throws if invalid."

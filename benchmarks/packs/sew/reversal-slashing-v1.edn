@@ -1,6 +1,6 @@
 {:benchmark/id              :benchmark/sew-reversal-slashing-v1
  :benchmark/version         1
- :benchmark/domain          :domain/escrow-dispute-resolution
+ :benchmark/domain          :domain/protocol-value-conservation
  :benchmark/protocol        :protocol/sew
  :benchmark/scenario-suite  :suite/sew-reversal-slashing-v1
  :benchmark/scenario-suite-description
@@ -23,7 +23,8 @@
  "Evaluate reversal-reviewer slashing: appeal due process for reversing
   resolvers, multi-level vindication, governance force slashing,
   challenger bounty payment, and insufficient-stake accounting."
- :benchmark/concepts        [:decision-quality/solvency-status
+ :benchmark/concepts        [:robustness/protocol-value-conservation
+                             :decision-quality/solvency-status
                              :allocation/slash-obligation
                              :consensus/authority
                              :consensus/evidence

@@ -1,0 +1,50 @@
+{
+  "evidence\/schema-version": "event-evidence.v1",
+  "scenario\/id": "s21-dr3-kleros-pending-cleared-on-escalation",
+  "evidence\/chain-prev-hash": "2b822dfa9dc442d3d4f3c9fdf5aac8a03791e72471e0c72fa6b9245be095de26",
+  "evidence\/importance": "core",
+  "run\/id": "s21-dr3-kleros-pending-cleared-on-escalation-run",
+  "world\/before-full-hash": "e41aa6b678e9a625d6f2f0cc2c0310f5380e3a41c903df6631c72dad86370f29",
+  "evidence\/context": {
+    "ctx\/scenario-id": "s21-dr3-kleros-pending-cleared-on-escalation",
+    "ctx\/run-id": "s21-dr3-kleros-pending-cleared-on-escalation-run",
+    "ctx\/event-index": 5,
+    "ctx\/event-type": "execute_pending_settlement",
+    "subject\/type": "escrow",
+    "subject\/id": 0,
+    "action\/type": "released",
+    "evidence\/reason": "escrow-released"
+  },
+  "post-state": {
+    "finalize\/after": {
+      "workflow-state": "released",
+      "total-held": 0
+    }
+  },
+  "evidence\/chain-self-hash": "2b822dfa9dc442d3d4f3c9fdf5aac8a03791e72471e0c72fa6b9245be095de26",
+  "inputs": {
+    "finalize\/workflow-id": 0,
+    "finalize\/direction": "released",
+    "finalize\/recipient": "0xseller",
+    "finalize\/settled-amount": 4925,
+    "finalize\/sub-held-amount": 4925,
+    "finalize\/partial-yield?": false,
+    "finalize\/shortfall?": false,
+    "finalize\/resolver": "0xl1"
+  },
+  "world\/after-hash": "03ae7a67416805ce2631749d8aba7fe0214e16764f20e9c2d6945e6a061eedb6",
+  "evidence\/type": "escrow-released",
+  "evidence\/chain-seq": 4,
+  "calculation": null,
+  "pre-state": {
+    "finalize\/before": {
+      "workflow-state": "disputed",
+      "total-held": 4925,
+      "resolver": "0xl1"
+    }
+  },
+  "world\/before-hash": "33802551b79999dc7bc13801ffea44a1bfac70247354af45bf1b5d0631be1f76",
+  "world\/after-full-hash": "f3bbb6c317df36160a4405160d7385e4663bfc99786149dc8c8e3b4943721e92",
+  "evidence\/hash": "2b822dfa9dc442d3d4f3c9fdf5aac8a03791e72471e0c72fa6b9245be095de26",
+  "event\/seq": 5
+}

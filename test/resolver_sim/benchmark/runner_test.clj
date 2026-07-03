@@ -6,6 +6,8 @@
             [resolver-sim.benchmark.repo :as repo]
             [resolver-sim.benchmark.signing :as signing]
             [resolver-sim.benchmark.sharing :as sharing]
+            [resolver-sim.protocols.sew :as sew]
+            [resolver-sim.protocols.sew.invariants :as sew-inv]
             [resolver-sim.scenario.suites :as suites]
             [clojure.java.io :as io]
             [clojure.edn :as edn]
@@ -143,6 +145,36 @@
           "Each result should have :file")
       (is (every? #(contains? % :outcome) (:results evidence))
           "Each result should have :outcome"))))
+
+(deftest test-deterministic-replay-benchmark-produces-claim-results
+  (testing "PRF deterministic replay benchmark executes duplicate runs and resolves replay claims"
+    (with-redefs [repo/metadata (fn [] {:repo {:commit "test-commit"
+                                               :dirty? false}})
+                  sew/replay-with-sew-protocol (fn [_scenario _opts]
+                                                 {:events-processed 3
+                                                  :outcome :pass
+                                                  :halt-reason nil
+                                                  :metrics {:invariant-results {}}
+                                                  :world {:status :ok}})
+                  sew-inv/check-all (fn [_world] {:results {}})]
+      (let [evidence (runner/run-benchmark "benchmarks/packs/prf-core/deterministic-replay-v1.edn")
+            claim-results (:claim-results evidence)
+            claim-outcomes (into {} (map (juxt :claim/id :claim/outcome)) claim-results)]
+        (is (= 88 (count (:results evidence)))
+            "Deterministic replay benchmark should execute 44 scenarios twice")
+        (is (= #{1 2} (into #{} (map :benchmark/run-index) (:results evidence))))
+        (is (= #{2} (into #{} (map :benchmark/run-count) (:results evidence))))
+        (is (= 88 (get-in evidence [:metrics :execution-count])))
+        (is (= 44 (get-in evidence [:metrics :unique-scenario-count])))
+        (is (= 2 (get-in evidence [:metrics :declared-run-count])))
+        (is (= 88 (get-in evidence [:run/manifest :execution-count])))
+        (is (= 44 (get-in evidence [:run/manifest :unique-scenario-count])))
+        (is (= 2 (get-in evidence [:run/manifest :declared-run-count])))
+        (is (= :pass (get claim-outcomes :claim/replay-identical-results)))
+        (is (= :pass (get claim-outcomes :claim/hash-consistency-across-runs)))
+        (is (= :pass (get claim-outcomes :claim/no-nondeterminism)))
+        (is (not-any? #(= :inconclusive (:claim/outcome %)) claim-results)
+            "Replay claims should now resolve to concrete outcomes")))))
 
 (deftest test-malformed-manifest
   (testing "Throws on missing manifest"

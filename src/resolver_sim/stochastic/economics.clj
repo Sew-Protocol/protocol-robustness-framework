@@ -2,7 +2,8 @@
   "Payoff and economic functions.
    
    All functions are pure: no side effects, deterministic given inputs."
-  (:require [resolver-sim.stochastic.rng :as rng]))
+  (:require [resolver-sim.stochastic.rng :as rng]
+            [resolver-sim.time.context :as time-ctx]))
 
 (defn calculate-fee
   "Calculate resolver fee based on escrow and fee rate (bps).
@@ -141,20 +142,22 @@
      P = P(no appeal) + P(appeal) × P(L1 fails to reverse)
 
    Parameters (map):
-     :p-appeal-wrong    P(aggrieved party appeals) — default 0.40
-     :p-l1-reversal     P(L1 overturns corrupt verdict | appealed) — default 0.85
-     :has-kleros?       whether L2/Kleros backstop is active — default true
-     :p-l2-escalation   P(party escalates to L2 | L1 upholds corrupt) — default 0.70
-     :p-l2-reversal     P(L2 overturns | escalated) — default 0.95
+     :p-appeal-wrong    P(aggrieved party appeals) — defaults from ~{:base} band
+     :p-l1-reversal     P(L1 overturns corrupt verdict | appealed)
+     :has-kleros?       whether L2/Kleros backstop is active
+     :p-l2-escalation   P(party escalates to L2 | L1 upholds corrupt)
+     :p-l2-reversal     P(L2 overturns | escalated)
 
+   Missing keys default to ~default-escalation-assumptions :base band.
    Inputs are clamped to [0,1]."
-  [{:keys [p-appeal-wrong p-l1-reversal has-kleros? p-l2-escalation p-l2-reversal]
-    :or   {p-appeal-wrong  0.40
-           p-l1-reversal   0.85
-           has-kleros?     true
-           p-l2-escalation 0.70
-           p-l2-reversal   0.95}}]
-  (let [clamp         (fn [x] (-> x double (max 0.0) (min 1.0)))
+  [params]
+  (let [base          (:base default-escalation-assumptions)
+        p-appeal-wrong  (get params :p-appeal-wrong  (:p-appeal-wrong base))
+        p-l1-reversal   (get params :p-l1-reversal   (:p-l1-reversal base))
+        has-kleros?     (get params :has-kleros?     (:has-kleros? base))
+        p-l2-escalation (get params :p-l2-escalation (:p-l2-escalation base))
+        p-l2-reversal   (get params :p-l2-reversal   (:p-l2-reversal base))
+        clamp         (fn [x] (-> x double (max 0.0) (min 1.0)))
         p-appeal      (clamp p-appeal-wrong)
         p-l1-fail     (- 1.0 (clamp p-l1-reversal))
         p-l2-escalate (clamp p-l2-escalation)
@@ -181,20 +184,22 @@
      P = P(no appeal) + P(appeal) × P(L1 upholds)
 
    Parameters (map):
-     :appeal-prob-wrong    P(aggrieved party appeals at all) — default 0.40
-     :p-l1-reversal        P(senior resolver overturns corrupt verdict | appealed) — default 0.85
-     :has-kleros?          whether L2/Kleros backstop exists — default true
-     :p-l2-escalation      P(party escalates to L2 | L1 upheld corrupt) — default 0.70
-     :p-l2-reversal        P(Kleros overturns | escalated to L2) — default 0.95
+     :appeal-prob-wrong    P(aggrieved party appeals at all) — defaults from ~{:base} band
+     :p-l1-reversal        P(senior resolver overturns corrupt verdict | appealed)
+     :has-kleros?          whether L2/Kleros backstop exists
+     :p-l2-escalation      P(party escalates to L2 | L1 upheld corrupt)
+     :p-l2-reversal        P(Kleros overturns | escalated to L2)
 
+   Missing keys default to ~default-escalation-assumptions :base band.
    Returns the probability [0,1] that fraud reaches final settlement as-is."
-  [{:keys [appeal-prob-wrong p-l1-reversal has-kleros? p-l2-escalation p-l2-reversal]
-    :or   {appeal-prob-wrong 0.40
-           p-l1-reversal     0.85
-           has-kleros?       true
-           p-l2-escalation   0.70
-           p-l2-reversal     0.95}}]
-  (let [p-no-appeal  (- 1.0 appeal-prob-wrong)
+  [params]
+  (let [base             (:base default-escalation-assumptions)
+        appeal-prob-wrong (get params :appeal-prob-wrong (:p-appeal-wrong base))
+        p-l1-reversal     (get params :p-l1-reversal    (:p-l1-reversal base))
+        has-kleros?       (get params :has-kleros?      (:has-kleros? base))
+        p-l2-escalation   (get params :p-l2-escalation  (:p-l2-escalation base))
+        p-l2-reversal     (get params :p-l2-reversal    (:p-l2-reversal base))
+        p-no-appeal  (- 1.0 appeal-prob-wrong)
         p-l1-upholds (- 1.0 p-l1-reversal)
         p-after-l1   (* appeal-prob-wrong p-l1-upholds)]
     (if has-kleros?
@@ -224,15 +229,13 @@
 ;; Yield Modeling
 ;; ---------------------------------------------------------------------------
 
-(def ^:const seconds-per-year 31536000)
-
 (defn calculate-accrued-yield
   "Calculate accrued yield based on principal, annual rate (bps), and duration (seconds).
    
    yield = (principal * rate-bps * duration) / (10000 * seconds-per-year)"
   [principal-wei rate-bps duration-seconds]
   (let [num (* (bigint principal-wei) (bigint rate-bps) (bigint duration-seconds))
-        den (* 10000 (bigint seconds-per-year))]
+        den (* 10000 (bigint time-ctx/seconds-per-year))]
     (long (quot num den))))
 
 (defn random-aave-rate

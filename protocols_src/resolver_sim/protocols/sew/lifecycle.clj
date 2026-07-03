@@ -24,6 +24,7 @@
             [resolver-sim.yield.registry               :as yield-reg]
             [resolver-sim.protocols.sew.yield.policy  :as yield-policy]
             [resolver-sim.util.attribution             :as attr]
+            [resolver-sim.util.math                    :as math]
             [resolver-sim.time.context                 :as time-ctx]
             [resolver-sim.evidence.capture            :as cap]))
 
@@ -39,9 +40,6 @@
 ;; ---------------------------------------------------------------------------
 ;; Internal accounting helpers
 ;; ---------------------------------------------------------------------------
-
-(defn- add-held [world token amount]
-  (update-in world [:total-held token] (fnil + 0) amount))
 
 (defn- token-available? [world token]
   (not (contains? (:token-liquidity-crunch world) token)))
@@ -63,12 +61,6 @@
           unfrozen?     (<= freeze-expiry (time-ctx/block-ts world))]
       (and capacity-ok? unfrozen?))))
 
-(defn- sub-held [world token amount]
-  (update-in world [:total-held token] (fnil - 0) amount))
-
-(defn- add-fee [world token amount]
-  (update-in world [:total-fees token] (fnil + 0) amount))
-
 ;; ---------------------------------------------------------------------------
 ;; Internal: _cancelAndRefund + _releaseEscrowTransfer
 ;;
@@ -80,8 +72,6 @@
 ;; ---------------------------------------------------------------------------
 ;; Yield Accrual
 ;; ---------------------------------------------------------------------------
-
-(def ^:const seconds-per-year 31536000)
 
 (declare accrue-yield)
 
@@ -343,9 +333,9 @@
                                     (assoc-in [:escrow-settings workflow-id]
                                               (t/make-escrow-settings settings))
                                     (assoc-in [:module-snapshots workflow-id] snapshot)
-                                    (update-in [:total-principal-deposited token] (fnil + 0) amount)
-                                    (add-held token afa)
-                                    (add-fee token fee)
+                                     (update-in [:total-principal-deposited token] (fnil + 0) amount)
+                                     (acct/add-held token afa)
+                                     (acct/record-fee token fee)
                                     (update-in [:total-fot-fees token] (fnil + 0) (- amount afa fee)))
                 ;; Trigger yield deposit if module is configured
                   world''       (if (and ymid
@@ -598,7 +588,11 @@
 
 (defn- cancel-disputed-escrow-now
   "Internal: execute disputed-escrow refund + resolver slash unconditionally.
-   Caller is responsible for time/state validation."
+   Caller is responsible for time/state validation.
+   Slashes the resolver's stake WITHOUT subtracting from :total-held —
+   the resolver's stake lives in :resolver-stakes, not :total-held
+   (register-stake never calls add-held), so the slash distribution is
+   backed by the stake reduction, not by :total-held."
   [world workflow-id]
   (let [et             (t/get-transfer world workflow-id)
         resolver        (:dispute-resolver et)
@@ -608,8 +602,26 @@
                              (not= resolver t/zero-address))
         world-finalized (finalize world workflow-id :refunded)
         world-slashed   (if has-resolver?
-                          (:world (reg/slash-resolver-stake world-finalized resolver slash-amt
-                                                            nil 0 workflow-id))
+                          (let [current (reg/get-stake world-finalized resolver)
+                                actual  (math/to-canonical (min (double current) (double slash-amt)))
+                                world'  (-> world-finalized
+                                            (update-in [:resolver-stakes resolver] (fnil - 0) actual)
+                                            (acct/distribute-slashed-funds actual nil 0 workflow-id)
+                                            (update-in [:resolver-slash-total resolver] (fnil + 0) actual))]
+                            (attr/with-attribution
+                             {:subject/type :resolver
+                              :subject/id   resolver
+                              :action/type  :slash
+                              :evidence/reason :slashing}
+                             (cap/capture-event-evidence!
+                              :slashing
+                              {:resolver-stake current}
+                              {:resolver-stake (reg/get-stake world' resolver)}
+                              {:requested-amount slash-amt :actual-amount actual}
+                              nil
+                              {:world-before world-finalized
+                               :world-after world'}))
+                            world')
                           world-finalized)
         world-result    (-> world-slashed
                             (t/decrement-resolver-capacity resolver)

@@ -208,6 +208,30 @@
                                  "benchmarks/scoring/shortfall-allocation-v0.edn")]
     (testing "report structure"
       (is (= :benchmark/prf-shortfall-allocation-v0 (:benchmark/id report)))
+      (is (= :domain/protocol-value-conservation (:benchmark/domain report)))
+      (is (string? (:benchmark/domain-description report)))
+      (is (= [:concept/conservation] (:benchmark/framework-concepts report)))
+      (is (= [{:concept/id :robustness/protocol-value-conservation
+               :concept/source :benchmark-local}
+              {:concept/id :allocation/partial-fill
+               :concept/source :benchmark-local}
+              {:concept/id :allocation/shortfall
+               :concept/source :benchmark-local}
+              {:concept/id :allocation/pro-rata-fairness
+               :concept/source :benchmark-local}
+              {:concept/id :consensus/evidence
+               :concept/source :global}
+              {:concept/id :consensus/finality
+               :concept/source :global}
+              {:concept/id :verifiable-assurance/forensic-confidence
+               :concept/source :global}]
+             (mapv #(select-keys % [:concept/id :concept/source])
+                   (:benchmark/concepts report))))
+      (is (= {:concept/id :robustness/protocol-value-conservation
+              :concept/source :benchmark-local
+              :concept/title "Protocol value conservation and allocation"
+              :concept/framework-concepts [:concept/conservation]}
+             (first (:benchmark/concept-summary report))))
       (is (= 3 (:total-scenarios report)))
       (is (= 2 (:passed-scenarios report)))
       (is (= false (:all-pass? report))))
@@ -333,6 +357,17 @@
         evidence-path (temp-evidence-file ev)
         report (rpt/resolve-report evidence-path)]
     (is (= :benchmark/prf-shortfall-allocation-v0 (:benchmark/id report)))
+    (is (= :domain/protocol-value-conservation (:benchmark/domain report)))
+    (is (some #(= {:concept/id :robustness/protocol-value-conservation
+                   :concept/source :benchmark-local}
+                  (select-keys % [:concept/id :concept/source]))
+              (:benchmark/concepts report)))
+    (is (= {:concept/id :robustness/protocol-value-conservation
+            :concept/source :benchmark-local
+            :concept/title "Protocol value conservation and allocation"
+            :concept/framework-concepts [:concept/conservation]}
+           (first (:benchmark/concept-summary report))))
+    (is (= [:concept/conservation] (:benchmark/framework-concepts report)))
     (is (:all-pass? report))))
 
 (deftest build-report-missing-scoring-path-throws

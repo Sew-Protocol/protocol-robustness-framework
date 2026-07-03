@@ -5,9 +5,11 @@
    autoCancelDisputedEscrow — happy paths and every revert condition."
   (:require [resolver-sim.protocols.sew.snapshot-fixtures :as snap-fix]
             [clojure.test :refer [deftest is testing run-tests]]
-            [resolver-sim.protocols.sew.types     :as t]
-            [resolver-sim.protocols.sew.lifecycle :as lc]
-            [resolver-sim.protocols.sew.resolution :as res]
+            [resolver-sim.protocols.sew.types        :as t]
+            [resolver-sim.protocols.sew.lifecycle    :as lc]
+            [resolver-sim.protocols.sew.accounting   :as acct]
+            [resolver-sim.protocols.sew.registry     :as reg]
+            [resolver-sim.protocols.sew.resolution   :as res]
             [resolver-sim.time.context :as time-ctx]))
 
 ;; ---------------------------------------------------------------------------
@@ -225,6 +227,19 @@
     (is (false? (:ok r)))
     (is (= :not-authorized-to-cancel-yet (:error r)))))
 
+(deftest sender-cancel-strategy-can-cancel-dominates
+  "can-cancel? false dominates over unilateral-cancel? true."
+  (let [r (lc/sender-cancel (world-with-one-escrow) 0 alice {:can-cancel? false :unilateral-cancel? true})]
+    (is (false? (:ok r)))
+    (is (= :not-authorized-to-cancel-yet (:error r)))))
+
+(deftest sender-cancel-strategy-mutual-only
+  "can-cancel? true + unilateral-cancel? false → mutual-consent path."
+  (let [r (lc/sender-cancel (world-with-one-escrow) 0 alice {:can-cancel? true :unilateral-cancel? false})]
+    (is (true? (:ok r)))
+    (is (= :pending (t/escrow-state (:world r) 0)) "still pending")
+    (is (= :agree-to-cancel (get-in (:world r) [:escrow-transfers 0 :sender-status])))))
+
 ;; ---------------------------------------------------------------------------
 ;; recipient-cancel
 ;; ---------------------------------------------------------------------------
@@ -250,6 +265,25 @@
   (let [r (lc/recipient-cancel (world-with-one-escrow) 0 alice nil)]
     (is (false? (:ok r)))
     (is (= :not-recipient (:error r)))))
+
+(deftest recipient-cancel-strategy-can-cancel-dominates
+  "can-cancel? false dominates over unilateral-cancel? true."
+  (let [r (lc/recipient-cancel (world-with-one-escrow) 0 bob {:can-cancel? false :unilateral-cancel? true})]
+    (is (false? (:ok r)))
+    (is (= :not-authorized-to-cancel-yet (:error r)))))
+
+(deftest recipient-cancel-strategy-mutual-only
+  "can-cancel? true + unilateral-cancel? false → mutual-consent path."
+  (let [r (lc/recipient-cancel (world-with-one-escrow) 0 bob {:can-cancel? true :unilateral-cancel? false})]
+    (is (true? (:ok r)))
+    (is (= :pending (t/escrow-state (:world r) 0)) "still pending")
+    (is (= :agree-to-cancel (get-in (:world r) [:escrow-transfers 0 :recipient-status])))))
+
+(deftest recipient-cancel-strategy-blocks
+  "Both flags false → not-authorized-to-cancel-yet."
+  (let [r (lc/recipient-cancel (world-with-one-escrow) 0 bob {:can-cancel? false :unilateral-cancel? false})]
+    (is (false? (:ok r)))
+    (is (= :not-authorized-to-cancel-yet (:error r)))))
 
 ;; ---------------------------------------------------------------------------
 ;; auto-cancel-disputed-escrow
@@ -285,6 +319,91 @@
         r (lc/auto-cancel-disputed-escrow w 0)]
     (is (false? (:ok r)))
     (is (= :dispute-timeout-not-exceeded (:error r)))))
+
+;; ---------------------------------------------------------------------------
+;; auto-cancel-disputed-on-auto-time (NOT IN SOLIDITY)
+;; ---------------------------------------------------------------------------
+
+(deftest auto-cancel-disputed-on-auto-time-happy
+  (let [w (-> (world-disputed)
+              (assoc-in [:escrow-transfers 0 :auto-cancel-time] 1000)
+              (time-ctx/with-temporal-context {:block-ts 5000}))
+        r (lc/auto-cancel-disputed-on-auto-time w 0)]
+    (is (true? (:ok r)))
+    (is (= :refunded (t/escrow-state (:world r) 0)))))
+
+(deftest auto-cancel-disputed-on-auto-time-not-disputed
+  (let [w (-> (world-with-one-escrow)
+              (assoc-in [:escrow-transfers 0 :auto-cancel-time] 1000))
+        r (lc/auto-cancel-disputed-on-auto-time w 0)]
+    (is (false? (:ok r)))
+    (is (= :transfer-not-in-dispute (:error r)))))
+
+(deftest auto-cancel-disputed-on-auto-time-has-pending-settlement
+  (let [pending {:exists true :is-release true :appeal-deadline 9999 :resolution-hash nil}
+        w       (-> (world-disputed)
+                    (assoc-in [:escrow-transfers 0 :auto-cancel-time] 1000)
+                    (assoc :block-time 5000)
+                    (assoc-in [:pending-settlements 0] pending))
+        r       (lc/auto-cancel-disputed-on-auto-time w 0)]
+    (is (false? (:ok r)))
+    (is (= :has-pending-settlement (:error r)))))
+
+(deftest auto-cancel-disputed-on-auto-time-time-not-passed
+  (let [w (-> (world-disputed)
+              (assoc-in [:escrow-transfers 0 :auto-cancel-time] 3000)
+              (assoc :block-time 2000))
+        r (lc/auto-cancel-disputed-on-auto-time w 0)]
+    (is (false? (:ok r)))
+    (is (= :auto-cancel-time-not-passed (:error r)))))
+
+(deftest auto-cancel-disputed-with-resolver-and-bonds
+  "Regression: cancel-disputed-escrow-now must not sub-held the slash from
+   :total-held.  The resolver's stake is tracked in :resolver-stakes, not
+   :total-held (register-stake never calls add-held).  Previously the
+   sub-held in slash-resolver-stake consumed bond funds from :total-held
+   after finalize had already drained the principal, causing
+   return-all-bonds-for-workflow to underflow."
+  (let [resolver "0xResolver"
+        snap     (snap-fix/escrow-snapshot
+                  {:escrow-fee-bps            0
+                   :default-auto-release-delay 0
+                   :default-auto-cancel-delay  0
+                   :max-dispute-duration      3600
+                   :appeal-window-duration    0
+                   :appeal-bond-protocol-fee-bps 0})
+        sett     (t/make-escrow-settings
+                  {:auto-cancel-time 2000
+                   :custom-resolver  resolver})
+        w0       (t/empty-world 1000)
+        {:keys [world workflow-id]} (lc/create-escrow w0 alice usdc bob 2000 sett snap)
+        ;; Register resolver with stake
+        w2       (reg/register-stake world resolver 5000)
+        ;; Raise dispute
+        w3       (:world (lc/raise-dispute w2 0 alice))
+        ;; Post appeal bonds (both parties)
+        w4       (acct/post-appeal-bond w3 0 bob   snap usdc 500)
+        w5       (acct/post-appeal-bond w4 0 alice snap usdc 500)
+        ;; Advance time past auto-cancel-time (2000)
+        w6       (time-ctx/with-temporal-context w5 {:block-ts 3000})
+        r        (lc/auto-cancel-disputed-on-auto-time w6 0)]
+    (is (true? (:ok r)) "auto-cancel should succeed")
+    (let [w (:world r)]
+      (is (= :refunded (t/escrow-state w 0)) "escrow refunded")
+      ;; Resolver stake reduced by amount-after-fee (2000 afa with 0 fee)
+      (is (= 3000 (reg/get-stake w resolver)) "resolver stake reduced by afa")
+      ;; Bond balances cleared
+      (is (zero? (get-in w [:bond-balances 0 bob]   0)) "bob bond returned")
+      (is (zero? (get-in w [:bond-balances 0 alice]  0)) "alice bond returned")
+      ;; total-held must be non-negative (no underflow)
+      (is (not (neg? (get-in w [:total-held usdc] 0))) "total-held non-negative")
+      ;; Slash distribution recorded
+      (is (pos? (get-in w [:bond-distribution :insurance] 0))
+          "slash distributed to insurance")
+      (is (pos? (get-in w [:bond-distribution :protocol] 0))
+          "slash distributed to protocol")
+      (is (pos? (:retained-slash-reserves w 0))
+          "slash distributed to retained reserves"))))
 
 ;; ---------------------------------------------------------------------------
 ;; Fork-finality: terminal mutation rejection

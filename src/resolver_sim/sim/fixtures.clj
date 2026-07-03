@@ -8,6 +8,7 @@
             [clojure.java.io :as io]
             [clojure.data.json :as json]
             [resolver-sim.evidence.config :as evcfg]
+            [resolver-sim.io.resource-path :as rp]
             [resolver-sim.validation.suite-result :as suite]
             [resolver-sim.contract-model.replay :as replay]
             [resolver-sim.protocols.registry :as preg]
@@ -64,15 +65,22 @@
       (str "data/fixtures/" nm ext))))
 
 (defn load-fixture
+  "Load a fixture by keyword. Tries classpath resource first, then filesystem."
   [k]
   (let [path (fixture-key->path k)
-        resource (io/file path)]
-    (if (.exists resource)
-      (with-open [r (io/reader resource)]
+        resource-path (str "resource:" path)]
+    (if (rp/path-exists? resource-path)
+      (let [content (rp/slurp-path resource-path)]
         (if (.endsWith path ".json")
-          (json/read r :key-fn keyword)
-          (edn/read (java.io.PushbackReader. r))))
-      (throw (ex-info "Fixture not found" {:key k :path path})))))
+          (json/read-str content :key-fn keyword)
+          (edn/read-string content)))
+      (let [f (io/file path)]
+        (if (.exists f)
+          (with-open [r (io/reader f)]
+            (if (.endsWith path ".json")
+              (json/read r :key-fn keyword)
+              (edn/read (java.io.PushbackReader. r))))
+          (throw (ex-info "Fixture not found" {:key k :path path :resource-path resource-path})))))))
 
 (defn normalize-scenario
   "Delegate to `resolver-sim.scenario.normalize/normalize-scenario`."
@@ -384,16 +392,20 @@
 ;; ---------------------------------------------------------------------------
 
 (defn list-suites
-  "Read the suite registry from data/fixtures/suites/manifest.edn and return a map of suite-key → metadata."
+  "Read the suite registry and return a map of suite-key → metadata.
+   Tries classpath resource first, then filesystem."
   []
-  (let [manifest-path "data/fixtures/suites/manifest.edn"
-        manifest (edn/read-string (slurp manifest-path))]
+  (let [manifest (or (try (rp/edn-read "resource:data/fixtures/suites/manifest.edn")
+                          (catch Exception _ nil))
+                     (edn/read-string (slurp "data/fixtures/suites/manifest.edn")))]
     (reduce-kv (fn [m k v]
-                 (let [suite-path (str "data/fixtures/suites/" (:file v))
-                       suite (edn/read-string (slurp suite-path))]
-                   (assoc m k (select-keys suite [:suite/id :suite/title :suite/purpose
-                                                  :suite/class :suite/criticality
-                                                  :suite/prevents]))))
+                 (let [suite-file (:file v)
+                       suite-data (or (try (rp/edn-read (str "resource:data/fixtures/suites/" suite-file))
+                                           (catch Exception _ nil))
+                                      (edn/read-string (slurp (str "data/fixtures/suites/" suite-file))))]
+                   (assoc m k (select-keys suite-data [:suite/id :suite/title :suite/purpose
+                                                       :suite/class :suite/criticality
+                                                       :suite/prevents]))))
                {}
                manifest)))
 

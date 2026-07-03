@@ -18,6 +18,9 @@ benchmarks/
     sew/                        Sew protocol benchmarks
 
   concepts/                     Benchmark-specific concept definitions
+    protocol-value-conservation-v1.edn
+                                Domain-level protocol value accounting,
+                                allocation, and liability explanation
     protocol-robustness-v0.edn  Concepts for the protocol-robustness-v0 pack
     shortfall-allocation-v0.edn Concepts for the shortfall-allocation-v0 pack
 
@@ -78,6 +81,19 @@ When reviewing a benchmark, look at its claims, scoring rule, and
 description — not just its suite reference — to understand what it
 measures.
 
+## Benchmark Domains
+
+Benchmark domains live in `benchmarks/registry.edn`. They are taxonomy
+entries for grouping packs and reports under a review area such as
+`:domain/evidence-integrity` or `:domain/protocol-value-conservation`.
+
+Keep the layers distinct:
+
+- framework concept: reusable explanation in `data/concepts/`
+- benchmark domain: registry grouping for packs
+- benchmark concept file: benchmark-local operationalisation in `benchmarks/concepts/`
+- benchmark pack: executable evaluation contract in `benchmarks/packs/`
+
 ## Benchmark as Contract
 
 Each benchmark is a registered evaluation contract — a bundle of
@@ -102,11 +118,12 @@ as part of the canonical benchmark contract.
 
 Benchmark-specific concept definitions live under `concepts/`. These
 map low-level scenario mechanics, claims, and evidence types to
-stakeholder-readable language. Unlike the reusable use-case and
-decision-quality concepts in `data/concepts/`, benchmark concepts
-are specific to what a given benchmark evaluates. Packs may provide
-their own concept file when the benchmark needs report-specific
-language that is not part of the shared registry.
+stakeholder-readable language. Unlike the reusable use-case,
+framework, and decision-quality concepts in `data/concepts/`,
+benchmark concepts are specific to what a benchmark or benchmark
+domain evaluates. Packs may provide their own concept file when the
+benchmark needs report-specific language that is not part of the
+shared registry.
 
 Runner execution, report rendering, and `bb benchmarks:validate` all use
 the same benchmark concept resolver. Resolution order is:

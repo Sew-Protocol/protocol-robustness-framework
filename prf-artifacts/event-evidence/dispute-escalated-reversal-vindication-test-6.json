@@ -1,0 +1,48 @@
+{
+  "evidence\/schema-version": "event-evidence.v1",
+  "scenario\/id": "reversal-vindication-test",
+  "evidence\/chain-prev-hash": "75bf07c70ed45a8ac8cfa86824fb6699a0dda9a1be10c06e3aff39b20c645213",
+  "evidence\/importance": "core",
+  "run\/id": "reversal-vindication-test-run",
+  "world\/before-full-hash": "cd2fa421dd542d29ad657bf805bc30aa84a10faf2db013df8056ac24083f2fde",
+  "evidence\/context": {
+    "ctx\/scenario-id": "reversal-vindication-test",
+    "ctx\/run-id": "reversal-vindication-test-run",
+    "ctx\/event-index": 6,
+    "ctx\/event-type": "escalate_dispute",
+    "subject\/type": "dispute",
+    "subject\/id": 0,
+    "action\/type": "escalate",
+    "evidence\/reason": "dispute-escalated"
+  },
+  "post-state": {
+    "escalation\/after": {
+      "dispute-level": 1,
+      "resolver": "0xl1"
+    }
+  },
+  "evidence\/chain-self-hash": "75bf07c70ed45a8ac8cfa86824fb6699a0dda9a1be10c06e3aff39b20c645213",
+  "inputs": {
+    "escalation\/workflow-id": 0,
+    "escalation\/caller": "0xbuyer",
+    "escalation\/from-level": 0,
+    "escalation\/to-level": 1,
+    "escalation\/new-resolver": "0xl1",
+    "escalation\/bond-amount": 0,
+    "escalation\/escalation-count": 0
+  },
+  "world\/after-hash": "0e6d2fcf52b3b1aef02e3f2cb455b9e8ba4edb4183499a1a4ac5f90b40d4a958",
+  "evidence\/type": "dispute-escalated",
+  "evidence\/chain-seq": 6,
+  "calculation": null,
+  "pre-state": {
+    "escalation\/before": {
+      "dispute-level": 0,
+      "resolver": null
+    }
+  },
+  "world\/before-hash": "7fefbb846ee55c301167d260eb0c0d3312cf0dbf82e4ae3a9891c601733f6ff6",
+  "world\/after-full-hash": "805761abea68648628eb7a1547aa10f5d46f8fa1a5b9913d5517020d08c870e9",
+  "evidence\/hash": "75bf07c70ed45a8ac8cfa86824fb6699a0dda9a1be10c06e3aff39b20c645213",
+  "event\/seq": 6
+}

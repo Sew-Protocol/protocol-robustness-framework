@@ -308,7 +308,7 @@
           "b gets allocation"))))
 
 (deftest test-pro-rata-rows-excess-liquidity
-  (testing "available liquidity exceeding total cap reports residual"
+  (testing "available liquidity exceeding total cap does not overpay"
     (let [policy {:mode :pro-rata}
           decision (pf/calculate-fulfillment 100 base-position policy
                                              {:rows [{:key :a :owed 50 :weight 50 :cap 20}
@@ -316,8 +316,8 @@
       (is (= :partial-fill (:settlement-mode decision)))
       (is (= 20 (get-in decision [:filled :a])))
       (is (= 30 (get-in decision [:filled :b])))
-      (is (pos? (get-in decision [:evidence :shortage]))
-          "shortage is computed from total requested, not available"))))
+      (is (zero? (get-in decision [:evidence :shortage]))
+          "shortage is 0 when rows total owed <= available"))))
 
 (deftest test-pro-rata-rows-conservation
   (testing "conservation: filled + deferred = owed for each row"
@@ -351,3 +351,169 @@
           "each row has filled")
       (is (every? #(contains? % :deferred) rows-evidence)
           "each row has deferred"))))
+
+;; ── Principal-first with decoupled rows ───────────────────────────────
+
+(deftest test-principal-first-rows-backward-compatible
+  (testing "no explicit rows produces same result as current principal-first behavior"
+    (let [policy {:mode :principal-first}
+          without-rows (pf/calculate-fulfillment 8000 base-position policy)
+          rows [{:key :principal :owed 10000 :weight 10000 :cap 10000}
+                {:key :realized-yield :owed 500 :weight 500 :cap 500}
+                {:key :deferred-yield :owed 200 :weight 200 :cap 200}]
+          with-rows (pf/calculate-fulfillment 8000 base-position policy
+                                              {:rows rows})]
+      (is (= (:settlement-mode without-rows) (:settlement-mode with-rows)))
+      (is (= (:filled without-rows) (:filled with-rows)))
+      (is (= (:deferred without-rows) (:deferred with-rows))))))
+
+(deftest test-principal-first-rows-principal-capped
+  (testing "principal owed > cap: principal is capped, yield shares remaining"
+    (let [policy {:mode :principal-first}
+          decision (pf/calculate-fulfillment 5000 base-position policy
+                                             {:rows [{:key :principal :owed 10000 :weight 10000 :cap 1000}
+                                                     {:key :realized-yield :owed 500 :weight 500 :cap 500}
+                                                     {:key :deferred-yield :owed 200 :weight 200 :cap 200}]})]
+      (is (= :partial-fill (:settlement-mode decision)))
+      (is (= 1000 (get-in decision [:filled :principal]))
+          "principal capped at 1000")
+      (is (some? (get-in decision [:filled :realized-yield]))
+          "yield receives from remaining after principal cap"))))
+
+(deftest test-principal-first-rows-yield-weight-exceeds-cap
+  (testing "yield row weight > cap: excess redistributed among yield rows"
+    (let [policy {:mode :principal-first}
+          decision (pf/calculate-fulfillment 3000 base-position policy
+                                             {:rows [{:key :principal :owed 2000 :weight 2000 :cap 2000}
+                                                     {:key :realized-yield :owed 2000 :weight 1000 :cap 100}
+                                                     {:key :deferred-yield :owed 2000 :weight 1000 :cap nil}]})]
+      (is (= :partial-fill (:settlement-mode decision)))
+      (is (= 2000 (get-in decision [:filled :principal]))
+          "principal fills fully")
+      (is (<= (get-in decision [:filled :realized-yield]) 100)
+          "realized-yield capped at 100")
+      (is (pos? (get-in decision [:filled :deferred-yield]))
+          "deferred-yield gets remaining after cap redistribution"))))
+
+(deftest test-principal-first-rows-evidence
+  (testing "principal-first with rows produces allocation-rows evidence"
+    (let [policy {:mode :principal-first}
+          decision (pf/calculate-fulfillment 5000 base-position policy
+                                             {:rows [{:key :principal :owed 10000 :weight 10000 :cap 1000}
+                                                     {:key :realized-yield :owed 500 :weight 500 :cap nil}]})
+          rows-evidence (get-in decision [:evidence :allocation-rows])]
+      (is (some? rows-evidence) "allocation-rows in evidence")
+      (is (= 2 (count rows-evidence)))
+      (is (true? (:cap-hit? (first rows-evidence)))
+          "principal hit its cap")
+      (is (false? (:cap-hit? (second rows-evidence)))
+          "yield row did not hit cap (nil cap)")
+      (is (every? #(contains? % :filled) rows-evidence))
+      (is (every? #(contains? % :deferred) rows-evidence))))
+
+;; Additional tests for decoupled principal-first edge cases
+(deftest test-principal-first-rows-zero-liquidity
+(testing "Zero liquidity: nothing allocated, everything deferred"
+(let [policy {:mode :principal-first}
+      decision (pf/calculate-fulfillment 0 base-position policy
+                                         {:rows [{:key :principal :owed 1000 :weight 1000 :cap 1000}
+                                                 {:key :realized-yield :owed 500 :weight 500 :cap 500}]})]
+  (is (= :partial-fill (:settlement-mode decision)))
+  (is (= 0 (get-in decision [:filled :principal] 0)) "No principal filled")
+  (is (= 0 (get-in decision [:filled :realized-yield] 0)) "No yield filled")
+  (is (= 1000 (get-in decision [:deferred :principal] 0)) "All principal deferred")
+  (is (= 500 (get-in decision [:deferred :realized-yield] 0)) "All yield deferred"))))
+
+(deftest test-principal-first-rows-weight-zero
+(testing "Zero weight: receives nothing regardless of cap"
+(let [policy {:mode :principal-first}
+      decision (pf/calculate-fulfillment 1000 base-position policy
+                                         {:rows [{:key :principal :owed 1000 :weight 0 :cap 1000}
+                                                 {:key :realized-yield :owed 500 :weight 500 :cap 500}]})]
+  (is (= 0 (get-in decision [:filled :principal] 0)) "Principal with zero weight gets nothing")
+  (is (= 500 (get-in decision [:filled :realized-yield] 0)) "Yield gets available liquidity"))))
+
+(deftest test-principal-first-rows-cap-zero
+(testing "Zero cap: receives nothing regardless of weight"
+(let [policy {:mode :principal-first}
+      decision (pf/calculate-fulfillment 1000 base-position policy
+                                         {:rows [{:key :principal :owed 1000 :weight 1000 :cap 0}
+                                                 {:key :realized-yield :owed 500 :weight 500 :cap 500}]})]
+  (is (= 0 (get-in decision [:filled :principal] 0)) "Principal with zero cap gets nothing")
+  (is (= 500 (get-in decision [:filled :realized-yield] 0)) "Yield gets available liquidity"))))
+
+(deftest test-principal-first-rows-weight-less-than-cap
+(testing "Weight < cap: allocation based on weight, not cap"
+(let [policy {:mode :principal-first}
+      decision (pf/calculate-fulfillment 1000 base-position policy
+                                         {:rows [{:key :principal :owed 1000 :weight 500 :cap 1000}
+                                                 {:key :realized-yield :owed 500 :weight 500 :cap 500}]})]
+  (is (= 500 (get-in decision [:filled :principal] 0)) "Principal gets weight-based share")
+  (is (= 500 (get-in decision [:filled :realized-yield] 0)) "Yield gets weight-based share"))))
+
+(deftest test-principal-first-rows-weight-greater-than-cap
+(testing "Weight > cap: allocation limited by cap"
+(let [policy {:mode :principal-first}
+      decision (pf/calculate-fulfillment 1000 base-position policy
+                                         {:rows [{:key :principal :owed 1000 :weight 1000 :cap 500}
+                                                 {:key :realized-yield :owed 500 :weight 500 :cap 500}]})]
+  (is (= 500 (get-in decision [:filled :principal] 0)) "Principal limited by cap")
+  (is (= 500 (get-in decision [:filled :realized-yield] 0)) "Yield gets remaining"))))
+
+(deftest test-principal-first-rows-all-capped
+(testing "All rows capped: excess liquidity remains unallocated"
+(let [policy {:mode :principal-first}
+      decision (pf/calculate-fulfillment 1000 base-position policy
+                                         {:rows [{:key :principal :owed 1000 :weight 1000 :cap 300}
+                                                 {:key :realized-yield :owed 500 :weight 500 :cap 200}]})]
+  (is (= 300 (get-in decision [:filled :principal] 0)) "Principal capped at 300")
+  (is (= 200 (get-in decision [:filled :realized-yield] 0)) "Yield capped at 200")
+  (is (= 500 (get-in decision [:deferred :principal] 0)) "Principal deferred amount")
+  (is (= 300 (get-in decision [:deferred :realized-yield] 0)) "Yield deferred amount"))))
+
+(deftest test-principal-first-rows-conservation
+(testing "Conservation: filled + deferred = requested for each row"
+(let [policy {:mode :principal-first}
+      decision (pf/calculate-fulfillment 1000 base-position policy
+                                         {:rows [{:key :principal :owed 1000 :weight 1000 :cap 600}
+                                                 {:key :realized-yield :owed 500 :weight 500 :cap 300}
+                                                 {:key :deferred-yield :owed 200 :weight 200 :cap 100}]})
+      rows-evidence (get-in decision [:evidence :allocation-rows])]
+  (doseq [row rows-evidence]
+    (let [key (:key row)
+          requested (:owed row)
+          filled (:filled row)
+          deferred (:deferred row)]
+      (is (= requested (+ filled deferred))
+          (str "Row " key " conservation: filled + deferred = requested"))))))
+
+(deftest test-principal-first-rows-only-principal
+(testing "Only principal row: yield rows empty"
+(let [policy {:mode :principal-first}
+      decision (pf/calculate-fulfillment 500 base-position policy
+                                         {:rows [{:key :principal :owed 1000 :weight 1000 :cap 1000}]})]
+  (is (= 500 (get-in decision [:filled :principal] 0)) "Principal gets available liquidity")
+  (is (nil? (get-in decision [:filled :realized-yield])) "No yield allocation")
+  (is (nil? (get-in decision [:filled :deferred-yield])) "No deferred yield allocation"))))
+
+(deftest test-principal-first-rows-no-principal
+(testing "No principal row: all liquidity to yield"
+(let [policy {:mode :principal-first}
+      decision (pf/calculate-fulfillment 500 base-position policy
+                                         {:rows [{:key :realized-yield :owed 500 :weight 500 :cap 500}
+                                                 {:key :deferred-yield :owed 200 :weight 200 :cap 200}]})]
+  (is (= 0 (get-in decision [:filled :principal] 0)) "No principal allocation")
+  (is (= 500 (get-in decision [:filled :realized-yield] 0)) "Realized yield gets share")
+  (is (= 200 (get-in decision [:filled :deferred-yield] 0)) "Deferred yield gets share"))))
+
+(deftest test-principal-first-rows-full-fill
+(testing "Full fill when liquidity covers all capped amounts"
+(let [policy {:mode :principal-first}
+      decision (pf/calculate-fulfillment 1500 base-position policy
+                                         {:rows [{:key :principal :owed 1000 :weight 1000 :cap 1000}
+                                                 {:key :realized-yield :owed 500 :weight 500 :cap 500}]})]
+  (is (= :full-fill (:settlement-mode decision)))
+  (is (= 1000 (get-in decision [:filled :principal] 0)) "Principal fully filled")
+  (is (= 500 (get-in decision [:filled :realized-yield] 0)) "Yield fully filled")
+  (is (= 0 (get-in decision [:deferred :principal] 0)) "No principal deferred")
+  (is (= 0 (get-in decision [:deferred :realized-yield] 0)) "No yield deferred")))))

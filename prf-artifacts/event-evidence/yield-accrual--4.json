@@ -1,0 +1,163 @@
+{
+  "evidence\/schema-version": "event-evidence.v1",
+  "evidence\/chain-prev-hash": "322d9960af916d7e9cb6bbc6bb59eee4d60a2e20c37f108a743c9071627e92cf",
+  "evidence\/importance": "core",
+  "world\/before-full-hash": "0499d1ad1ed20b393177afc0acf46e87094b924faf370b810733cb93ba81fff0",
+  "evidence\/context": {
+    "accrual\/token": "USDC",
+    "accrual\/deferred-delta": 0,
+    "accrual\/previous-index": {
+      "num": "62173225",
+      "den": "62157456"
+    },
+    "accrual\/module-id": "aave-v3",
+    "accrual\/position-id": "0xOwnerA",
+    "accrual\/accrual-mode": "dust-threshold",
+    "withdraw\/module-id": "aave-v3",
+    "ctx\/event-index": 4,
+    "accrual\/yield-delta": 0,
+    "accrual\/short-circuits": [
+      "dust-threshold"
+    ],
+    "accrual\/final-index": {
+      "num": "62173225",
+      "den": "62157456"
+    },
+    "ctx\/run-id": null,
+    "ctx\/scenario-id": null,
+    "accrual\/now": 1200000,
+    "withdraw\/position-id": "0xOwnerA",
+    "ctx\/event-type": "yield_withdraw"
+  },
+  "post-state": {
+    "accrual\/after": {
+      "total-held": {
+        "USDC": 0
+      }
+    }
+  },
+  "evidence\/chain-self-hash": "322d9960af916d7e9cb6bbc6bb59eee4d60a2e20c37f108a743c9071627e92cf",
+  "inputs": {
+    "accrual\/decision": {
+      "haircut-yield-delta": 0,
+      "accrual-dust-carry": 0,
+      "workflow-id": null,
+      "final-index": 1.000253694424045,
+      "short-circuits": [
+        "dust-threshold"
+      ],
+      "deferred-yield-delta": 0,
+      "now": 1200000,
+      "config": {
+        "min-accrual-delta": 1,
+        "max-index-delta-ratio": 0.05,
+        "max-index-delta-policy": "cap",
+        "stale-oracle-max-seconds": 86400,
+        "stale-oracle-floor-bps": 0
+      },
+      "dt": 0,
+      "evidence": {
+        "delta-exact": {
+          "num": "0",
+          "den": "1"
+        },
+        "dust-threshold-applied": true,
+        "dust-carry-after": {
+          "num": "0",
+          "den": "1"
+        },
+        "final-index": {
+          "num": "62173225",
+          "den": "62157456"
+        },
+        "short-circuits": [
+          "dust-threshold"
+        ],
+        "dust-carry-prior": {
+          "num": "0",
+          "den": "1"
+        },
+        "now": 1200000,
+        "dt": 0,
+        "schema-version": "accrual-decision.v2",
+        "final-units": 0,
+        "attempted-delta": 0,
+        "previous-index": {
+          "num": "62173225",
+          "den": "62157456"
+        },
+        "accrual-mode": "dust-threshold",
+        "min-accrual-delta": 1,
+        "base-apy-bps": 400,
+        "effective-apy-bps": 400,
+        "shares": {
+          "num": "1000",
+          "den": "1"
+        },
+        "attempted-index": {
+          "num": "62173225",
+          "den": "62157456"
+        }
+      },
+      "realized-yield-delta": 0,
+      "exact-final-value": 1000.253694424045,
+      "final-accrual-delta": 0,
+      "token": "USDC",
+      "module-id": "aave-v3",
+      "exact-prev-value": 1000.253694424045,
+      "position-id": "0xOwnerA",
+      "previous-index": 1.000253694424045,
+      "accrual-mode": "dust-threshold",
+      "attempted-accrual-delta": 0,
+      "position": {
+        "owner\/id": "0xOwnerA",
+        "oracle-stale-affected?": false,
+        "capital-event-affected?": false,
+        "current-value": 1000,
+        "entry-index": 1.0,
+        "module\/id": "aave-v3",
+        "partial-fill-affected?": false,
+        "position\/id": [
+          "position",
+          "0xOwnerA",
+          "aave-v3",
+          "USDC"
+        ],
+        "deferred-yield": 0,
+        "principal-impairment": 0,
+        "realized-yield": 0,
+        "last-accrual-index": 1.000126839167935,
+        "current-index": 1.000126839167935,
+        "token": "USDC",
+        "status": "active",
+        "unrealized-yield": 0,
+        "last-accrual-time": 1100000,
+        "principal": 1000,
+        "shortfall-affected?": false,
+        "accrual-dust-remainder": 0.1268391679350583,
+        "shares": 1000.0,
+        "haircut-yield": 0
+      },
+      "base-apy-bps": 400,
+      "effective-apy-bps": 400,
+      "exact-accrual-delta": 0,
+      "attempted-index": 1.000253694424045,
+      "unrealized-yield-delta": 0
+    }
+  },
+  "world\/after-hash": "8de3979c2b76f8eef1c5ceacf05c2440a64ebf69bc2c6e748f01cc92e595abd0",
+  "evidence\/type": "yield-accrual",
+  "evidence\/chain-seq": 17,
+  "calculation": null,
+  "pre-state": {
+    "accrual\/before": {
+      "total-held": {
+        "USDC": 0
+      }
+    }
+  },
+  "world\/before-hash": "0f344519377baa41e1f60a0015b3bfb81be8701816190ffbbf676efde5b55416",
+  "world\/after-full-hash": "b107223a9885f55475faafd942065e9976b4c91a3cdd2a7f2de467d1c040e2d6",
+  "evidence\/hash": "322d9960af916d7e9cb6bbc6bb59eee4d60a2e20c37f108a743c9071627e92cf",
+  "event\/seq": 4
+}

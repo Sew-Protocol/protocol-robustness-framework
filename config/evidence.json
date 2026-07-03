@@ -1,8 +1,8 @@
 {
   "schema": "evidence-config.v1",
-  "artifact_dir": "results/test-artifacts",
-  "runs_root": "results/runs",
-  "evidence_bundle_dir": "results/evidence-bundle",
+  "artifact_dir": "./prf-artifacts",
+  "runs_root": "./prf-runs",
+  "evidence_bundle_dir": "./prf-bundles",
   "contract_version": "evidence-contract.v1",
   "strict_mode": true,
   "rounding_policy": "floor-to-asset-decimals.v1",

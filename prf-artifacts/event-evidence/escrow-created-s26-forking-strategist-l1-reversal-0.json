@@ -1,0 +1,73 @@
+{
+  "evidence\/schema-version": "event-evidence.v1",
+  "scenario\/id": "s26-forking-strategist-l1-reversal",
+  "evidence\/chain-prev-hash": "d84423e8f75ebca3c522592b1f156813a11c2221ea82fe828c2e1b94fbf2ea3d",
+  "evidence\/importance": "core",
+  "run\/id": "s26-forking-strategist-l1-reversal-run",
+  "world\/before-full-hash": "071acd5a15bfb742254a362ab076c1abe3c2cd6b773bb93500c1e1f0ac4f2073",
+  "evidence\/context": {
+    "ctx\/scenario-id": "s26-forking-strategist-l1-reversal",
+    "ctx\/run-id": "s26-forking-strategist-l1-reversal-run",
+    "ctx\/event-index": 0,
+    "ctx\/event-type": "create_escrow",
+    "subject\/type": "escrow",
+    "subject\/id": 0,
+    "action\/type": "create",
+    "evidence\/reason": "escrow-created"
+  },
+  "post-state": {
+    "escrow\/after": {
+      "next-workflow-id": 1,
+      "total-held": 5910,
+      "resolver-stake": null,
+      "created-workflow": {
+        "escrow-state": "pending",
+        "auto-cancel-time": 0,
+        "amount-after-fee": 5910,
+        "auto-release-time": 0,
+        "token": "USDC",
+        "initial-fee": 90,
+        "from": "0xbuyer",
+        "dispute-resolver": null,
+        "last-accrual-time": 1000,
+        "to": "0xseller"
+      }
+    }
+  },
+  "evidence\/chain-self-hash": "d84423e8f75ebca3c522592b1f156813a11c2221ea82fe828c2e1b94fbf2ea3d",
+  "inputs": {
+    "escrow\/yield-deposit-applied?": null,
+    "escrow\/amount": 6000,
+    "escrow\/amount-after-fee": 5910,
+    "escrow\/auto-release": 0,
+    "escrow\/token": "USDC",
+    "escrow\/yield-module": null,
+    "escrow\/auto-cancel": 0,
+    "escrow\/settings": {
+      "yield-preset": "off",
+      "profile-id": null,
+      "protection-profile-id": null,
+      "auto-release": null,
+      "auto-cancel": null,
+      "custom-resolver": null
+    },
+    "escrow\/workflow-id": 0,
+    "escrow\/fee": 90,
+    "escrow\/resolver": null
+  },
+  "world\/after-hash": "e3ebb668bd05318677424cdd03f9a157a3c7f05e4995dcc80f28a8b6bb8e0e5b",
+  "evidence\/type": "escrow-created",
+  "evidence\/chain-seq": 1,
+  "calculation": null,
+  "pre-state": {
+    "escrow\/before": {
+      "next-workflow-id": 0,
+      "total-held": null,
+      "resolver-stake": null
+    }
+  },
+  "world\/before-hash": "bb7132e7532195a96cd16d85ce6510f45ce02cf41103c09d1a792c311a710fdf",
+  "world\/after-full-hash": "924664b488f8fff124e9f2f141afa26fc2d732daa3c7cef8b83998b8b1489eb7",
+  "evidence\/hash": "d84423e8f75ebca3c522592b1f156813a11c2221ea82fe828c2e1b94fbf2ea3d",
+  "event\/seq": 0
+}

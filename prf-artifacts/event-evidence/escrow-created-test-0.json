@@ -1,0 +1,73 @@
+{
+  "evidence\/schema-version": "event-evidence.v1",
+  "scenario\/id": "test",
+  "evidence\/chain-prev-hash": "0e28495ee31bc6319cb1a4140e7b59e05b39484f471d29ca52180253c11ecd08",
+  "evidence\/importance": "core",
+  "run\/id": "test-run",
+  "world\/before-full-hash": "254b585625b9901f25e1c8d58f2dc2e906b7a26ea289a38a2fc9319eef708860",
+  "evidence\/context": {
+    "ctx\/scenario-id": "test",
+    "ctx\/run-id": "test-run",
+    "ctx\/event-index": 0,
+    "ctx\/event-type": "create_escrow",
+    "subject\/type": "escrow",
+    "subject\/id": 0,
+    "action\/type": "create",
+    "evidence\/reason": "escrow-created"
+  },
+  "post-state": {
+    "escrow\/after": {
+      "next-workflow-id": 1,
+      "total-held": 2985,
+      "resolver-stake": null,
+      "created-workflow": {
+        "escrow-state": "pending",
+        "auto-cancel-time": 0,
+        "amount-after-fee": 2985,
+        "auto-release-time": 0,
+        "token": "0xUSDC",
+        "initial-fee": 15,
+        "from": "0xAlice",
+        "dispute-resolver": null,
+        "last-accrual-time": 1000,
+        "to": "0xBob"
+      }
+    }
+  },
+  "evidence\/chain-self-hash": "0e28495ee31bc6319cb1a4140e7b59e05b39484f471d29ca52180253c11ecd08",
+  "inputs": {
+    "escrow\/yield-deposit-applied?": null,
+    "escrow\/amount": 3000,
+    "escrow\/amount-after-fee": 2985,
+    "escrow\/auto-release": 0,
+    "escrow\/token": "0xUSDC",
+    "escrow\/yield-module": null,
+    "escrow\/auto-cancel": 0,
+    "escrow\/settings": {
+      "yield-preset": "off",
+      "profile-id": null,
+      "protection-profile-id": null,
+      "auto-release": null,
+      "auto-cancel": null,
+      "custom-resolver": null
+    },
+    "escrow\/workflow-id": 0,
+    "escrow\/fee": 15,
+    "escrow\/resolver": null
+  },
+  "world\/after-hash": "747cc996253145001d08e3ab338c1fb996822a0787c6244b8a67421ac16a4166",
+  "evidence\/type": "escrow-created",
+  "evidence\/chain-seq": 1,
+  "calculation": null,
+  "pre-state": {
+    "escrow\/before": {
+      "next-workflow-id": 0,
+      "total-held": null,
+      "resolver-stake": null
+    }
+  },
+  "world\/before-hash": "bb7132e7532195a96cd16d85ce6510f45ce02cf41103c09d1a792c311a710fdf",
+  "world\/after-full-hash": "2faa5b59c6e12ff005e132b40e51d09b8d3e0a47d547f67f9a6cbee3b7bce1ae",
+  "evidence\/hash": "0e28495ee31bc6319cb1a4140e7b59e05b39484f471d29ca52180253c11ecd08",
+  "event\/seq": 0
+}

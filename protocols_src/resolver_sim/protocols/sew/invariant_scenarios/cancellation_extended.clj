@@ -292,3 +292,170 @@
     ;; and calls auto-cancel-disputed-on-auto-time.
     {:seq 2 :time 1500 :agent "keeper" :action "automate_timed_actions"
      :params {:workflow-id 0}}]})
+
+;; ---------------------------------------------------------------------------
+;; GAP FILL: cancel-strategy {:can-cancel? true, :unilateral-cancel? false}
+;;
+;; Mutual-only strategy: sender can initiate cancel but it requires
+;; recipient agreement.  No immediate refund — falls through to mutual
+;; consent path.  Tests that :unilateral-cancel? false correctly defers
+;; to the mutual-consent code path.
+;; ---------------------------------------------------------------------------
+
+(def s-cancel-strategy-mutual-only
+  {:scenario-id     "s-cancel-strategy-mutual-only"
+   :schema-version  "1.0"
+   :scenario-author "@research"
+   :initial-block-time 1000
+   :agents          [{:id "buyer"  :address "0xbuyer"  :strategy "honest"}
+                     {:id "seller" :address "0xseller" :strategy "honest"}]
+   :protocol-params {:resolver-fee-bps 150
+                     :appeal-window-duration 0
+                     :max-dispute-duration 2592000
+                     :cancellation-strategy {:can-cancel? true
+                                             :unilateral-cancel? false}}
+   :events
+   [{:seq 0 :time 1000 :agent "buyer" :action "create_escrow"
+     :params {:token "USDC" :to "0xseller" :amount 1500}}
+    ;; Mutual-only: sender cancel sets status (not immediate refund)
+    {:seq 1 :time 1060 :agent "buyer" :action "sender_cancel"
+     :params {:workflow-id 0}}
+    ;; Recipient also cancels → both agreed → refunded
+    {:seq 2 :time 1120 :agent "seller" :action "recipient_cancel"
+     :params {:workflow-id 0}}]})
+
+;; ---------------------------------------------------------------------------
+;; GAP FILL: cancel-strategy {:can-cancel? false, :unilateral-cancel? true}
+;;
+;; Verifies that :can-cancel? dominates :unilateral-cancel?.  Even when
+;; unilateral-cancel? is true, if can-cancel? is false the cancel must
+;; be rejected.  Without this test a refactor could accidentally honor
+;; :unilateral-cancel? without checking :can-cancel?.
+;; ---------------------------------------------------------------------------
+
+(def s-cancel-strategy-can-cancel-dominates
+  {:scenario-id     "s-cancel-strategy-can-cancel-dominates"
+   :schema-version  "1.0"
+   :scenario-author "@research"
+   :initial-block-time 1000
+   :agents          [{:id "buyer"  :address "0xbuyer"  :strategy "honest"}
+                     {:id "seller" :address "0xseller" :strategy "honest"}]
+   :protocol-params {:resolver-fee-bps 150
+                     :appeal-window-duration 0
+                     :max-dispute-duration 2592000
+                     :cancellation-strategy {:can-cancel? false
+                                             :unilateral-cancel? true}}
+   :expected-errors [{:seq 1 :action "sender_cancel" :error :not-authorized-to-cancel-yet}]
+   :events
+   [{:seq 0 :time 1000 :agent "buyer" :action "create_escrow"
+     :params {:token "USDC" :to "0xseller" :amount 1500}}
+    ;; can-cancel? false dominates — reject even though unilateral-cancel? true
+    {:seq 1 :time 1060 :agent "buyer" :action "sender_cancel"
+     :params {:workflow-id 0}}]})
+
+;; ---------------------------------------------------------------------------
+;; GAP FILL: sender-cancel after auto-cancel-time deadline (before keeper)
+;;
+;; Creates an escrow with auto-cancel-time set and a unilateral cancel
+;; strategy.  The sender cancels manually at the deadline (before the
+;; keeper fires).  Then the keeper calls automate-timed-actions and gets
+;; no action (escrow already refunded).
+;; ---------------------------------------------------------------------------
+
+(def s-sender-cancel-after-auto-cancel-deadline
+  {:scenario-id     "s-sender-cancel-after-auto-cancel-deadline"
+   :schema-version  "1.0"
+   :scenario-author "@research"
+   :initial-block-time 1000
+   :agents          [{:id "buyer"  :address "0xbuyer"  :strategy "honest"}
+                     {:id "seller" :address "0xseller" :strategy "honest"}
+                     {:id "keeper" :address "0xkeeper" :role "keeper"}]
+   :protocol-params {:resolver-fee-bps 150
+                     :appeal-window-duration 0
+                     :max-dispute-duration 2592000
+                     :cancellation-strategy {:can-cancel? true
+                                             :unilateral-cancel? true}}
+   :events
+   [{:seq 0 :time 1000 :agent "buyer" :action "create_escrow"
+     :params {:token "USDC" :to "0xseller" :amount 2000
+              :auto-cancel-time 2000}}
+    ;; Sender manually cancels at the deadline → immediate refund (unilateral)
+    {:seq 1 :time 2000 :agent "buyer" :action "sender_cancel"
+     :params {:workflow-id 0}}
+    ;; Keeper fires after manual cancel → no action (escrow already refunded)
+    {:seq 2 :time 2100 :agent "keeper" :action "automate_timed_actions"
+     :params {:workflow-id 0}}]})
+
+;; ---------------------------------------------------------------------------
+;; GAP FILL: auto-cancel-due-on-disputed? with time-not-passed
+;;
+;; Disputed escrow with auto-cancel-time set to a future time.  At t=1300
+;; the dispute-timeout has not yet exceeded max-dispute-duration (5000s)
+;; and auto-cancel-time (2000) has not yet passed.  automate-timed-actions
+;; returns no action.  At t=2000 auto-cancel-time arrives and the griefing
+;; protection fires (auto-cancel-due-on-disputed?).
+;; ---------------------------------------------------------------------------
+
+(def s-auto-cancel-due-on-disputed-time-not-passed
+  {:scenario-id     "s-auto-cancel-due-on-disputed-time-not-passed"
+   :schema-version  "1.0"
+   :scenario-author "@research"
+   :initial-block-time 1000
+   :agents          [{:id "buyer"  :address "0xbuyer"  :strategy "honest"}
+                     {:id "seller" :address "0xseller" :strategy "honest"}
+                     {:id "keeper" :address "0xkeeper" :role "keeper"}]
+   :protocol-params {:resolver-fee-bps 150
+                     :appeal-window-duration 0
+                     :max-dispute-duration 5000}
+   :events
+   [{:seq 0 :time 1000 :agent "buyer" :action "create_escrow"
+     :params {:token "USDC" :to "0xseller" :amount 2000
+              :auto-cancel-time 2000}}
+    {:seq 1 :time 1060 :agent "buyer" :action "raise_dispute"
+     :params {:workflow-id 0}}
+    ;; At t=1300: auto-cancel-time (2000) not yet passed, timeout not exceeded
+    {:seq 2 :time 1300 :agent "keeper" :action "automate_timed_actions"
+     :params {:workflow-id 0}}
+    ;; At t=2000: auto-cancel-time passed → auto-cancel-on-disputed fires
+    {:seq 3 :time 2000 :agent "keeper" :action "automate_timed_actions"
+     :params {:workflow-id 0}}]})
+
+;; ---------------------------------------------------------------------------
+;; GAP FILL: auto-cancel-due-on-disputed? with pending settlement blocking
+;;
+;; Disputed escrow with auto-cancel-time passed, but a pending settlement
+;; (not yet executable) blocks the auto-cancel griefing protection.
+;; At t=1300 the pending settlement's appeal deadline (1400) has not passed,
+;; and the dispute-timeout has not exceeded max-dispute-duration (5000).
+;; At t=1500 the settlement becomes executable and Priority 1 fires.
+;; ---------------------------------------------------------------------------
+
+(def s-auto-cancel-due-on-disputed-pending-settlement
+  {:scenario-id     "s-auto-cancel-due-on-disputed-pending-settlement"
+   :schema-version  "1.0"
+   :scenario-author "@research"
+   :initial-block-time 1000
+   :agents          [{:id "buyer"    :address "0xbuyer"    :strategy "honest"}
+                     {:id "seller"   :address "0xseller"   :strategy "honest"}
+                     {:id "resolver" :address "0xresolver" :role "resolver"}
+                     {:id "keeper"   :address "0xkeeper"   :role "keeper"}]
+   :protocol-params {:resolver-fee-bps 150
+                     :appeal-window-duration 300
+                     :max-dispute-duration 5000}
+   :events
+   [{:seq 0 :time 1000 :agent "buyer" :action "create_escrow"
+     :params {:token "USDC" :to "0xseller" :amount 2000
+              :custom-resolver "0xresolver"
+              :auto-cancel-time 1200}}
+    {:seq 1 :time 1060 :agent "buyer" :action "raise_dispute"
+     :params {:workflow-id 0}}
+    ;; Resolver submits resolution → pending settlement (appeal deadline = 1100+300 = 1400)
+    {:seq 2 :time 1100 :agent "resolver" :action "execute_resolution"
+     :params {:workflow-id 0 :is-release true :resolution-hash "0xhash"}}
+    ;; At t=1300: auto-cancel-time passed but pending settlement blocks auto-cancel
+    ;; (pending not executable yet — deadline 1400, timeout not exceeded — 240<5000)
+    {:seq 3 :time 1300 :agent "keeper" :action "automate_timed_actions"
+     :params {:workflow-id 0}}
+    ;; At t=1500: pending-settlement-executable? true → execute settlement
+    {:seq 4 :time 1500 :agent "keeper" :action "automate_timed_actions"
+     :params {:workflow-id 0}}]})

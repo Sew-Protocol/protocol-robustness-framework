@@ -1,0 +1,50 @@
+{
+  "evidence\/schema-version": "event-evidence.v1",
+  "scenario\/id": "s32-forking-strategist-premature-settlement-rejected",
+  "evidence\/chain-prev-hash": "007b2ed414d898204f3c63a9d5834bf3b921a468f7073d3aaa4109f4fa2f0899",
+  "evidence\/importance": "core",
+  "run\/id": "s32-forking-strategist-premature-settlement-rejected-run",
+  "world\/before-full-hash": "0fbf5503db510ce5595549eca7874c2669af61aa981fae93335032e5907ae368",
+  "evidence\/context": {
+    "ctx\/scenario-id": "s32-forking-strategist-premature-settlement-rejected",
+    "ctx\/run-id": "s32-forking-strategist-premature-settlement-rejected-run",
+    "ctx\/event-index": 6,
+    "ctx\/event-type": "execute_pending_settlement",
+    "subject\/type": "escrow",
+    "subject\/id": 0,
+    "action\/type": "refunded",
+    "evidence\/reason": "escrow-refunded"
+  },
+  "post-state": {
+    "finalize\/after": {
+      "workflow-state": "refunded",
+      "total-held": 0
+    }
+  },
+  "evidence\/chain-self-hash": "007b2ed414d898204f3c63a9d5834bf3b921a468f7073d3aaa4109f4fa2f0899",
+  "inputs": {
+    "finalize\/workflow-id": 0,
+    "finalize\/direction": "refunded",
+    "finalize\/recipient": "0xbuyer",
+    "finalize\/settled-amount": 5910,
+    "finalize\/sub-held-amount": 5910,
+    "finalize\/partial-yield?": false,
+    "finalize\/shortfall?": false,
+    "finalize\/resolver": "0xl1"
+  },
+  "world\/after-hash": "27d4b9df559a98b5347c7c20a214426704067e313557334b413a4c41ec48e0b5",
+  "evidence\/type": "escrow-refunded",
+  "evidence\/chain-seq": 5,
+  "calculation": null,
+  "pre-state": {
+    "finalize\/before": {
+      "workflow-state": "disputed",
+      "total-held": 5910,
+      "resolver": "0xl1"
+    }
+  },
+  "world\/before-hash": "81e32fe258296899140ee83543046b580d6b1ebeb2eeb1bedb91b6452353d412",
+  "world\/after-full-hash": "2c321ae00e0842eecfe741999f087d68aa33979885791442230c4eea16fc54fa",
+  "evidence\/hash": "007b2ed414d898204f3c63a9d5834bf3b921a468f7073d3aaa4109f4fa2f0899",
+  "event\/seq": 6
+}

@@ -348,6 +348,9 @@
 
    For non-yield escrows (no yield module): checks both delta-held = -afa
    and delta-claimable = +net-afa (strict principal accounting).
+   Resolver stake slashes are NOT reflected in delta-held because the
+   resolver's stake lives in :resolver-stakes, not :total-held
+   (register-stake never calls add-held).
 
    For yield-backed escrows: only checks delta-claimable, since delta-held
    also absorbs yield accrual deltas (which are tracked by held-delta-accounted).
@@ -378,29 +381,7 @@
                      claimable-before (get-token-claimable-sum world-before token)
                      claimable-after  (get-token-claimable-sum world-after token)
                      delta-claimable  (- claimable-after claimable-before)
-
-                     ;; Resolver stake slashes (USDC-only) may occur in the same
-                     ;; transition as escrow finalization (e.g. dispute timeout).
-                      stake-held-delta
-                      (if (= token :USDC)
-                        (let [sb (reduce + 0 (vals (:resolver-stakes world-before {})))
-                              sa (reduce + 0 (vals (:resolver-stakes world-after {})))]
-                          (- sa sb))
-                        0)
-
-                      ;; Slash distribution may reduce held in the same transition as
-                      ;; escrow finalization (e.g. a reversal slash that triggers at the
-                      ;; maximum dispute level).  Account for the distribution outflow
-                      ;; so delta-held = -afa + stake-held-delta + slash-dist-delta.
-                      slash-dist-delta
-                      (let [bd-before (reduce + 0 (vals (:bond-distribution world-before {})))
-                            bd-after  (reduce + 0 (vals (:bond-distribution world-after {})))
-                            rs-before (:retained-slash-reserves world-before 0)
-                            rs-after  (:retained-slash-reserves world-after 0)
-                            total-before (+ bd-before rs-before)
-                            total-after  (+ bd-after rs-after)]
-                        (- total-before total-after))  ;; outflow from held
-
+                       
                       ;; Expected immediately-claimable amount:
                      ;;   partial-yield shortfall → principal + net liquid yield (fee on yield leg)
                      ;;   gross shortfall → fulfilled-amount only (deferred stays in held)
@@ -419,15 +400,15 @@
                        (nil? yield-mid) net-afa
                        :else net-afa)  ;; minimum — for yield-no-shortfall we check >=
 
-                     ;; Validation predicate
-                     ok?
-                     (cond
-                        ;; No yield module: strict principal accounting
-                        ;;   slash-dist-delta accounts for slash distributions in same transition
-                        ;;   (stake-held-delta is excluded because it's a liability change, not held change)
-                        (nil? yield-mid)
-                        (and (= delta-held (+ (- afa) slash-dist-delta))
-                            (= delta-claimable net-afa))
+                      ;; Validation predicate
+                      ok?
+                      (cond
+                         ;; No yield module: strict principal accounting.
+                         ;; Resolver slashes affect :resolver-stakes, not :total-held,
+                         ;; so delta-held = -afa with no slash-dist adjustment.
+                         (nil? yield-mid)
+                         (and (= delta-held (- afa))
+                             (= delta-claimable net-afa))
 
                        ;; Yield with shortfall: only fulfilled-amount goes to claimable immediately
                        shortfall

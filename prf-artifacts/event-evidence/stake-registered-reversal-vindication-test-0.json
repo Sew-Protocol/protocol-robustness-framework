@@ -1,0 +1,38 @@
+{
+  "evidence\/schema-version": "event-evidence.v1",
+  "scenario\/id": "reversal-vindication-test",
+  "evidence\/chain-prev-hash": "97f78e04363b028e3f29c56ccf5c6405e1a73c5137801a3752c02a7e680cc99e",
+  "evidence\/importance": "core",
+  "run\/id": "reversal-vindication-test-run",
+  "world\/before-full-hash": "3a7e179c72c60c9e303b5a5cee63864e898d5b5eb94977ea6b924f563f73866f",
+  "evidence\/context": {
+    "ctx\/scenario-id": "reversal-vindication-test",
+    "ctx\/run-id": "reversal-vindication-test-run",
+    "ctx\/event-index": 0,
+    "ctx\/event-type": "register_stake",
+    "subject\/type": "resolver",
+    "subject\/id": "0xl0",
+    "action\/type": "register",
+    "evidence\/reason": "stake-registered"
+  },
+  "post-state": {
+    "stake\/after": 8000
+  },
+  "evidence\/chain-self-hash": "97f78e04363b028e3f29c56ccf5c6405e1a73c5137801a3752c02a7e680cc99e",
+  "inputs": {
+    "stake\/resolver": "0xl0",
+    "stake\/amount": 8000,
+    "stake\/yield-profile-id": null
+  },
+  "world\/after-hash": "8498f6e70076b4dd25bff2808bdef5662598c5e6176bb6ab0eca6605eec81e09",
+  "evidence\/type": "stake-registered",
+  "evidence\/chain-seq": 1,
+  "calculation": null,
+  "pre-state": {
+    "stake\/before": 0
+  },
+  "world\/before-hash": "8f1fc5d7e614057ff660d90384c8528e0ebbd7242c3c4b19b2c2ce164d260a28",
+  "world\/after-full-hash": "11ff4344b2165bab58c18929ae0e9d67758545b1ed5ad669eaec7459f2ee0c6f",
+  "evidence\/hash": "97f78e04363b028e3f29c56ccf5c6405e1a73c5137801a3752c02a7e680cc99e",
+  "event\/seq": 0
+}

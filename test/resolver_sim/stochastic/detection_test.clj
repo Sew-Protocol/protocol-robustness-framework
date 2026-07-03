@@ -1,6 +1,7 @@
 (ns resolver-sim.stochastic.detection-test
   "Tests for probabilistic detection helpers, including the new-evidence-probability
-   gate that controls Track 2 pending-evidence reversal slashing."
+   gate that controls Track 2 pending-evidence reversal slashing and the
+   L2 (Kleros) backstop detection."
   (:require [clojure.test :refer :all]
             [resolver-sim.stochastic.detection :as detection]
             [resolver-sim.stochastic.rng :as rng]
@@ -105,3 +106,80 @@
       (let [result (detection/reversal-pending-live?
                     prepared {:reversal-slashed? true})]
         (is result "simple vector: 6th roll 0.1 < 0.5 threshold should detect on :pending-evidence")))))
+
+;; ── L2 (Kleros) backstop detection ─────────────────────────────────────────
+
+(deftest l2-slashed?-zero-threshold
+  (is (false? (detection/l2-slashed?
+               {:rng (rng/make-rng 7) :l2-detection-prob 0}
+               {:verdict-correct? false :appealed? true}))
+      "l2-slashed? returns false when threshold is 0"))
+
+(deftest l2-slashed?-not-appealed
+  (is (false? (detection/l2-slashed?
+               {:rng (rng/make-rng 7) :l2-detection-prob 0.99}
+               {:verdict-correct? false :appealed? false}))
+      "l2-slashed? returns false when not appealed"))
+
+(deftest l2-slashed?-correct-verdict
+  (is (false? (detection/l2-slashed?
+               {:rng (rng/make-rng 7) :l2-detection-prob 0.99}
+               {:verdict-correct? true :appealed? true}))
+      "l2-slashed? returns false when verdict is correct"))
+
+(deftest l2-slashed?-detects-wrong-appealed
+  (testing "l2-slashed? detects wrong+appealed verdict when roll under threshold"
+    (let [result (detection/l2-slashed?
+                  {:rng (rng/make-rng 42) :l2-detection-prob 0.99}
+                  {:verdict-correct? false :appealed? true})]
+      (is (true? result)
+          "l2-slashed? should detect at 0.99 threshold with rng 42"))))
+
+(deftest l2-slashed?-misses-when-roll-over-threshold
+  (testing "l2-slashed? misses when roll value > threshold"
+    (let [result (detection/l2-slashed?
+                  {:rng (rng/make-rng 7) :l2-detection-prob 0.01}
+                  {:verdict-correct? false :appealed? true})]
+      (is (false? result)
+          "l2-slashed? should miss at 0.01 threshold with rng 7"))))
+
+(deftest l2-slashed?-gated-by-has-kleros
+  (testing "l2-slashed? returns false when has-kleros? is false regardless of l2-detection-prob"
+    (is (false? (detection/l2-slashed?
+                 {:rng (rng/make-rng 42)
+                  :l2-detection-prob 0.99
+                  :has-kleros? false}
+                 {:verdict-correct? false :appealed? true}))
+        "l2-slashed? must be suppressed when has-kleros? is false")))
+
+(deftest l2-slashed?-default-has-kleros-true
+  (testing "l2-slashed? defaults has-kleros? to true when not set"
+    (let [result (detection/l2-slashed?
+                  {:rng (rng/make-rng 42) :l2-detection-prob 0.99}
+                  {:verdict-correct? false :appealed? true})]
+      (is (true? result)
+          "l2-slashed? should default has-kleros? to true"))))
+
+(deftest l2-slashed?-static-no-slash-suppresses
+  (testing ":static-no-slash oracle fixture suppresses L2 detection"
+    (is (false? (detection/l2-slashed?
+                 {:rng (rng/make-rng 9)
+                  :oracle-fixture {:mode :static-no-slash}
+                  :l2-detection-prob 0.99}
+                 {:verdict-correct? false :appealed? true}))
+        "static-no-slash must suppress L2 detection")))
+
+(deftest l2-slashed?-consumes-l2-detection-roll
+  (testing "l2-slashed? consumes an :l2-detection oracle roll"
+    (let [cursor (atom 0)
+          result (detection/l2-slashed?
+                  {:rng (rng/make-rng 42)
+                   :l2-detection-prob 0.99
+                   :oracle-fixture {:mode :fixed-roll-sequence
+                                    :rolls [0.01 0.99]
+                                    :scope #{:detection}
+                                    :on-exhaustion :throw}
+                   :oracle-roll-cursor cursor}
+                  {:verdict-correct? false :appealed? true})]
+      (is (true? result) "should detect")
+      (is (= 1 @cursor) "should have consumed 1 roll"))))

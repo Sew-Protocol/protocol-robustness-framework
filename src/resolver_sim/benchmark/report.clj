@@ -5,31 +5,28 @@
    Produces a plain map suitable for Clerk rendering — no view logic.
    Supports both explicit-path and auto-resolved (from evidence bundle)
    report construction."
-  (:require [clojure.edn :as edn]
-            [clojure.java.io :as io]
+  (:require [clojure.java.io :as io]
             [clojure.string :as str]
             [resolver-sim.concepts.benchmark :as benchmark-concepts]
-            [resolver-sim.benchmark.claims :refer [normalize-claim-refs]]))
+            [resolver-sim.benchmark.claims :refer [normalize-claim-refs]]
+            [resolver-sim.io.resource-path :as rp]))
 
 ;; ── Path resolution ────────────────────────────────────────────────────────────
-;; Maps from scoring IDs to filesystem paths for auto-resolution.
+;; Maps from scoring IDs to paths for auto-resolution.
 
 (def benchmark-scoring-paths
   "Scoring rule ID → scoring file path."
-  {:scoring/robustness-dimensions-v0 "benchmarks/scoring/robustness-dimensions-v0.edn"
-   :scoring/binary-claims-v1 "benchmarks/scoring/binary-claims-v1.edn"
-   :scoring/severity-weighted-robustness-v1 "benchmarks/scoring/severity-weighted-robustness-v1.edn"
-   :scoring/severity-weighted-v1 "benchmarks/scoring/severity-weighted-robustness-v1.edn"
-   :scoring/shortfall-allocation-v0 "benchmarks/scoring/shortfall-allocation-v0.edn"})
+  {:scoring/robustness-dimensions-v0 "resource:benchmarks/scoring/robustness-dimensions-v0.edn"
+   :scoring/binary-claims-v1 "resource:benchmarks/scoring/binary-claims-v1.edn"
+   :scoring/severity-weighted-robustness-v1 "resource:benchmarks/scoring/severity-weighted-robustness-v1.edn"
+   :scoring/severity-weighted-v1 "resource:benchmarks/scoring/severity-weighted-robustness-v1.edn"
+   :scoring/shortfall-allocation-v0 "resource:benchmarks/scoring/shortfall-allocation-v0.edn"})
 
 ;; ── Data loading ──────────────────────────────────────────────────────────────
 
 (defn load-edn
   [path]
-  (let [f (io/file path)]
-    (if (.exists f)
-      (edn/read-string (slurp f))
-      (throw (ex-info (str "File not found: " path) {:path path})))))
+  (rp/edn-read path))
 
 (defn load-evidence
   [path]
@@ -37,21 +34,34 @@
 
 (defn load-benchmark-concepts
   [path]
-  (when (and path (.exists (io/file path)))
+  (when (and path (rp/path-exists? path))
     (benchmark-concepts/load-benchmark-local-concepts [path])))
 
 (defn load-scoring
   [path]
   (load-edn path))
 
+(defn- benchmark-domain-index
+  []
+  (try
+    (into {}
+          (map (juxt :domain/id identity))
+          (:domains (rp/edn-read "resource:benchmarks/registry.edn")))
+    (catch Exception _
+      {})))
+
+(defn- benchmark-domain-entry
+  [domain-id]
+  (get (benchmark-domain-index) domain-id))
+
 (defn- reference-validation-path-by-id
   [scenario-id]
-  (when (.exists (io/file "suites/reference-validation-v1/manifest.edn"))
-    (let [manifest (load-edn "suites/reference-validation-v1/manifest.edn")]
-      (some (fn [scenario]
-              (when (= scenario-id (:id scenario))
-                (:simulator/scenario-path scenario)))
-            (:scenarios manifest)))))
+  (when-let [manifest (try (rp/edn-read "resource:suites/reference-validation-v1/manifest.edn")
+                           (catch Exception _ nil))]
+    (some (fn [scenario]
+            (when (= scenario-id (:id scenario))
+              (:simulator/scenario-path scenario)))
+          (:scenarios manifest))))
 
 ;; ── Concept lookup ───────────────────────────────────────────────────────────
 
@@ -305,13 +315,50 @@
 
 (defn- resolve-report-concepts
   [manifest concepts-path]
-  (let [local-concepts (when (and concepts-path (.exists (io/file concepts-path)))
-                         (benchmark-concepts/load-benchmark-local-concepts [concepts-path]))]
-    (:report-concepts
-     (benchmark-concepts/resolve-benchmark-concepts
-      (:benchmark/concepts manifest)
-      (cond-> {}
-        local-concepts (assoc :local-concepts local-concepts))))))
+  (let [local-concepts (when concepts-path
+                         (let [base-paths (benchmark-concepts/benchmark-concept-files)
+                               merged-paths (if (and (.exists (io/file concepts-path))
+                                                     (not (some #(= concepts-path %) base-paths)))
+                                              (conj base-paths concepts-path)
+                                              base-paths)]
+                           (benchmark-concepts/load-benchmark-local-concepts merged-paths)))]
+    (benchmark-concepts/resolve-benchmark-concepts
+     (:benchmark/concepts manifest)
+     (cond-> {}
+       local-concepts (assoc :local-concepts local-concepts)))))
+
+(defn- benchmark-framework-concepts
+  [concepts]
+  (->> concepts
+       (mapcat (fn [concept]
+                 (or (:concept/framework-concepts concept)
+                     (get-in concept [:concept/maps-to :framework-concepts])
+                     [])))
+       distinct
+       vec))
+
+(defn- benchmark-concept-provenance
+  [resolved-entries]
+  (mapv (fn [{:keys [concept/id concept/source concept]}]
+          (cond-> {:concept/id id
+                   :concept/source source}
+            concept
+            (assoc :concept/title (or (:concept/title concept) (:concept/name concept))
+                   :concept/maps-to (:concept/maps-to concept))))
+        resolved-entries))
+
+(defn- benchmark-concept-summary
+  [resolved-entries]
+  (mapv (fn [{:keys [concept/id concept/source concept]}]
+          (cond-> {:concept/id id
+                   :concept/source source}
+            concept
+            (assoc :concept/title (or (:concept/title concept) (:concept/name concept))
+                   :concept/framework-concepts
+                   (vec (or (:concept/framework-concepts concept)
+                            (get-in concept [:concept/maps-to :framework-concepts])
+                            [])))))
+        resolved-entries))
 
 (defn build-report
   "Build a complete report data structure from:
@@ -323,13 +370,20 @@
   [evidence-path concepts-path scoring-path]
   (let [evidence (load-evidence evidence-path)
         manifest (:benchmark evidence)
-        concepts (resolve-report-concepts manifest concepts-path)
+        domain-entry (benchmark-domain-entry (:benchmark/domain manifest))
+        concept-resolution (resolve-report-concepts manifest concepts-path)
+        concepts (:report-concepts concept-resolution)
         scoring (load-scoring scoring-path)
         metrics (:metrics evidence)
         results (:results evidence)
         inv-summary (:invariant-summary evidence)
         dimensions (build-dimension-results results (:claim-results evidence) manifest concepts scoring)]
     {:benchmark/id (:benchmark/id manifest)
+     :benchmark/domain (:benchmark/domain manifest)
+     :benchmark/domain-description (:domain/description domain-entry)
+     :benchmark/concepts (benchmark-concept-provenance (:resolved-entries concept-resolution))
+     :benchmark/concept-summary (benchmark-concept-summary (:resolved-entries concept-resolution))
+     :benchmark/framework-concepts (benchmark-framework-concepts concepts)
      :purpose (:benchmark/purpose manifest)
      :scenario/suite (:benchmark/scenario-suite manifest)
      :scenario/suite-description (:benchmark/scenario-suite-description manifest)

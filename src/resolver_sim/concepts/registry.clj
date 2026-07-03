@@ -7,14 +7,13 @@
    - Provide lookup functions for report enrichment.
 
    No protocol execution changes, no scenario generation."
-  (:require [clojure.edn :as edn]
-            [clojure.java.io :as io]
-            [clojure.set :as set]
+  (:require [clojure.set :as set]
+            [resolver-sim.io.resource-path :as rp]
             [resolver-sim.logging :as log]))
 
 ;; ── Registry loading ─────────────────────────────────────────────────────────
 
-(def ^:private concept-registry-path "data/concepts/registry.edn")
+(def ^:private concept-registry-path "resource:data/concepts/registry.edn")
 
 (def required-concept-keys
   #{:concept/id :concept/name :concept/summary
@@ -26,21 +25,21 @@
 
 (defn- load-edn
   [path]
-  (let [f (io/file path)]
-    (if (.exists f)
-      (edn/read-string (slurp f))
-      (throw (ex-info (str "Concept file not found: " path) {:path path})))))
+  (rp/edn-read path))
 
 (defn- resolve-concept-file
-  "Resolve a concept file path. Paths are relative to the project root."
+  "Resolve a concept file path. Tries filesystem first, then classpath.
+   Returns a path spec usable by rp/edn-read."
   [concept-entry]
-  (let [rel-path (:concept/file concept-entry)
-        f (io/file rel-path)]
-    (if (.exists f)
-      (.getAbsolutePath f)
-      (throw (ex-info (str "Concept file not found: " rel-path)
-                      {:concept-id (:concept/id concept-entry)
-                       :path rel-path})))))
+  (let [rel-path (:concept/file concept-entry)]
+    (if (.exists (java.io.File. rel-path))
+      rel-path
+      (let [resource-path (str "resource:" rel-path)]
+        (if (rp/path-exists? resource-path)
+          resource-path
+          (throw (ex-info (str "Concept file not found: " rel-path)
+                          {:concept-id (:concept/id concept-entry)
+                           :path rel-path})))))))
 
 (defn- validate-concept
   "Validate a single concept definition."

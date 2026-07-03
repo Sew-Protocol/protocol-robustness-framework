@@ -591,42 +591,39 @@
 ;; ---------------------------------------------------------------------------
 ;; Structural: governance dispatch audit
 ;;
-;; Every action that modifies protocol-level state (pause, token crunch,
-;; yield risk, resolver rotation, fee update, slash actions) must use
+;; Every action that modifies protocol-level state must use
 ;; with-governance-actor. This test reads the source file to verify.
 ;; ---------------------------------------------------------------------------
 
 (deftest test-governance-dispatch-audit
-  (testing "Governance-sensitive actions must use with-governance-actor"
+  (testing "Governance-sensitive actions must use shared governance dispatch"
     (let [source (slurp "protocols_src/resolver_sim/protocols/sew.clj")
-          ;; Actions that MUST have governance gates (by protocol design)
-          must-be-gated #{:rotate-dispute-resolver
-                          :set-paused
-                          :withdraw-fees
-                          :governance-update-fee
-                          :propose-fraud-slash
-                          :resolve-appeal}
-          ;; Simulation-only actions that intentionally skip governance
-          known-simulation #{:set-token-liquidity-crunch :set-yield-risk}
-          all-gated must-be-gated
-          violations (for [action all-gated
+          sections (rest (cstr/split source #"\(defmethod apply-action \""))
+          wrapped-actions (into #{}
+                                (keep (fn [section]
+                                        (let [[action body] (cstr/split section #"\"" 2)]
+                                          (when (and action
+                                                     body
+                                                     (re-find #"run-governance-action" body))
+                                            action))))
+                                sections)
+          must-be-gated sew/governance-sensitive-actions
+          missing-wrapper (for [action must-be-gated
                            :let [p (re-pattern
-                                    (str "defmethod apply-action \"" (name action) "\""
+                                    (str "defmethod apply-action \"" action "\""
                                          "[^#]*?"
-                                         "with-governance-actor"))]
+                                         "run-governance-action"))]
                            :when (not (re-find p source))]
-                       (str (name action) " missing with-governance-actor"))
-          must-violations (for [action must-be-gated
-                                :let [p (re-pattern
-                                         (str "defmethod apply-action \"" (name action) "\""
-                                              "[^#]*?"
-                                              "with-governance-actor"))]
-                                :when (not (re-find p source))]
-                            (name action))]
-      (doseq [v violations]
+                       action)]
+      (doseq [v missing-wrapper]
         (println (str "  GOVERNANCE GAP: " v)))
-      (is (empty? must-violations)
-          (str "Must-have governance gates missing: " (pr-str must-violations))))))
+      (is (= must-be-gated wrapped-actions)
+          (str "Governance audit/action-set mismatch: expected "
+               (pr-str must-be-gated) " wrapped " (pr-str wrapped-actions)))
+      (is (re-find #"defn- run-governance-action[\s\S]*with-governance-actor" source)
+          "run-governance-action must remain the single wrapper over with-governance-actor")
+      (is (empty? missing-wrapper)
+          (str "Governance gates missing: " (pr-str missing-wrapper))))))
 
 ;; ---------------------------------------------------------------------------
 ;; Theory-falsification scenarios

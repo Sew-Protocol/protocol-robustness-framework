@@ -1,0 +1,45 @@
+{
+  "evidence\/schema-version": "event-evidence.v1",
+  "scenario\/id": "s09-multi-escrow-solvency",
+  "evidence\/chain-prev-hash": "42e1d2d6f4f13ff2865a4296f8dbae062eb10181957d7476cabbb37eaede4b44",
+  "evidence\/importance": "core",
+  "run\/id": "s09-multi-escrow-solvency-run",
+  "world\/before-full-hash": "aa5f674f620c81fab10abd75e071286dc0d3400ccacf3d4206da5f89191ca4fc",
+  "evidence\/context": {
+    "ctx\/scenario-id": "s09-multi-escrow-solvency",
+    "ctx\/run-id": "s09-multi-escrow-solvency-run",
+    "ctx\/event-index": 5,
+    "ctx\/event-type": "raise_dispute",
+    "subject\/type": "dispute",
+    "subject\/id": 2,
+    "action\/type": "raise",
+    "evidence\/reason": "dispute-raised"
+  },
+  "post-state": {
+    "dispute\/after": {
+      "escrow-state": "disputed",
+      "resolver-capacity": null
+    }
+  },
+  "evidence\/chain-self-hash": "42e1d2d6f4f13ff2865a4296f8dbae062eb10181957d7476cabbb37eaede4b44",
+  "inputs": {
+    "dispute\/workflow-id": 2,
+    "dispute\/caller": "0xbuyer2",
+    "dispute\/resolver": "0xresolver",
+    "dispute\/level": 0
+  },
+  "world\/after-hash": "9ed0bf335edc666a926f35db8fae12c8884414c87c217323dc27332198d2e377",
+  "evidence\/type": "dispute-raised",
+  "evidence\/chain-seq": 6,
+  "calculation": null,
+  "pre-state": {
+    "dispute\/before": {
+      "escrow-state": "pending",
+      "resolver": "0xresolver"
+    }
+  },
+  "world\/before-hash": "59c6013da12b99d5af28e04c20edb9b49c06bca1880cf39ab0a6c952f63e65a7",
+  "world\/after-full-hash": "4e9885b7327c8aa24aef0f8b056cb7cf7090eeba40cb15f9d8bbda6519774a7a",
+  "evidence\/hash": "42e1d2d6f4f13ff2865a4296f8dbae062eb10181957d7476cabbb37eaede4b44",
+  "event\/seq": 5
+}

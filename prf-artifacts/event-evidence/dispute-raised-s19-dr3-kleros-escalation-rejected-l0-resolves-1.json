@@ -1,0 +1,45 @@
+{
+  "evidence\/schema-version": "event-evidence.v1",
+  "scenario\/id": "s19-dr3-kleros-escalation-rejected-l0-resolves",
+  "evidence\/chain-prev-hash": "ef83d84b582e1014742e84f83d8e281bf2c59c8df6b25d35a629fedcae70c65f",
+  "evidence\/importance": "core",
+  "run\/id": "s19-dr3-kleros-escalation-rejected-l0-resolves-run",
+  "world\/before-full-hash": "309c14e25539652e324ab1d02a56532a07021321b9732549fd9353544f143e53",
+  "evidence\/context": {
+    "ctx\/scenario-id": "s19-dr3-kleros-escalation-rejected-l0-resolves",
+    "ctx\/run-id": "s19-dr3-kleros-escalation-rejected-l0-resolves-run",
+    "ctx\/event-index": 1,
+    "ctx\/event-type": "raise_dispute",
+    "subject\/type": "dispute",
+    "subject\/id": 0,
+    "action\/type": "raise",
+    "evidence\/reason": "dispute-raised"
+  },
+  "post-state": {
+    "dispute\/after": {
+      "escrow-state": "disputed",
+      "resolver-capacity": null
+    }
+  },
+  "evidence\/chain-self-hash": "ef83d84b582e1014742e84f83d8e281bf2c59c8df6b25d35a629fedcae70c65f",
+  "inputs": {
+    "dispute\/workflow-id": 0,
+    "dispute\/caller": "0xbuyer",
+    "dispute\/resolver": null,
+    "dispute\/level": 0
+  },
+  "world\/after-hash": "9ed0bf335edc666a926f35db8fae12c8884414c87c217323dc27332198d2e377",
+  "evidence\/type": "dispute-raised",
+  "evidence\/chain-seq": 2,
+  "calculation": null,
+  "pre-state": {
+    "dispute\/before": {
+      "escrow-state": "pending",
+      "resolver": null
+    }
+  },
+  "world\/before-hash": "d5a98528b6dfe1270eee3abed2b0399102977add39633bbfb94ca022f4c4643b",
+  "world\/after-full-hash": "85b8f2446cd71b49637b8c76af43cc571ef892133b82e7edcaf8c7a3d1b114ed",
+  "evidence\/hash": "ef83d84b582e1014742e84f83d8e281bf2c59c8df6b25d35a629fedcae70c65f",
+  "event\/seq": 1
+}

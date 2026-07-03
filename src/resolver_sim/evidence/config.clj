@@ -40,9 +40,21 @@
 (defn artifact
   "Return the artifact definition map for the given id keyword or string."
   [artifact-id]
-  (let [id (keyword (name artifact-id))
+  (let [id-str (name artifact-id)
         arts (get (get-config) :artifacts [])]
-    (some #(when (= (:id %) id) %) arts)))
+    (some #(when (= (:id %) id-str) %) arts)))
+
+(defn artifact-dir
+  "Return the artifact directory path.
+   Checks *artifact-dir* thread-local override first (for per-thread isolation),
+   then PRF_ARTIFACT_DIR env var (for per-run workspaces),
+   then config/evidence.json's artifact_dir,
+   then a default for standalone operation."
+  []
+  (or *artifact-dir*
+      (System/getenv "PRF_ARTIFACT_DIR")
+      (get (get-config) :artifact_dir)
+      "./prf-artifacts"))
 
 (defn artifact-file
   "Resolve an artifact id to its filename, e.g. (artifact-file :test-summary) → \"test-summary.json\"."
@@ -52,7 +64,7 @@
 (defn artifact-path
   "Resolve an artifact id to its full path relative to project root."
   [artifact-id]
-  (let [adir (get (get-config) :artifact_dir)
+  (let [adir (artifact-dir)
         f    (artifact-file artifact-id)]
     (str adir "/" f)))
 
@@ -64,18 +76,6 @@
 
 (defn framework []
   (get (get-config) :framework))
-
-(defn artifact-dir
-  "Return the artifact directory path.
-   Checks *artifact-dir* thread-local override first (for per-thread isolation),
-   then PRF_ARTIFACT_DIR env var (for per-run workspaces),
-   then config/evidence.json's artifact_dir,
-   then a default 'results/test-artifacts' for standalone operation."
-  []
-  (or *artifact-dir*
-      (System/getenv "PRF_ARTIFACT_DIR")
-      (get (get-config) :artifact_dir)
-      "results/test-artifacts"))
 
 (defn runs-root []
   (get (get-config) :runs_root))

@@ -1,0 +1,40 @@
+{
+  "evidence\/schema-version": "event-evidence.v1",
+  "evidence\/chain-prev-hash": "9b71e03697da8cb49d021840648f76e3734da1c9b12089f0e31332070c36710a",
+  "evidence\/importance": "core",
+  "world\/before-full-hash": "0c7f8aaeac8044071cacb05cd2e9225e5e35fb27fb736e8b4343a2a1ca2d250f",
+  "evidence\/context": {
+    "subject\/type": "resolver",
+    "subject\/id": "0xOther",
+    "action\/type": "propose-rejected",
+    "evidence\/reason": "slash-resolver-mismatch"
+  },
+  "post-state": {
+    "slash\/error": "slash-resolver-mismatch"
+  },
+  "evidence\/chain-self-hash": "9b71e03697da8cb49d021840648f76e3734da1c9b12089f0e31332070c36710a",
+  "inputs": {
+    "slash\/error": "slash-resolver-mismatch",
+    "slash\/workflow-id": 0,
+    "slash\/resolver": "0xOther",
+    "slash\/amount": 100,
+    "expected": "0xOther",
+    "dispute-resolver": "0xRes"
+  },
+  "world\/after-hash": "aad31352a750cfce030aee3c1798a21b8537da4263426ae0f26ff3c6ca4638a2",
+  "evidence\/type": "fraud-slash-rejected",
+  "evidence\/chain-seq": 176,
+  "calculation": null,
+  "pre-state": {
+    "slash\/proposal": {
+      "workflow-id": 0,
+      "caller": "0xGov",
+      "resolver": "0xOther",
+      "amount": 100
+    }
+  },
+  "world\/before-hash": "c6fd561c61a138de7a5c92b6d999fcb113325b775c2d332e0cb714e1130488fd",
+  "world\/after-full-hash": "0c7f8aaeac8044071cacb05cd2e9225e5e35fb27fb736e8b4343a2a1ca2d250f",
+  "evidence\/hash": "9b71e03697da8cb49d021840648f76e3734da1c9b12089f0e31332070c36710a",
+  "event\/seq": 0
+}

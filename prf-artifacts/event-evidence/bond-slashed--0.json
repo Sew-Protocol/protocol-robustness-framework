@@ -1,0 +1,39 @@
+{
+  "evidence\/schema-version": "event-evidence.v1",
+  "evidence\/chain-prev-hash": "374ae8caf15b38eebe30d01827a1040e7c9c873a444abb1e02fb742784730e95",
+  "evidence\/importance": "core",
+  "world\/before-full-hash": "784aa9065bc597f85f67197d784d052c28f36644600d392e4396633960958bd0",
+  "evidence\/context": {
+    "subject\/type": "bond",
+    "subject\/id": "0-0xAlice",
+    "action\/type": "slash",
+    "evidence\/reason": "bond-slashed"
+  },
+  "post-state": {
+    "bond\/after": {
+      "bond-balance": 0,
+      "bond-status": "slashed"
+    }
+  },
+  "evidence\/chain-self-hash": "374ae8caf15b38eebe30d01827a1040e7c9c873a444abb1e02fb742784730e95",
+  "inputs": {
+    "bond\/workflow-id": 0,
+    "bond\/appellant": "0xAlice",
+    "bond\/amount": 980,
+    "bond\/token": "0xUSDC"
+  },
+  "world\/after-hash": "2e509b37dabe072b591af2de9879c0acf51368ba57abb692a5b5a9dd9b3dfbd2",
+  "evidence\/type": "bond-slashed",
+  "evidence\/chain-seq": 6,
+  "calculation": null,
+  "pre-state": {
+    "bond\/before": {
+      "bond-balance": 980,
+      "bond-status": "active"
+    }
+  },
+  "world\/before-hash": "31301b52bbfbfcd8687a25da0b0816ed4c2feef74aeb0cf61dd20db5d8cbf617",
+  "world\/after-full-hash": "ac8c991d6fde2439f87ce034b59d0a5dd6f004d34213547d57180fd4f52bf337",
+  "evidence\/hash": "374ae8caf15b38eebe30d01827a1040e7c9c873a444abb1e02fb742784730e95",
+  "event\/seq": 0
+}

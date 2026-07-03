@@ -10,12 +10,22 @@ This document describes every field and how an external reviewer should interpre
 
 ```
 :benchmark/id   <keyword>   — e.g. :benchmark/prf-protocol-robustness-v0
+:benchmark/domain <keyword> — benchmark taxonomy area, e.g. :domain/protocol-value-conservation
+:benchmark/domain-description <string or nil> — human-readable description from benchmarks/registry.edn
+:benchmark/concepts <vector> — resolved benchmark concept entries with :concept/id and :concept/source
+:benchmark/concept-summary <vector> — compact reviewer-facing concept entries
+:benchmark/framework-concepts <vector> — framework-level concept IDs referenced by the benchmark concepts
 :purpose         <string>    — what this benchmark evaluates
 :scenario/suite  <keyword>   — suite keyword registered in scenario/suites.clj
 :scenario/suite-description <string or nil> — human-readable scenario summary
 ```
 
 `:scenario/suite` is an internal keyword. `:scenario/suite-description` is optional; when absent, the suite name may be opaque to external readers.
+`:benchmark/domain` is the report's high-level grouping surface. It lets readers and downstream tools distinguish, for example, evidence-integrity benchmarks from protocol-value-conservation benchmarks even when both reference Sew scenarios.
+`:benchmark/concepts` shows the declared concept IDs and their resolution status. `:concept/source` is one of `:benchmark-local`, `:global`, or `:missing`.
+`:benchmark/concept-summary` is the short reviewer scan surface. Each entry includes `:concept/id`, `:concept/title`, `:concept/source`, and `:concept/framework-concepts`.
+`:benchmark/framework-concepts` is the compact reviewer-facing bridge back to reusable framework concepts such as `:concept/conservation`.
+When `build-report` is given an explicit `concepts-path`, that file is merged with the standard embedded benchmark concept set rather than replacing it. This keeps direct report construction aligned with `resolve-report`.
 
 ---
 

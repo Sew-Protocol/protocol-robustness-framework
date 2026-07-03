@@ -54,7 +54,25 @@
                                                    table-header-cell-style
                                                    table-cell-style table-cell-compact-style
                                                    status-style status-badge-base-style
-                                                   kind-badge-style]]))
+                                                   kind-badge-style]]
+            [resolver-sim.io.scenario-fixture-sync :as sync]))
+
+;; Hardcoded reviewer-priority scenario IDs validated against canonical list at load time.
+(def ^:private high-priority-scenario-ids
+  #{"s04-dispute-timeout-autocancel"
+    "s14-dr3-module-authorized"
+    "s15-dr3-module-unauthorized-rejected"
+    "s17-ieo-dispute-no-resolver-timeout"
+    "s18-dr3-kleros-l0-resolves"
+    "s19-dr3-kleros-escalation-rejected-l0-resolves"
+    "s20-dr3-kleros-max-escalation-guard"
+    "s21-dr3-kleros-pending-cleared-on-escalation"
+    "s22-status-leak-agree-cancel-over-dispute"
+    "s23-preemptive-escalation-blocked"})
+
+(when-not (every? (set (map :scenario-id (sync/all-invariant-scenario-maps)))
+                  high-priority-scenario-ids)
+  (println "WARN: high-priority-scenario-ids contains IDs not in all-scenarios"))
 
 ;; ---
 ;; ## R/A/G Legend
@@ -609,18 +627,7 @@
  (common/safe-render
   "Reviewer Work Queue — Validation Failures"
   (fn []
-    (let [id-prefix? (fn [id prefix] (str/starts-with? (str/lower-case (str id)) prefix))
-          high-priority? (fn [id]
-                           (or (id-prefix? id "s04")
-                               (id-prefix? id "s14")
-                               (id-prefix? id "s15")
-                               (id-prefix? id "s17")
-                               (id-prefix? id "s18")
-                               (id-prefix? id "s19")
-                               (id-prefix? id "s20")
-                               (id-prefix? id "s21")
-                               (id-prefix? id "s22")
-                               (id-prefix? id "s23")))
+     (let [high-priority? (fn [id] (contains? high-priority-scenario-ids (str id)))
           traces (or all-traces [])
           golds (or golden-reports {})
           triage-rows
@@ -918,16 +925,7 @@
  (common/safe-render
   "Appendix — Queue Data Source Debug"
   (fn []
-    (let [ids ["s04-dispute-timeout-autocancel"
-               "s14-dr3-module-authorized"
-               "s15-dr3-module-unauthorized-rejected"
-               "s17-ieo-dispute-no-resolver-timeout"
-               "s18-dr3-kleros-l0-resolves"
-               "s19-dr3-kleros-escalation-rejected-l0-resolves"
-               "s20-dr3-kleros-max-escalation-guard"
-               "s21-dr3-kleros-pending-cleared-on-escalation"
-               "s22-status-leak-agree-cancel-over-dispute"
-               "s23-preemptive-escalation-blocked"]]
+     (let [ids (sort high-priority-scenario-ids)]
       [:details {:style {:margin "8px 0 14px" :background (:info/bg notebook-theme) :border (str "1px solid " (:info-border notebook-theme))
                          :borderRadius "6px" :padding "8px 10px" :color (:text/body notebook-theme)}}
        [:summary {:style {:cursor "pointer" :fontWeight "600" :color (:text/body notebook-theme)}}

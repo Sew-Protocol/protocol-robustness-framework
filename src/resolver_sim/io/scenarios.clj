@@ -9,11 +9,13 @@
             [clojure.edn      :as edn]
             [clojure.java.io  :as io]
             [clojure.string   :as str]
+            [resolver-sim.io.resource-path :as rp]
             [resolver-sim.logging :as log]))
 
 (def ^:dynamic *scenario-dir*
-  "Directory for executable scenario files, relative to project root."
-  "scenarios/edn")
+  "Directory for executable scenario files.
+   Internal default uses explicit resource: path for JAR portability."
+  "resource:scenarios/edn")
 
 (def ^:dynamic *scenario-ext*
   "File extension for executable scenario files, including leading dot."
@@ -35,21 +37,22 @@
   (keyword (str/replace s "_" "-")))
 
 (defn- scenario-format [path]
-  (let [name (.getName (io/file path))]
-    (cond
-      (str/ends-with? name ".edn") :edn
-      (str/ends-with? name ".json") :json
-      :else :json)))
+  (cond
+    (str/ends-with? path ".edn") :edn
+    (str/ends-with? path ".json") :json
+    :else :json))
 
 (defn load-scenario-file
-  "Load and parse a scenario file. EDN is preferred; JSON is deprecated."
+  "Load and parse a scenario file. EDN is preferred; JSON is deprecated.
+   Supports resource:, file:, and bare filesystem paths."
   [path]
   (case (scenario-format path)
-    :edn (edn/read-string (slurp path))
+    :edn (edn/read-string (rp/slurp-path path))
     :json (do
             (log/warn! :scenario-json-deprecated
                        {:path path
                         :preferred-format :edn
                         :message "Executable JSON scenario input is deprecated; use EDN instead"})
-            (with-open [r (io/reader path)]
+            (with-open [r (java.io.InputStreamReader.
+                           (rp/open-input-stream path) "UTF-8")]
               (json/read r :key-fn json-key->kw)))))

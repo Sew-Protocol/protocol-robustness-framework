@@ -7,38 +7,18 @@
             [resolver-sim.protocols.sew.invariant-scenarios :as scenarios]
             [resolver-sim.protocols.sew.invariant-scenarios.doc-summaries :as doc]))
 
-(def ^:private baseline-s01-s23-ids
-  #{"s01-baseline-happy-path"
-    "s02-dr3-dispute-release"
-    "s03-dr3-dispute-refund"
-    "s04-dispute-timeout-autocancel"
-    "s05-pending-settlement-execute"
-    "s06-mutual-cancel"
-    "s07-unauthorized-resolver-rejected"
-    "s08-state-machine-attack-gauntlet"
-    "s09-multi-escrow-solvency"
-    "s10-double-finalize-rejected"
-    "s11-zero-fee-edge-case"
-    "s12a-snapshot-isolation-fee-zero"
-    "s12b-snapshot-isolation-fee-500"
-    "s13-pending-settlement-refund"
-    "s14-dr3-module-authorized"
-    "s15-dr3-module-unauthorized-rejected"
-    "s16-ieo-create-release"
-    "s17-ieo-dispute-no-resolver-timeout"
-    "s18-dr3-kleros-l0-resolves"
-    "s19-dr3-kleros-escalation-rejected-l0-resolves"
-    "s20-dr3-kleros-max-escalation-guard"
-    "s21-dr3-kleros-pending-cleared-on-escalation"
-    "s22-status-leak-agree-cancel-over-dispute"
-    "s23-preemptive-escalation-blocked"})
+(defn- baseline-s01-s23-ids
+  "Derive S01-S23 scenario IDs from the canonical list (entries 0-22 in all-scenarios).
+   S12 is a pair producing 2 scenario IDs, so 23 entries yield 24 IDs."
+  []
+  (set (map :scenario-id (take 24 (sync/all-invariant-scenario-maps)))))
 
 (defn- scenario-by-id [sid]
   (some #(when (= sid (:scenario-id %)) %) (sync/all-invariant-scenario-maps)))
 
 (deftest baseline-doc-summaries-complete
   (testing "every baseline S01–S23 scenario-id has a doc summary"
-    (let [missing (remove doc/summary baseline-s01-s23-ids)]
+    (let [missing (remove doc/summary (baseline-s01-s23-ids))]
       (is (empty? missing)
           (str "Add summaries in doc-summaries.clj for: " (vec missing))))))
 

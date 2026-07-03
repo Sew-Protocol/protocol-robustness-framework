@@ -494,6 +494,8 @@
 
 (defn appeal-reversal-outcome
   "Sample whether an appealed wrong verdict is reversed at L1 and/or L2.
+   This models the Kleros appeal/escalation tree (juror decisions).
+   For automated probabilistic detection (bond slashing), see l2-slashed?.
 
    Uses :p-l1-reversal, :p-l2-escalation, :p-l2-reversal (or escalation-assumptions band).
    When :scope contains :appeal, those draws use oracle-roll-event (fixed or static modes).
@@ -502,9 +504,9 @@
   [rng params {:keys [verdict-correct? appealed?]}]
   (let [band-assumptions (get (:escalation-assumptions params)
                               (:escalation-assumption-band params :base))
-        p-l1 (double (or (:p-l1-reversal params) (:p-l1-reversal band-assumptions 0.75)))
-        p-l2-esc (double (or (:p-l2-escalation params) (:p-l2-escalation band-assumptions 0.55)))
-        p-l2-rev (double (or (:p-l2-reversal params) (:p-l2-reversal band-assumptions 0.88)))
+        p-l1 (double (or (:p-l1-reversal params) (:p-l1-reversal band-assumptions 0.85)))
+        p-l2-esc (double (or (:p-l2-escalation params) (:p-l2-escalation band-assumptions 0.70)))
+        p-l2-rev (double (or (:p-l2-reversal params) (:p-l2-reversal band-assumptions 0.95)))
         scope (:scope (:oracle-effective params)
                       (:scope (normalize-oracle-fixture params) #{:detection}))
         has-kleros? (if (some? (:has-kleros? params))
@@ -569,10 +571,28 @@
       false)))
 
 (defn l2-slashed?
-  "L2 (Kleros) backstop detection when case is appealed with wrong verdict."
+  "L2 (Kleros) backstop detection when case is appealed with wrong verdict.
+   Gated by :has-kleros? — when false, the backstop is disabled regardless of
+   :l2-detection-prob.  Defaults to true for backward compatibility.
+
+   Relationship to appeal-reversal-outcome:
+     appeal-reversal-outcome models the Kleros appeal/escalation tree — whether
+     a wrong verdict can be escalated to L2 and reversed by a human (juror)
+     decision.  The outcome is :l2-reversed? / :decision-reversed?.
+
+     l2-slashed? models probabilistic automated detection — e.g., a monitoring
+     system that flags suspicious verdicts for slashing.  The outcome is
+     a slash event (:l2 slash reason) that reduces bond, not a reversal.
+
+     Both can fire independently on the same disputed escrow, producing
+     different economic consequences (reversal → stake-basis slash vs.
+     detection → bond-basis slash)."
   [params {:keys [verdict-correct? appealed?]}]
-  (let [threshold (:l2-detection-prob params 0)]
-    (if (and appealed? (not verdict-correct?) (pos? threshold))
+  (let [has-kleros? (if (some? (:has-kleros? params))
+                      (:has-kleros? params)
+                      true)
+        threshold (:l2-detection-prob params 0)]
+    (if (and has-kleros? appealed? (not verdict-correct?) (pos? threshold))
       (let [roll-event (oracle-roll-event params :l2-detection)
             detected? (roll-detect? (:roll/value roll-event) threshold)]
         (trace-decision! params roll-event threshold detected?)

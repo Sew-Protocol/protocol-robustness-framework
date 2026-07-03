@@ -1,0 +1,32 @@
+{
+  "code-hash": "6a3a0f0f2c9895d711cebfc1a1e0ceafb938a2b00f1da250cc6e4206019cd5d6",
+  "deps-hash": "b10395a23c1203e66500ffebcd2fd56eda0ef2b4f114ef2968b251d7c847b6e8",
+  "input-hash": "608cb6ceb20046772f2b09992094f5210a940d0aa64d0e4fbb903460ba5f7e09",
+  "run\/id": null,
+  "run-config-hash": null,
+  "cursor\/scope": "targeted-evidence",
+  "source\/hash-roots": [
+    "src",
+    "protocols_src"
+  ],
+  "cursor\/source": {
+    "code-hash": "6a3a0f0f2c9895d711cebfc1a1e0ceafb938a2b00f1da250cc6e4206019cd5d6",
+    "deps-hash": "b10395a23c1203e66500ffebcd2fd56eda0ef2b4f114ef2968b251d7c847b6e8",
+    "input-hash": "608cb6ceb20046772f2b09992094f5210a940d0aa64d0e4fbb903460ba5f7e09",
+    "dirty?": true,
+    "git-commit-sha": "fec3b208faab85a9e81e98958617f39733849759",
+    "source\/hash-roots": [
+      "src",
+      "protocols_src"
+    ],
+    "dirty-diff-hash": "b0040d1bf03410f578b06db9d47fa49c4619651d8bb0dc5f076e0819dcf8cb6d",
+    "source\/hash-algorithm": "source-tree-hash.v1.path-content-sha256",
+    "source\/hash": "6a3a0f0f2c9895d711cebfc1a1e0ceafb938a2b00f1da250cc6e4206019cd5d6"
+  },
+  "cursor\/total-captured": 4,
+  "source\/hash-algorithm": "source-tree-hash.v1.path-content-sha256",
+  "cursor\/final-seq": 4,
+  "cursor\/final-self-hash": "015facd0ccf3b9a1d6513bffbab9413f0c22942b438665b598cbb272143411b2",
+  "source\/hash": "6a3a0f0f2c9895d711cebfc1a1e0ceafb938a2b00f1da250cc6e4206019cd5d6",
+  "schema\/version": "chain-cursor-final.v1"
+}

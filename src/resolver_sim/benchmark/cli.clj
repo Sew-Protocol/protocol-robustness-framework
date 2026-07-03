@@ -2,10 +2,13 @@
   (:require [resolver-sim.benchmark.sharing :as sharing]
             [resolver-sim.benchmark.registry :as registry]
             [resolver-sim.benchmark.signing :as signing]
+            [resolver-sim.benchmark.validation :as validation]
+            [resolver-sim.benchmark.game-theory-validation :as gt]
+            [resolver-sim.benchmark.diagnostics :as diagnostics]
             [resolver-sim.evidence.chain :as chain]
             [resolver-sim.hash.canonical :as hc]
             [resolver-sim.evidence.timestamping :as ts]
-            [clojure.edn :as edn]
+            [resolver-sim.io.resource-path :as rp]
             [clojure.java.io :as io]
             [clojure.string :as str]
             [clojure.tools.cli :refer [parse-opts]]
@@ -17,7 +20,7 @@
   "Read a benchmark definition file and extract its :benchmark/description.
    Falls back to a human-readable name derived from the benchmark keyword."
   [path]
-  (try (:benchmark/description (edn/read-string (slurp path)))
+  (try (:benchmark/description (rp/edn-read path))
        (catch Exception _ nil)))
 
 (defn- keyword->display-name
@@ -31,19 +34,20 @@
   "Load all benchmark entries from a single pack registry file.
    Returns a vector of {:id, :description, :manifest} maps."
   [pack-id pack-reg-path]
-  (let [pack-file (io/file pack-reg-path)]
-    (if-not (.exists pack-file)
-      (do (println "Pack registry not found:" pack-reg-path) [])
-      (let [pack-reg (edn/read-string (slurp pack-file))
-            pack-dir (.getParent pack-file)
-            pack-name (name pack-id)]
-        (mapv (fn [b]
-                (let [bench-path (.getPath (io/file pack-dir (:benchmark/file b)))
-                      desc (or (load-benchmark-description bench-path)
-                               (keyword->display-name (:benchmark/id b)))
-                      bm-id (str pack-name "/" (name (:benchmark/id b)))]
-                  {:id bm-id :description desc :manifest bench-path}))
-              (:benchmarks pack-reg))))))
+  (if-let [pack-reg (try (rp/edn-read pack-reg-path) (catch Exception _ nil))]
+    (let [pack-name (name pack-id)]
+      (mapv (fn [b]
+              (let [bench-path (rp/relative-to pack-reg-path (:benchmark/file b))
+                    desc (or (load-benchmark-description bench-path)
+                             (keyword->display-name (:benchmark/id b)))
+                    bm-id (str pack-name "/" (name (:benchmark/id b)))]
+                {:id bm-id :description desc :manifest bench-path}))
+            (:benchmarks pack-reg)))
+    (do (println "Pack registry not found:" pack-reg-path) [])))
+
+(def ^:private default-benchmark-manifest
+  "resource:benchmarks/packs/sew/escrow-dispute-v1.edn")
+(def ^:private legacy-registry-path "BENCHMARKS.edn")
 
 (defn- load-index
   "Read benchmarks/registry.edn, walk the pack hierarchy, and return
@@ -52,16 +56,17 @@
 
    Falls back to BENCHMARKS.edn if the canonical registry is missing."
   []
-  (let [registry-file (io/file "benchmarks/registry.edn")]
-    (if-not (.exists registry-file)
-      (do (println "benchmarks/registry.edn not found, falling back to BENCHMARKS.edn")
-          (edn/read-string (slurp "BENCHMARKS.edn")))
-      (let [registry (edn/read-string (slurp registry-file))]
-        {:benchmarks
-         (mapcat (fn [pack]
-                   (load-pack-benchmarks (:pack/id pack)
-                                         (str "benchmarks/" (:pack/registry pack))))
-                 (:packs registry))}))))
+  (if-let [registry (try (rp/edn-read rp/canonical-registry-path)
+                         (catch Exception _ nil))]
+    {:benchmarks
+     (mapcat (fn [pack]
+               (load-pack-benchmarks (:pack/id pack)
+                                     (rp/pack-registry-path (:pack/registry pack))))
+             (:packs registry))}
+    (do (println "benchmarks/registry.edn not found, falling back to BENCHMARKS.edn")
+        (when-let [legacy (try (rp/edn-read legacy-registry-path)
+                               (catch Exception _ nil))]
+          {:benchmarks legacy}))))
 
 (def cli-options
   [["-o" "--output PATH" "Output path for evidence bundle"
@@ -121,14 +126,262 @@
     (catch Exception e
       (println "Warning: benchmark history write failed:" (.getMessage e)))))
 
+;; ── Exit codes ──────────────────────────────────────────────────────────────────
+
+(def exit-success 0)
+(def exit-error 1)
+(def exit-unknown-benchmark 2)
+(def exit-missing-concept 3)
+(def exit-missing-scenario 4)
+(def exit-invalid-params 5)
+(def exit-duplicate-registries 6)
+
+;; ── Shared orchestration ───────────────────────────────────────────────────────
+
+(defn run-and-report
+  "Run a benchmark by manifest path or benchmark ID, write evidence, and
+   return {:exit-code <int> :evidence <map> :output-path <string>}.
+
+   This is the shared orchestration function.  Called by the benchmark CLI
+   and potentially other CLIs that need benchmark execution without
+   taking over the process (no System/exit)."
+  [benchmark-id-or-path options]
+  (let [index (load-index)
+        benchmark-from-index (first (filter #(= (:id %) benchmark-id-or-path)
+                                            (:benchmarks index)))
+        manifest-path (cond
+                        benchmark-from-index (:manifest benchmark-from-index)
+                        (and benchmark-id-or-path
+                             (str/ends-with? benchmark-id-or-path ".edn")) benchmark-id-or-path
+                        benchmark-from-index (:manifest benchmark-from-index)
+                        :else default-benchmark-manifest)
+        _ (println "Running benchmark:" manifest-path)]
+    (try
+      (let [evidence ((requiring-resolve 'resolver-sim.benchmark.runner/run-benchmark)
+                      manifest-path)
+            output-path (:output options)
+            final-evidence (if-let [key-path (:key options)]
+                             (let [sig (signing/sign-hash (:evidence/hash evidence) key-path (:password options))
+                                   pub-path (str key-path ".pub")]
+                               (assoc evidence
+                                      :evidence/signature sig
+                                      :evidence/public-key-path (if (.exists (io/file pub-path)) pub-path key-path)))
+                             evidence)
+            passed? (= (get-in evidence [:metrics :passed]) (get-in evidence [:metrics :total]))]
+        {:exit-code (if passed? 0 1)
+         :evidence final-evidence
+         :output-path output-path
+         :passed? passed?})
+      (catch Exception e
+        (println "Benchmark execution failed:" (.getMessage e))
+        {:exit-code 1 :evidence nil :output-path nil :passed? false}))))
+
+;; ── CLI dispatch — subcommands ─────────────────────────────────────────────────
+
+(defn- dispatch-run-and-report
+  [args options]
+  (binding [chain/*signing-key* (:key options)
+            chain/*signing-password* (:password options)
+            ts/*tsa-url* (:tsa-url options)]
+    (let [benchmark-id (first args)
+          {:keys [exit-code evidence output-path passed?]}
+          (run-and-report benchmark-id options)]
+      (when evidence
+        ((requiring-resolve 'resolver-sim.benchmark.runner/write-evidence)
+         evidence output-path)
+        (record-history-best-effort! evidence)
+        (when passed?
+          (interactive-ux evidence output-path options)))
+      (System/exit exit-code))))
+
+(defn- print-validate-result
+  "Print validation results and return exit code."
+  [{:keys [valid? checks summary]}]
+  (println "\nValidation" (if valid? "PASSED" "FAILED"))
+  (println summary)
+  (doseq [c checks]
+    (println (str "  " (if (:passed? c) "PASS" "FAIL") "  " (name (:check c)) " — " (:details c))))
+  (System/exit (if valid? 0 1)))
+
+(defn- dispatch-validate
+  [args options]
+  (let [subcmd (first args)]
+    (case subcmd
+      "resources"
+      (print-validate-result (validation/validate-resources))
+      ;; default: run all checks
+      (print-validate-result (validation/validate-all)))))
+
+(defn- dispatch-game-theory
+  [args options]
+  (let [{:keys [suite format out]} options
+        result (gt/run-equilibrium-validation
+                :suite (when suite (keyword suite))
+                :format (or (keyword format) :both)
+                :out-dir (or out "./prf-out/game-theory"))]
+    (println "\nGame-theoretic validation"
+             (if (zero? (:exit-code result)) "PASSED" "FAILED"))
+    (let [s (:summary result)]
+      (println "  Suites:" (:suites-executed s) "passed:" (:suites-passed s))
+      (println "  Scenarios:" (:scenario-count s))
+      (println "  Equilibrium checks:"
+               "passed:" (get-in s [:equilibrium-check-summary :passed])
+               "failed:" (get-in s [:equilibrium-check-summary :failed])
+               "inconclusive:" (get-in s [:equilibrium-check-summary :inconclusive]))
+      (doseq [f (:output-files result)]
+        (println "  Output:" f)))
+    (System/exit (:exit-code result))))
+
+(defn- dispatch-list
+  [args options]
+  (let [subcmd (first args)]
+    (case subcmd
+      "game-theory-checks"
+      (let [catalog (gt/list-game-theory-checks)]
+        (println "\nMechanism properties:")
+        (doseq [mp (:mechanism-properties catalog)]
+          (println (str "  " (name (:id mp)) " — " (:title mp))))
+        (println "\nEquilibrium concepts:")
+        (doseq [ec (:equilibrium-concepts catalog)]
+          (println (str "  " (name (:id ec)) " — " (:title ec))))
+        (System/exit 0))
+      ;; default
+      (do (println "Usage: list [game-theory-checks]")
+          (System/exit 1)))))
+
+(defn- dispatch-explain
+  [args options]
+  (let [topic (first args)]
+    (case topic
+      "game-theory"
+      (let [sections (gt/explain-game-theory)]
+        (doseq [{:keys [title body]} sections]
+          (println "\n" title)
+          (println (apply str (repeat (count title) "─")))
+          (println body))
+        (System/exit 0))
+      ;; default
+      (do (println "Usage: explain [game-theory]")
+          (System/exit 1)))))
+
+(defn- print-doctor-report
+  "Print a doctor report to stdout."
+  [{:keys [healthy? checks exit-code output-files] :as report}]
+  (println "\nDoctor — Runtime Health Check")
+  (println (apply str (repeat 35 "─")))
+  (println "Status:" (if healthy? "HEALTHY" "ISSUES DETECTED"))
+  (doseq [c checks]
+    (println (str "  " (if (:passed? c) "PASS" "FAIL") "  " (name (:check c))
+                  " — " (:details c))))
+  (doseq [f output-files]
+    (println "  Report:" f)))
+
+(defn- dispatch-doctor
+  [args options]
+  (let [out-dir (or (:out options) "./prf-out/doctor")
+        report (diagnostics/doctor :out-dir out-dir)]
+    (print-doctor-report report)
+    (System/exit (:exit-code report))))
+
+(defn- dispatch-verify-portability
+  [args options]
+  (let [out-dir (or (:out options) "./prf-out/verify")
+        result (diagnostics/verify-portability :out-dir out-dir)]
+    (println "\nPortability Verification"
+             (if (:portable? result) "PASSED" "FAILED"))
+    (println "  Resources verified:" (:total-checks result))
+    (println "  Passed:" (:passed result))
+    (println "  Failed:" (:failed result))
+    (when (pos? (:filesystem-fallbacks result))
+      (println "  WARNING:" (:filesystem-fallbacks result)
+               "resources loaded via filesystem fallback"))
+    (doseq [f (:output-files result)]
+      (println "  Report:" f))
+    (System/exit (:exit-code result))))
+
+;; ── CLI option specs ────────────────────────────────────────────────────────────
+
+(def subcommand-options
+  "Additional option specs for subcommands that need more than the global flags."
+  {"validate" []
+   "validate-game-theory"
+   [["-s" "--suite SUITE" "Equilibrium suite keyword (e.g. :equilibrium-validation)"]
+    ["-o" "--out DIR" "Output directory" :default "./prf-out/game-theory"]
+    ["-f" "--format FORMAT" "Output format: edn, json, or both" :default "both"]]
+   "doctor"
+   [[nil "--out DIR" "Output directory" :default "./prf-out/doctor"]]
+   "verify-portability"
+   [[nil "--out DIR" "Output directory" :default "./prf-out/verify"]]})
+
+(defn- parse-sub-opts
+  "Parse options for a specific subcommand.
+   Merges subcommand-specific options with global cli-options."
+  [args subcmd]
+  (let [extra-opts (get subcommand-options subcmd [])
+        all-opts (into cli-options extra-opts)]
+    (parse-opts args all-opts)))
+
+;; ── Main dispatch ──────────────────────────────────────────────────────────────
+
+(defn- subcommand?
+  "True when the first argument is a subcommand name, not a flag or benchmark ID."
+  [args]
+  (contains? #{"run-and-report" "validate" "validate-game-theory"
+               "game-theoretic-validation" "list" "explain"
+               "doctor" "verify-portability"}
+             (first args)))
+
 (defn -main [& args]
+  (if (subcommand? args)
+    ;; Subcommand dispatch: parse sub-args with merged options
+    (let [subcmd (first args)
+          sub-args (rest args)
+          extra-opts (get subcommand-options subcmd [])
+          all-opts (into cli-options extra-opts)
+          {:keys [options arguments errors]} (parse-opts sub-args all-opts)]
+      (if errors
+        (do (run! println errors) (System/exit 1))
+        (case subcmd
+          "run-and-report"         (dispatch-run-and-report arguments options)
+          "validate"               (dispatch-validate arguments options)
+          "validate-game-theory"   (dispatch-game-theory arguments options)
+          "game-theoretic-validation" (dispatch-game-theory arguments options)
+          "list"                   (dispatch-list arguments options)
+          "explain"                (dispatch-explain arguments options)
+          "doctor"                 (dispatch-doctor arguments options)
+          "verify-portability"     (dispatch-verify-portability arguments options)
+          ;; fallback
+          (dispatch-run-and-report arguments options)))))
+    ;; Flag-based dispatch: parse with global options only
   (let [{:keys [options arguments errors summary]} (parse-opts args cli-options)]
     (cond
       errors
-      (do (println errors) (System/exit 1))
+      (do (run! println errors) (System/exit 1))
 
       (:help options)
-      (do (println summary) (System/exit 0))
+      (do
+        (println "PRF Benchmark CLI")
+        (println)
+        (println "Usage: java -jar prf-benchmark.jar <subcommand> [options]")
+        (println)
+        (println "Subcommands:")
+        (println "  run-and-report <benchmark-id>    Run a benchmark (default)")
+        (println "  validate [resources]             Run static validation checks")
+        (println "  validate-game-theory [options]   Run equilibrium fixture suites")
+        (println "  game-theoretic-validation        Alias for validate-game-theory")
+        (println "  list game-theory-checks          List available game-theory checks")
+        (println "  explain game-theory              Explain equilibrium validation")
+        (println "  doctor [options]                 Runtime health check")
+        (println "  verify-portability [options]     Self-test for portable operation")
+        (println)
+        (println "Flags:")
+        (println "  -l, --list          List available benchmarks")
+        (println "  -o, --output PATH   Output path for evidence bundle")
+        (println "  -k, --key PATH      Path to private key")
+        (println "  -v, --verify        Verify evidence bundle")
+        (println "  -H, --hash-only     Compute hash of evidence bundle")
+        (println "  -h, --help          Show this help")
+        (System/exit 0))
 
       (:list options)
       (let [index (load-index)]
@@ -154,7 +407,7 @@
       (System/exit (if (sharing/reproduce (:reproduce options)) 0 1))
 
       (:share-summary options)
-      (let [bundle (edn/read-string (slurp (:share-summary options)))]
+      (let [bundle (rp/edn-read (:share-summary options))]
         (println (sharing/share-summary bundle))
         (System/exit 0))
 
@@ -181,55 +434,28 @@
 
       (:verify options)
       (let [bundle-path (first arguments)
-            bundle (edn/read-string (slurp bundle-path))
+            bundle (rp/edn-read bundle-path)
             hashable (dissoc bundle :timestamp :evidence/hash :evidence/signature)
             computed-hash (hc/hash-with-intent {:hash/intent :bundle-root} hashable)
             stored-hash (:evidence/hash bundle)
             hash-ok? (hc/intent-hash= computed-hash stored-hash)]
-        (println "Verification for:" bundle-path)
-        (println "Hash match:" (if hash-ok? "✓" "✗"))
+        (println "Verification for:" (or bundle-path "(stdin)"))
+        (println "Hash match:" (if hash-ok? "yes" "no"))
         (when (:evidence/signature bundle)
           (if-let [pub-key-path (:evidence/public-key-path bundle)]
             (let [sig-ok? (signing/verify-signature stored-hash (:evidence/signature bundle) pub-key-path)]
-              (println "Signature valid:" (if sig-ok? "✓" "✗")))
+              (println "Signature valid:" (if sig-ok? "yes" "no")))
             (println "Public key path missing in bundle, cannot verify signature.")))
         (System/exit (if hash-ok? 0 1)))
 
       (:hash-only options)
       (let [bundle-path (first arguments)
-            bundle (edn/read-string (slurp bundle-path))
+            bundle (rp/edn-read bundle-path)
             hashable (dissoc bundle :timestamp :evidence/hash :evidence/signature)
             computed-hash (hc/hash-with-intent {:hash/intent :bundle-root} hashable)]
         (println computed-hash)
         (System/exit 0))
 
+      ;; Default: run a benchmark (backward compat)
       :else
-      (binding [chain/*signing-key* (:key options)
-                chain/*signing-password* (:password options)
-                ts/*tsa-url* (:tsa-url options)]
-        (let [arg (first arguments)
-              index (load-index)
-              benchmark-from-index (first (filter #(= (:id %) arg) (:benchmarks index)))
-              manifest-path (cond
-                              benchmark-from-index (:manifest benchmark-from-index)
-                              (and arg (.endsWith arg ".edn")) arg
-                              :else "benchmarks/packs/sew/escrow-dispute-v1.edn")
-              _ (println "Running benchmark:" manifest-path)
-              evidence ((requiring-resolve 'resolver-sim.benchmark.runner/run-benchmark)
-                        manifest-path)
-              output-path (:output options)
-              final-evidence (if-let [key-path (:key options)]
-                               (let [sig (signing/sign-hash (:evidence/hash evidence) key-path (:password options))
-                                     pub-path (str key-path ".pub")
-                                     pub-exists? (.exists (io/file pub-path))]
-                                 (assoc evidence
-                                        :evidence/signature sig
-                                        :evidence/public-key-path (if pub-exists? pub-path key-path)))
-                               evidence)
-              passed? (= (get-in evidence [:metrics :passed]) (get-in evidence [:metrics :total]))]
-          ((requiring-resolve 'resolver-sim.benchmark.runner/write-evidence)
-           final-evidence output-path)
-          (record-history-best-effort! final-evidence)
-          (when passed?
-            (interactive-ux final-evidence output-path options))
-          (System/exit (if passed? 0 1)))))))
+      (dispatch-run-and-report arguments options))))

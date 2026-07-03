@@ -1,0 +1,50 @@
+{
+  "evidence\/schema-version": "event-evidence.v1",
+  "scenario\/id": "batch-sew-test",
+  "evidence\/chain-prev-hash": "e4bd402fb9833c16456a49b5f8646d17f0cf08e6fea2795de450083204c184f1",
+  "evidence\/importance": "core",
+  "run\/id": "batch-sew-test-run",
+  "world\/before-full-hash": "f9b17e9885cec1ef2cd92519a1e85db81b9bae9dbe6a6f8dab5e09b4f999ccc4",
+  "evidence\/context": {
+    "ctx\/scenario-id": "batch-sew-test",
+    "ctx\/run-id": "batch-sew-test-run",
+    "ctx\/event-index": 7,
+    "ctx\/event-type": "execute_resolution",
+    "subject\/type": "escrow",
+    "subject\/id": 1,
+    "action\/type": "released",
+    "evidence\/reason": "escrow-released"
+  },
+  "post-state": {
+    "finalize\/after": {
+      "workflow-state": "released",
+      "total-held": 0
+    }
+  },
+  "evidence\/chain-self-hash": "e4bd402fb9833c16456a49b5f8646d17f0cf08e6fea2795de450083204c184f1",
+  "inputs": {
+    "finalize\/workflow-id": 1,
+    "finalize\/direction": "released",
+    "finalize\/recipient": "0xbob1",
+    "finalize\/settled-amount": 1000,
+    "finalize\/sub-held-amount": 1000,
+    "finalize\/partial-yield?": false,
+    "finalize\/shortfall?": false,
+    "finalize\/resolver": "0xR1"
+  },
+  "world\/after-hash": "03ae7a67416805ce2631749d8aba7fe0214e16764f20e9c2d6945e6a061eedb6",
+  "evidence\/type": "escrow-released",
+  "evidence\/chain-seq": 17,
+  "calculation": null,
+  "pre-state": {
+    "finalize\/before": {
+      "workflow-state": "disputed",
+      "total-held": 1000,
+      "resolver": "0xR1"
+    }
+  },
+  "world\/before-hash": "ab695428b77ae5752cb56e7c9b0e726a5dbc5fd1e792143c3918e35081d7af80",
+  "world\/after-full-hash": "cee68d961160ea433c79df87861d2413299c66a9056c3ca1e75cc0452cfa47f7",
+  "evidence\/hash": "e4bd402fb9833c16456a49b5f8646d17f0cf08e6fea2795de450083204c184f1",
+  "event\/seq": 7
+}

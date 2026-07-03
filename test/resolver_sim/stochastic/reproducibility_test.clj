@@ -171,6 +171,26 @@
            #"exhausted"
            (detection/detect-probabilistic-violations params :malicious false 0.0))))))
 
+(deftest l2-slashed?-is-deterministic
+  (testing "l2-slashed? with same rng seed yields identical detection"
+    (let [a (det/l2-slashed?
+             {:rng (rng/make-rng 42) :l2-detection-prob 0.5}
+             {:verdict-correct? false :appealed? true})
+          b (det/l2-slashed?
+             {:rng (rng/make-rng 42) :l2-detection-prob 0.5}
+             {:verdict-correct? false :appealed? true})]
+      (is (= a b) "l2-slashed? must be deterministic with same rng seed"))))
+
+(deftest l2-slashed?-has-kleros-guard-is-deterministic
+  (testing "l2-slashed? with has-kleros? false is deterministic (always false)"
+    (let [a (det/l2-slashed?
+             {:rng (rng/make-rng 1) :l2-detection-prob 0.99 :has-kleros? false}
+             {:verdict-correct? false :appealed? true})
+          b (det/l2-slashed?
+             {:rng (rng/make-rng 99) :l2-detection-prob 0.99 :has-kleros? false}
+             {:verdict-correct? false :appealed? true})]
+      (is (= a b false) "has-kleros? false must always suppress L2 detection"))))
+
 (deftest oracle-roll-trace-metadata-is-emitted
   (testing "roll trace entries include kind/source/value/threshold/detected"
     (let [trace (atom [])

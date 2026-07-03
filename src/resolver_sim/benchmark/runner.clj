@@ -4,6 +4,7 @@
             [resolver-sim.benchmark.claims :as benchmark-claims]
             [resolver-sim.concepts.benchmark :as benchmark-concepts]
             [resolver-sim.hash.canonical :as hc]
+            [resolver-sim.io.resource-path :as rp]
             [resolver-sim.logging :as log]
             [resolver-sim.io.scenarios :as io-sc]
             [resolver-sim.protocols.sew :as sew]
@@ -44,7 +45,7 @@
 (defn- reference-validation-id-by-path
   [scenario-path]
   (try
-    (let [manifest (edn/read-string (slurp "suites/reference-validation-v1/manifest.edn"))
+    (let [manifest (edn/read-string (slurp (io/resource "suites/reference-validation-v1/manifest.edn")))
           scenarios (:scenarios manifest)]
       (some (fn [scenario]
               (when (= scenario-path (:simulator/scenario-path scenario))
@@ -57,6 +58,68 @@
   (when (= suite-kw :suite/reference-validation-v1)
     (reference-validation-id-by-path scenario-path)))
 
+(def ^:private prf-replay-claim-ids
+  #{:claim/replay-identical-results
+    :claim/hash-consistency-across-runs
+    :claim/no-nondeterminism})
+
+(defn- deterministic-replay-benchmark?
+  [benchmark]
+  (or (= :suite/prf-replay-v1 (:benchmark/scenario-suite benchmark))
+      (some (comp prf-replay-claim-ids :claim/id)
+            (benchmark-claims/normalize-claim-refs (:benchmark/claims benchmark)))))
+
+(defn- benchmark-run-count
+  [benchmark]
+  (if (deterministic-replay-benchmark? benchmark) 2 1))
+
+(defn- unique-scenario-count
+  [results]
+  (->> results
+       (map (fn [result]
+              (or (:scenario/id result)
+                  (:simulator/scenario-path result)
+                  (:file result))))
+       set
+       count))
+
+(defn- execute-scenario
+  [suite-kw scenario-file run-index run-count]
+  (let [path (.getPath scenario-file)
+        scenario (load-scenario path)
+        result   (sew/replay-with-sew-protocol scenario
+                                               {:allow-dirty? true})
+        public-id (benchmark-public-scenario-id suite-kw path)
+        scenario-evidence (hc/hash-with-intent
+                           {:hash/intent :evidence-content}
+                           (select-keys result
+                                        [:events-processed :outcome :halt-reason]))
+        ;; Post-hoc invariant check: run check-all on final world, then
+        ;; merge with any per-step failures from the replay metrics.
+        final-world (:world result)
+        step-failures (get-in result [:metrics :invariant-results] {})
+        all-inv-ids (sort sew-inv/canonical-ids)
+        post-check (when final-world
+                     (:results (sew-inv/check-all final-world)))
+        inv-results (mapv (fn [id]
+                            {:id id
+                             :result (cond
+                                       (contains? step-failures id) :fail
+                                       (get post-check id) :pass
+                                       (false? (get-in post-check [id :holds?])) :fail
+                                       :else :pass)})
+                          all-inv-ids)]
+    {:file path
+     :scenario/id public-id
+     :simulator/scenario-path path
+     :benchmark/run-index run-index
+     :benchmark/run-count run-count
+     :outcome (:outcome result)
+     :halt-reason (:halt-reason result)
+     :metrics (:metrics result)
+     :invariant-results inv-results
+     :scenario/evidence-root scenario-evidence}))
+
 (defrecord SewAdapter []
   adapter/RepositoryAdapter
   (load-scenarios [_ benchmark]
@@ -64,52 +127,55 @@
       (resolve-suite-scenarios suite-kw)
       (find-scenarios-in-suites (:scenario-suites benchmark))))
 
-  (execute-benchmark [_ _benchmark scenarios]
-    (let [suite-kw (:benchmark/scenario-suite _benchmark)]
-      (mapv (fn [scenario-file]
-              (let [path (.getPath scenario-file)
-                    scenario (load-scenario path)
-                    result   (sew/replay-with-sew-protocol scenario
-                                                           {:allow-dirty? true})
-                    public-id (benchmark-public-scenario-id suite-kw path)
-                    scenario-evidence (hc/hash-with-intent
-                                       {:hash/intent :evidence-content}
-                                       (select-keys result
-                                                    [:events-processed :outcome :halt-reason]))
-                  ;; Post-hoc invariant check: run check-all on final world, then
-                  ;; merge with any per-step failures from the replay metrics.
-                    final-world (:world result)
-                    step-failures (get-in result [:metrics :invariant-results] {})
-                    all-inv-ids (sort sew-inv/canonical-ids)
-                    post-check (when final-world
-                                 (:results (sew-inv/check-all final-world)))
-                    inv-results (mapv (fn [id]
-                                        {:id id
-                                         :result (cond
-                                                   (contains? step-failures id) :fail
-                                                   (get post-check id) :pass
-                                                   (false? (get-in post-check [id :holds?])) :fail
-                                                   :else :pass)})
-                                      all-inv-ids)]
-                {:file path
-                 :scenario/id public-id
-                 :simulator/scenario-path path
-                 :outcome (:outcome result)
-                 :halt-reason (:halt-reason result)
-                 :metrics (:metrics result)
-                 :invariant-results inv-results
-                 :scenario/evidence-root scenario-evidence}))
-            scenarios)))
+  (execute-benchmark [_ benchmark scenarios]
+    (let [suite-kw (:benchmark/scenario-suite benchmark)
+          run-count (benchmark-run-count benchmark)]
+      (vec
+       (mapcat (fn [run-index]
+                 (map (fn [scenario-file]
+                        (execute-scenario suite-kw scenario-file run-index run-count))
+                      scenarios))
+               (range 1 (inc run-count))))))
 
   (collect-metrics [_ results]
     {:total (count results)
-     :passed (count (filter #(= :pass (:outcome %)) results))}))
+     :passed (count (filter #(= :pass (:outcome %)) results))
+     :execution-count (count results)
+     :passed-execution-count (count (filter #(= :pass (:outcome %)) results))
+     :unique-scenario-count (unique-scenario-count results)
+     :declared-run-count (apply max 1 (keep :benchmark/run-count results))}))
 
 (def default-adapter (->SewAdapter))
 
+;; ── Run manifest ────────────────────────────────────────────────────────────────
+
+(defn build-run-manifest
+  "Assemble a run manifest describing the current execution context.
+   Written alongside the evidence bundle for reproducibility."
+  [manifest-path manifest adapter results metrics]
+  (let [scenario-hashes (mapv (fn [r]
+                                {:scenario/id (:scenario/id r)
+                                 :file (:file r)
+                                 :benchmark/run-index (:benchmark/run-index r)
+                                 :benchmark/run-count (:benchmark/run-count r)
+                                 :outcome (:outcome r)
+                                 :scenario/evidence-root (:scenario/evidence-root r)})
+                              results)]
+    {:manifest/version "run-manifest.v1"
+     :manifest/at (str (java.time.Instant/now))
+     :benchmark/id (:benchmark/id manifest)
+     :benchmark/manifest-source manifest-path
+     :adapter (str (type adapter))
+     :scenario-count (count results)
+     :execution-count (:execution-count metrics (count results))
+     :unique-scenario-count (:unique-scenario-count metrics)
+     :declared-run-count (:declared-run-count metrics)
+     :scenario-hashes scenario-hashes
+     :metrics metrics}))
+
 (defn load-manifest [path]
-  (if (.exists (io/file path))
-    (edn/read-string (slurp path))
+  (if-let [resolved (rp/resolve-path path)]
+    (rp/edn-read path)
     (throw (ex-info "Benchmark manifest not found" {:path path}))))
 
 (defn run-benchmark
@@ -199,10 +265,35 @@
        (log/warn! "benchmark/failed" {:passed (:passed metrics) :total (:total metrics)})
        (println "Benchmark FAILED:" (:passed metrics) "/" (:total metrics) "passed."))
 
-     final-evidence)))
+     (assoc final-evidence
+            :run/manifest (build-run-manifest manifest-path manifest adapter results metrics)))))
 
-(defn write-evidence [evidence output-path]
-  (io/make-parents output-path)
-  (spit output-path (pr-str evidence))
-  (log/info! "benchmark/evidence-written" {:output-path output-path})
-  (println "Evidence bundle written to:" output-path))
+;; ── Evidence writer ─────────────────────────────────────────────────────────────
+
+(defn- sort-maps
+  "Recursively sort map keys for deterministic serialization.
+   Vectors and lists are preserved as-is; nested maps are sorted.
+   Non-Comparable keys (e.g. byte arrays) are converted to strings."
+  [x]
+  (cond
+    (map? x) (into (sorted-map-by (fn [a b]
+                                    (try
+                                      (compare a b)
+                                      (catch ClassCastException _
+                                        (compare (str a) (str b))))))
+                   (map (fn [[k v]] [k (sort-maps v)]) x))
+    (coll? x) (into (empty x) (map sort-maps x))
+    :else x))
+
+(defn write-evidence
+  ([evidence output-path]
+   (write-evidence evidence output-path nil))
+  ([evidence output-path run-manifest]
+   (io/make-parents output-path)
+   (let [stable (-> evidence
+                    (cond-> run-manifest (assoc :run/manifest run-manifest))
+                    sort-maps)]
+     (spit output-path (pr-str stable))
+     (log/info! "benchmark/evidence-written" {:output-path output-path
+                                              :sorted-keys? true})
+     (println "Evidence bundle written to:" output-path))))

@@ -1,0 +1,38 @@
+{
+  "evidence\/schema-version": "event-evidence.v1",
+  "scenario\/id": "batch-resolver-test",
+  "evidence\/chain-prev-hash": "2ea632b76ae843a29b94be9aedd9823ee396ceadc883a0de8e798a96d3016af8",
+  "evidence\/importance": "core",
+  "run\/id": "batch-resolver-test-run",
+  "world\/before-full-hash": "82362996c752a16f39567734edf8e859c19a3e0f99d7193a8e32074802a01b12",
+  "evidence\/context": {
+    "ctx\/scenario-id": "batch-resolver-test",
+    "ctx\/run-id": "batch-resolver-test-run",
+    "ctx\/event-index": 1,
+    "ctx\/event-type": "register_stake",
+    "subject\/type": "resolver",
+    "subject\/id": "0xR0",
+    "action\/type": "register",
+    "evidence\/reason": "stake-registered"
+  },
+  "post-state": {
+    "stake\/after": 10000
+  },
+  "evidence\/chain-self-hash": "2ea632b76ae843a29b94be9aedd9823ee396ceadc883a0de8e798a96d3016af8",
+  "inputs": {
+    "stake\/resolver": "0xR0",
+    "stake\/amount": 10000,
+    "stake\/yield-profile-id": null
+  },
+  "world\/after-hash": "c13451de80c2dc1c08e056bb1f9439a8053e4f7bb7e7c0071a0a25c0a11374ef",
+  "evidence\/type": "stake-registered",
+  "evidence\/chain-seq": 1,
+  "calculation": null,
+  "pre-state": {
+    "stake\/before": 0
+  },
+  "world\/before-hash": "8f1fc5d7e614057ff660d90384c8528e0ebbd7242c3c4b19b2c2ce164d260a28",
+  "world\/after-full-hash": "bc12e86ea21c95e330c743a1b188952224ca34b68a483bde9ec6b844f0a43232",
+  "evidence\/hash": "2ea632b76ae843a29b94be9aedd9823ee396ceadc883a0de8e798a96d3016af8",
+  "event\/seq": 1
+}

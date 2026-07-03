@@ -215,6 +215,13 @@
                             (- system-accuracy-base collapse-loss)))
 
         ; Kleros effectiveness at breaking cascades
+        ; NOTE: This kleros-effectiveness value is computed independently from the
+        ; main model parameters (:l2-detection-prob, :p-l2-reversal, :has-kleros?).
+        ; It is not wired into the MC detection pipeline (detection/l2-slashed?) or
+        ; the closed-form economics (economics/fraud-survival-probability).  It exists
+        ; solely as a diagnostic output for the correlated-failures report.  To make
+        ; correlation degrade Kleros effectiveness in the main model, wire this value
+        ; back into :l2-detection-prob or :p-l2-reversal during scenario setup.
         kleros-effectiveness (cond
                                (< rho 0.3) appeal-effectiveness
                                (< rho 0.6) (* appeal-effectiveness 0.7)

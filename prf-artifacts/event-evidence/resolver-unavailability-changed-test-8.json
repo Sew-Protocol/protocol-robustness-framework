@@ -1,0 +1,47 @@
+{
+  "evidence\/schema-version": "event-evidence.v1",
+  "scenario\/id": "test",
+  "evidence\/chain-prev-hash": "cd64d7bffb581feb6252f1c1403d180a92b39dd8bd73352c8bb83c729fc92be4",
+  "evidence\/importance": "core",
+  "run\/id": "test-run",
+  "world\/before-full-hash": "239eb00ac5ba73cc85409c00f38e91db9d9ad3a680887b73e6f921d610e7d30c",
+  "evidence\/context": {
+    "ctx\/scenario-id": "test",
+    "ctx\/run-id": "test-run",
+    "ctx\/event-index": 8,
+    "ctx\/event-type": "execute_fraud_slash",
+    "subject\/type": "resolver",
+    "subject\/id": "0xResolver",
+    "action\/type": "unavailable",
+    "evidence\/reason": "resolver-unavailability-changed"
+  },
+  "post-state": {
+    "unavailability\/after": {
+      "unavailable-count": 1,
+      "circuit-breaker-active?": true
+    }
+  },
+  "evidence\/chain-self-hash": "cd64d7bffb581feb6252f1c1403d180a92b39dd8bd73352c8bb83c729fc92be4",
+  "inputs": {
+    "unavailability\/resolver": "0xResolver",
+    "unavailability\/unavailable?": true,
+    "unavailability\/circuit-breaker-triggered?": true,
+    "unavailability\/circuit-breaker-cleared?": false,
+    "unavailability\/pct-bps": 10000,
+    "unavailability\/threshold-bps": 3000
+  },
+  "world\/after-hash": "db19059facaab7912528ef8f581132abf61e3cde2de96554fe22cd17e1cdb93d",
+  "evidence\/type": "resolver-unavailability-changed",
+  "evidence\/chain-seq": 9,
+  "calculation": null,
+  "pre-state": {
+    "unavailability\/before": {
+      "unavailable-count": 0,
+      "circuit-breaker-active?": false
+    }
+  },
+  "world\/before-hash": "e3720b6a540e7df282baaa99848cd223d79b441cdfa34e4b541eff9b77a241cb",
+  "world\/after-full-hash": "164b5d509cf57ca10d19e1687455562b71ba1a05675b82dcc565c6db37584459",
+  "evidence\/hash": "cd64d7bffb581feb6252f1c1403d180a92b39dd8bd73352c8bb83c729fc92be4",
+  "event\/seq": 8
+}

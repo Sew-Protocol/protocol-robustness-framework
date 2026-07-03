@@ -1,0 +1,44 @@
+{
+  "evidence\/schema-version": "event-evidence.v1",
+  "evidence\/chain-prev-hash": "e3511f75a4a61bef58410cb5cc227ba8179c93a63dc641de12f6f4a873a7aefe",
+  "evidence\/importance": "core",
+  "world\/before-full-hash": "d34c219c10f0876c39e594e0eaf23b130fc76765c9a85b9ab5a8b88b239ac88c",
+  "evidence\/context": {
+    "subject\/type": "slash",
+    "subject\/id": 0,
+    "action\/type": "resolve-appeal",
+    "evidence\/reason": "rejected-no-bond"
+  },
+  "post-state": {
+    "appeal-resolution\/after": {
+      "appeal-status": "rejected-no-bond",
+      "slash-status": "pending",
+      "appeal-bond-held": 0
+    }
+  },
+  "evidence\/chain-self-hash": "e3511f75a4a61bef58410cb5cc227ba8179c93a63dc641de12f6f4a873a7aefe",
+  "inputs": {
+    "appeal-resolution\/slash-id": 0,
+    "appeal-resolution\/workflow-id": 0,
+    "appeal-resolution\/resolver": "0xRes",
+    "appeal-resolution\/outcome": "rejected-no-bond",
+    "appeal-resolution\/slash-status": "pending",
+    "appeal-resolution\/bond-forfeited?": false,
+    "appeal-resolution\/bond-amount": 0,
+    "appeal-resolution\/bond-token": "USDC"
+  },
+  "world\/after-hash": "457d0d6687f577f4d5c467edd0c0605588bdd8876c14dd5c1bec63ed2f72f1fd",
+  "evidence\/type": "rejected-no-bond",
+  "evidence\/chain-seq": 344,
+  "calculation": null,
+  "pre-state": {
+    "appeal-resolution\/before": {
+      "slash-status": "appealed",
+      "appeal-bond-held": 0
+    }
+  },
+  "world\/before-hash": "aea66a631321c5e4fa514f2d66d3fad1a5f80865dc41cb9a1c38bc019538af68",
+  "world\/after-full-hash": "f13db577beed5fba69e6634d2df6f4d4e6533ba0edeacb8b606f832f9fbe948b",
+  "evidence\/hash": "e3511f75a4a61bef58410cb5cc227ba8179c93a63dc641de12f6f4a873a7aefe",
+  "event\/seq": 0
+}

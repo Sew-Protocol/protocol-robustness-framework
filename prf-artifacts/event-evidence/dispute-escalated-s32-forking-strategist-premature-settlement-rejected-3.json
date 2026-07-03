@@ -1,0 +1,48 @@
+{
+  "evidence\/schema-version": "event-evidence.v1",
+  "scenario\/id": "s32-forking-strategist-premature-settlement-rejected",
+  "evidence\/chain-prev-hash": "f078896b7854145b82a8b97673afe4ad456773b65003adaff30d869d0f210fb7",
+  "evidence\/importance": "core",
+  "run\/id": "s32-forking-strategist-premature-settlement-rejected-run",
+  "world\/before-full-hash": "2a0aa6281ebdf1c60d4efcfa7195cdaa304f377c7d97b468514c0792dbbecbd8",
+  "evidence\/context": {
+    "ctx\/scenario-id": "s32-forking-strategist-premature-settlement-rejected",
+    "ctx\/run-id": "s32-forking-strategist-premature-settlement-rejected-run",
+    "ctx\/event-index": 3,
+    "ctx\/event-type": "escalate_dispute",
+    "subject\/type": "dispute",
+    "subject\/id": 0,
+    "action\/type": "escalate",
+    "evidence\/reason": "dispute-escalated"
+  },
+  "post-state": {
+    "escalation\/after": {
+      "dispute-level": 1,
+      "resolver": "0xl1"
+    }
+  },
+  "evidence\/chain-self-hash": "f078896b7854145b82a8b97673afe4ad456773b65003adaff30d869d0f210fb7",
+  "inputs": {
+    "escalation\/workflow-id": 0,
+    "escalation\/caller": "0xbuyer",
+    "escalation\/from-level": 0,
+    "escalation\/to-level": 1,
+    "escalation\/new-resolver": "0xl1",
+    "escalation\/bond-amount": 0,
+    "escalation\/escalation-count": 0
+  },
+  "world\/after-hash": "0e6d2fcf52b3b1aef02e3f2cb455b9e8ba4edb4183499a1a4ac5f90b40d4a958",
+  "evidence\/type": "dispute-escalated",
+  "evidence\/chain-seq": 3,
+  "calculation": null,
+  "pre-state": {
+    "escalation\/before": {
+      "dispute-level": 0,
+      "resolver": null
+    }
+  },
+  "world\/before-hash": "7fefbb846ee55c301167d260eb0c0d3312cf0dbf82e4ae3a9891c601733f6ff6",
+  "world\/after-full-hash": "eeb4fc158f048aff49848969bc9ef14fd701aea86e0c8b636fc7a524ebea7384",
+  "evidence\/hash": "f078896b7854145b82a8b97673afe4ad456773b65003adaff30d869d0f210fb7",
+  "event\/seq": 3
+}

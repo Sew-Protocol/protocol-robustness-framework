@@ -26,7 +26,7 @@
     :benchmark/status-updated "2026-06-30"}
 
    {:benchmark/id :benchmark/prf-shortfall-allocation-v0
-    :benchmark/domain :domain/allocation-shortfall
+    :benchmark/domain :domain/protocol-value-conservation
     :benchmark/file "shortfall-allocation-v0.edn"
     :benchmark/status :active
     :benchmark/status-updated "2026-06-30"}]}

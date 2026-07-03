@@ -1,0 +1,58 @@
+{
+  "evidence\/schema-version": "event-evidence.v1",
+  "scenario\/id": "s110-resolver-yield-accrual",
+  "evidence\/chain-prev-hash": "6638a33397cd6184f8ddc1af81de5b3a070186d065985e2291aa7cd9e6355d1f",
+  "evidence\/importance": "core",
+  "run\/id": "s110-resolver-yield-accrual-run",
+  "world\/before-full-hash": "6aca18f7bd68f535c4c121ed8c16bb533d02718cc7c372b6ae41593d398c1519",
+  "evidence\/context": {
+    "ctx\/scenario-id": "s110-resolver-yield-accrual",
+    "ctx\/run-id": "s110-resolver-yield-accrual-run",
+    "ctx\/event-index": 0,
+    "ctx\/event-type": "register-stake",
+    "deposit\/module-id": "fixed-rate",
+    "deposit\/position-id": "resolver:0xresolver",
+    "deposit\/token": "USDC"
+  },
+  "post-state": {
+    "deposit\/after-positions": {
+      "resolver:0xresolver": {
+        "owner\/id": "resolver:0xresolver",
+        "entry-index": 1.0,
+        "module\/id": "fixed-rate",
+        "position\/id": [
+          "position",
+          "resolver:0xresolver",
+          "fixed-rate",
+          "USDC"
+        ],
+        "realized-yield": 0,
+        "token": "USDC",
+        "status": "active",
+        "unrealized-yield": 0,
+        "principal": 10000,
+        "shares": 10000
+      }
+    }
+  },
+  "evidence\/chain-self-hash": "6638a33397cd6184f8ddc1af81de5b3a070186d065985e2291aa7cd9e6355d1f",
+  "inputs": {
+    "deposit\/params": {
+      "owner\/id": "resolver:0xresolver",
+      "amount": 10000,
+      "token": "USDC",
+      "module\/id": "fixed-rate"
+    }
+  },
+  "world\/after-hash": "175ef269214d92c66a7c27ce0dab0f722648b4e257adc56c559ed4d0b012c557",
+  "evidence\/type": "yield-deposit",
+  "evidence\/chain-seq": 2,
+  "calculation": null,
+  "pre-state": {
+    "deposit\/before-positions": null
+  },
+  "world\/before-hash": "32be21ce44daeade1d272c3859ce3e34f86ae13093e59964a78ed6b02fb4139c",
+  "world\/after-full-hash": "083ad5b0d0b234bb393ad40929f2ec10e6a085ef441d63be2d6203bd1c72c314",
+  "evidence\/hash": "6638a33397cd6184f8ddc1af81de5b3a070186d065985e2291aa7cd9e6355d1f",
+  "event\/seq": 0
+}

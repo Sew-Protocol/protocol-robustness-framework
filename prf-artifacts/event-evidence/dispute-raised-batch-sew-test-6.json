@@ -1,0 +1,45 @@
+{
+  "evidence\/schema-version": "event-evidence.v1",
+  "scenario\/id": "batch-sew-test",
+  "evidence\/chain-prev-hash": "71bbc80024a074a1fe3ef30daba8135868c5b8ffafbea506e1549118cc70b208",
+  "evidence\/importance": "core",
+  "run\/id": "batch-sew-test-run",
+  "world\/before-full-hash": "c7adae26716d34828100df71071349c121cc4cb36fb06a0db577426e851847f5",
+  "evidence\/context": {
+    "ctx\/scenario-id": "batch-sew-test",
+    "ctx\/run-id": "batch-sew-test-run",
+    "ctx\/event-index": 6,
+    "ctx\/event-type": "raise_dispute",
+    "subject\/type": "dispute",
+    "subject\/id": 2,
+    "action\/type": "raise",
+    "evidence\/reason": "dispute-raised"
+  },
+  "post-state": {
+    "dispute\/after": {
+      "escrow-state": "disputed",
+      "resolver-capacity": 1
+    }
+  },
+  "evidence\/chain-self-hash": "71bbc80024a074a1fe3ef30daba8135868c5b8ffafbea506e1549118cc70b208",
+  "inputs": {
+    "dispute\/workflow-id": 2,
+    "dispute\/caller": "0xA0",
+    "dispute\/resolver": "0xR0",
+    "dispute\/level": 0
+  },
+  "world\/after-hash": "8241a9d8e95598918fd4b29f6d954e7889eeb468803b2cee074ed8566b63bf8a",
+  "evidence\/type": "dispute-raised",
+  "evidence\/chain-seq": 9,
+  "calculation": null,
+  "pre-state": {
+    "dispute\/before": {
+      "escrow-state": "pending",
+      "resolver": "0xR0"
+    }
+  },
+  "world\/before-hash": "5d425809bea1dd88d6531cd8ab464ff3ba66ff7acb44a0f91167ed230a4440d0",
+  "world\/after-full-hash": "ec8532c864bff0e86068bccb677cc8f5a7357954c01365018da700b7ab378e56",
+  "evidence\/hash": "71bbc80024a074a1fe3ef30daba8135868c5b8ffafbea506e1549118cc70b208",
+  "event\/seq": 6
+}

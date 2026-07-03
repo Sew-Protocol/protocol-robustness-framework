@@ -1,33 +1,20 @@
 (ns scripts.generate-scenario-index-docs
-  (:require [clojure.java.io :as io]
-            [clojure.string :as str]
+  (:require [clojure.string :as str]
             [resolver-sim.protocols.sew.invariant-scenarios :as scenarios]
             [resolver-sim.protocols.sew.invariant-scenarios.doc-summaries :as doc]))
 
 (def ^:private s01-s23-display-order
-  [["S01" "s01-baseline-happy-path"]
-   ["S02" "s02-dr3-dispute-release"]
-   ["S03" "s03-dr3-dispute-refund"]
-   ["S04" "s04-dispute-timeout-autocancel"]
-   ["S05" "s05-pending-settlement-execute"]
-   ["S06" "s06-mutual-cancel"]
-   ["S07" "s07-unauthorized-resolver-rejected"]
-   ["S08" "s08-state-machine-attack-gauntlet"]
-   ["S09" "s09-multi-escrow-solvency"]
-   ["S10" "s10-double-finalize-rejected"]
-   ["S11" "s11-zero-fee-edge-case"]
-   ["S12" "s12a-snapshot-isolation-fee-zero / s12b-snapshot-isolation-fee-500"]
-   ["S13" "s13-pending-settlement-refund"]
-   ["S14" "s14-dr3-module-authorized"]
-   ["S15" "s15-dr3-module-unauthorized-rejected"]
-   ["S16" "s16-ieo-create-release"]
-   ["S17" "s17-ieo-dispute-no-resolver-timeout"]
-   ["S18" "s18-dr3-kleros-l0-resolves"]
-   ["S19" "s19-dr3-kleros-escalation-rejected-l0-resolves"]
-   ["S20" "s20-dr3-kleros-max-escalation-guard"]
-   ["S21" "s21-dr3-kleros-pending-cleared-on-escalation"]
-   ["S22" "s22-status-leak-agree-cancel-over-dispute"]
-   ["S23" "s23-preemptive-escalation-blocked"]])
+  "Derived dynamically from the first 23 entries (S01–S23) in the canonical
+   all-scenarios list. Paired entries (S12) combine both scenario IDs."
+  (let [extract-label (fn [display-name]
+                        (re-find #"S\d+[a-z]?" display-name))
+        extract-sid   (fn [scenario-or-pair]
+                        (if (vector? scenario-or-pair)
+                          (str/join " / " (map :scenario-id scenario-or-pair))
+                          (:scenario-id scenario-or-pair)))]
+    (mapv (fn [[display-name scenario-or-pair]]
+            [(extract-label display-name) (extract-sid scenario-or-pair)])
+          (take 23 scenarios/all-scenarios))))
 
 (defn- short-scenario-name [sid]
   (when-let [[_ rest] (re-matches #"^s\d+[a-z]?-(.+)$" sid)]

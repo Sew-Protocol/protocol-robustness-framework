@@ -6,6 +6,10 @@
 
 (def default-temporal-schema-version "temporal-context.v2")
 
+(def ^:const seconds-per-year
+  "Canonical value: 365 * 86400. All namespaces should reference this."
+  31536000)
+
 (defn ensure-temporal-context
   "Ensure the world has a valid temporal context. Initializes from legacy :block-time if missing."
   [world]

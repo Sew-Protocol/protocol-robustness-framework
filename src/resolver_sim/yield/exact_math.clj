@@ -20,7 +20,9 @@
 
    Any new pro-rata calculation should call this function.")
 
-(def seconds-per-year 31536000)
+(def seconds-per-year
+  "Canonical: resolver-sim.time.context/seconds-per-year"
+  31536000)
 
 (def scaling-factor 10000)
 

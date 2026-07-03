@@ -1,6 +1,6 @@
 {:benchmark/id              :benchmark/sew-resolver-slashing-v1
   :benchmark/version         1
-  :benchmark/domain          :domain/escrow-dispute-resolution
+  :benchmark/domain          :domain/protocol-value-conservation
   :benchmark/protocol        :protocol/sew
    :benchmark/scenario-suite  :suite/sew-dispute-safety-v1
   :benchmark/scenario-suite-description
@@ -23,7 +23,8 @@
    "Evaluate Sew resolver slashing mechanics: slashing conservation,
     waterfall coverage, over-slashing prevention, and appeal bond
     adequacy under adversarial dispute scenarios."
-  :benchmark/concepts        [:ecommerce/purchase
+  :benchmark/concepts        [:robustness/protocol-value-conservation
+                              :ecommerce/purchase
                               :event/deposit
                               :allocation/slash-obligation
                               :consensus/authority
@@ -32,7 +33,6 @@
                               :consensus/escalation
                               :consensus/liveness
                               :consensus/legitimacy
-                              :concept/conservation
                               :concept/confidence
                               :concept/configuration]
   :benchmark/claims          [{:claim/id :claim/slashing-conservation
@@ -51,4 +51,3 @@
                               :claim/role :supporting
                               :claim/rationale "Appeal bonds must cover challenge costs adequately."
                               :claim/failure-meaning "Appeal bond was insufficient."}]}
-

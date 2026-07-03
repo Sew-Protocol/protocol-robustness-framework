@@ -4,7 +4,8 @@
             [clojure.test :refer [deftest is testing]]
             [resolver-sim.protocols.sew.types     :as t]
             [resolver-sim.protocols.sew.lifecycle :as lc]
-            [resolver-sim.protocols.sew.authority :as auth]))
+            [resolver-sim.protocols.sew.authority :as auth]
+            [resolver-sim.protocols.sew.resolution :as res]))
 
 (def alice    "0xAlice")
 (def bob      "0xBob")
@@ -59,6 +60,15 @@
         "module-authorized resolver should pass")
     (is (false? (auth/authorized-resolver? w 0 carol mod-fn))
         "carol not authorized by module")))
+
+(deftest execute-resolution-can-use-module-authorized-non-fallback-resolver
+  (testing "module authorization is exercised even when caller != dispute-resolver fallback"
+    (let [w (-> (world-with-escrow {:resolution-module mod-addr})
+                (assoc-in [:escrow-transfers 0 :dispute-resolver] resolver))
+          mod-fn (fn [_wf caller] {:authorized? (= caller carol)})
+          result (res/execute-resolution w 0 carol true "0xmodhash" mod-fn)]
+      (is (:ok result) "module-authorized non-fallback resolver should execute successfully")
+      (is (= carol (get-in (:world result) [:escrow-transfers 0 :resolution :resolved-by]))))))
 
 (deftest resolution-module-fallthrough-to-direct
   "When a resolution module declines, BaseEscrow falls through to check

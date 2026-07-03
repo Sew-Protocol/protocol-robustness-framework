@@ -1,0 +1,50 @@
+{
+  "evidence\/schema-version": "event-evidence.v1",
+  "scenario\/id": "test",
+  "evidence\/chain-prev-hash": "7c31a47a6f285ff3842370be157a5956e07a78042604261d1c3cac8c7f95caab",
+  "evidence\/importance": "core",
+  "run\/id": "test-run",
+  "world\/before-full-hash": "321a7cc5049109000b9f4961550c0ee4eb51dca3e7a407fa136314c9db551ffa",
+  "evidence\/context": {
+    "ctx\/scenario-id": "test",
+    "ctx\/run-id": "test-run",
+    "ctx\/event-index": 3,
+    "ctx\/event-type": "execute_resolution",
+    "subject\/type": "escrow",
+    "subject\/id": 0,
+    "action\/type": "refunded",
+    "evidence\/reason": "escrow-refunded"
+  },
+  "post-state": {
+    "finalize\/after": {
+      "workflow-state": "refunded",
+      "total-held": 6965
+    }
+  },
+  "evidence\/chain-self-hash": "7c31a47a6f285ff3842370be157a5956e07a78042604261d1c3cac8c7f95caab",
+  "inputs": {
+    "finalize\/workflow-id": 0,
+    "finalize\/direction": "refunded",
+    "finalize\/recipient": "0xAlice",
+    "finalize\/settled-amount": 4975,
+    "finalize\/sub-held-amount": 4975,
+    "finalize\/partial-yield?": false,
+    "finalize\/shortfall?": false,
+    "finalize\/resolver": "0xResolver"
+  },
+  "world\/after-hash": "0fd4ea456ab6fdb4152dc6dec76c7935e08a1d4539a4ba2860259392e0832624",
+  "evidence\/type": "escrow-refunded",
+  "evidence\/chain-seq": 4,
+  "calculation": null,
+  "pre-state": {
+    "finalize\/before": {
+      "workflow-state": "disputed",
+      "total-held": 11940,
+      "resolver": "0xResolver"
+    }
+  },
+  "world\/before-hash": "2db0caa3815ec1d1ed7d6021f327969f6c25354c52108d21b9ab48452aca8b73",
+  "world\/after-full-hash": "962b8315c2999d20a7a04f662f31a664b92c08668dabfa45d52539bea4ea094f",
+  "evidence\/hash": "7c31a47a6f285ff3842370be157a5956e07a78042604261d1c3cac8c7f95caab",
+  "event\/seq": 3
+}

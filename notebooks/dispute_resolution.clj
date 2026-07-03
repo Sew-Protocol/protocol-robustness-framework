@@ -123,6 +123,90 @@
          "⏳ Computing invariant suite results (S01–S107)…"]))))
 
 ;; ---------------------------------------------------------------------------
+;; Dynamic scenario set derivation
+;;
+;; Replaces hardcoded display-name sets with pattern-based filters over the
+;; canonical all-scenarios list. New scenarios following the naming convention
+;; are automatically picked up; no manual maintenance required.
+;; ---------------------------------------------------------------------------
+
+(defn- kleros-scenario-names
+  "Returns the set of display names whose scenario-id or label matches
+   'kleros' or 'forking-strategist' — the two Kleros-path naming conventions."
+  []
+  (set (filter #(re-find #"(?i)kleros|forking-strategist" %)
+               (map first sc/all-scenarios))))
+
+(defn- appeal-scenario-names
+  "Returns the set of display names whose scenario-id or label matches
+   appeal-related naming conventions: pending-settlement, pending-cleared,
+   appeal-deadline, or appeal-window."
+  []
+  (set (filter #(re-find #"(?i)pending-settlement|pending-cleared|appeal-deadline|appeal-window" %)
+               (map first sc/all-scenarios))))
+
+;; Curated invariant → scenario coverage map.
+;; Keys are canonical invariant IDs (from invariants/canonical-ids).
+;; Values are lists of scenario display names (prefix only, e.g. \"S09\") that
+;; are known to exercise the invariant.
+;;
+;; This map MUST stay in sync with canonical-ids and all-scenarios.
+;; The validator below warns on stale entries at render time.
+(def ^:private inv-coverage
+  {"solvency"                      ["S09" "S24" "S25" "S37"]
+   "fees-non-negative"             ["S11" "S25" "S36"]
+   "held-non-negative"             ["S09" "S24" "S25"]
+   "all-status-combinations-valid" ["S08" "S10" "S22"]
+   "pending-settlement-consistent" ["S05" "S13" "S21" "S25" "S32"]
+   "dispute-timestamp-consistent"  ["S04" "S05" "S17" "S21"]
+   "dispute-level-bounded"         ["S20" "S28" "S30"]
+   "slash-status-consistent"       ["S25" "S34" "S35" "S36"]
+   "appeal-bond-conserved"         ["S25" "S35" "S36"]
+   "appeal-bond-custody-consistent" ["S25" "S35" "S36"]
+   "no-auto-fraud-execute"         ["S25" "S34"]
+   "bond-liquidity"                ["S24" "S38" "S39"]
+   "bond-slash-bounded"            ["S24" "S41"]
+   "fee-cap"                       ["S11" "S12a" "S12b"]
+   "no-stale-automatable-escrows"  ["S04" "S17"]
+   "conservation-of-funds"         ["S24" "S25" "S31" "S37"]
+   "dispute-resolution-path"       ["S02" "S03" "S18" "S26" "S27"]
+   "slash-distribution-consistent" ["S24" "S34" "S37"]
+   "resolver-bond-mix-valid"       ["S38"]
+   "senior-coverage-not-exceeded"  ["S39"]
+   "resolver-not-frozen-on-assign" ["S40"]
+   "slash-epoch-cap-respected"     ["S40" "S41"]
+   "reversal-slash-disabled"       ["S41"]
+   "resolver-capacity"             ["S24" "S38"]
+   "yield-position-consistency"    []
+   "yield-exposure"                []
+   "terminal-states-unchanged"     ["S08" "S10" "S19" "S25"]
+   "time-non-decreasing"           ["S04" "S05" "S21"]
+   "time-no-action-after-finality" ["S08" "S10"]
+   "finalization-accounting-correct" ["S02" "S03" "S09" "S25"]
+   "escalation-level-monotonic"    ["S21" "S28" "S32"]
+   "no-withdrawal-during-dispute"  ["S45"]
+   "time-lock-integrity"           ["S66"]
+   "token-tax-reconciliation"      ["S11"]
+   "fees-monotone"                 ["S11" "S25" "S37"]
+   "single-resolution-payout-consistent" ["S02" "S03" "S31"]
+   "fraud-slash-executions-accounted"    ["S25" "S34" "S35"]})
+
+(defn- validate-inv-coverage!
+  "Warn if any inv-coverage key is not a canonical invariant, or any referenced
+   scenario prefix does not appear in the all-scenarios display names."
+  []
+  (let [valid-invs         invariants/canonical-ids
+        valid-prefixes     (set (map #(re-find #"S\d+[a-z]?" %) (map first sc/all-scenarios)))
+        bad-keys           (remove #(contains? valid-invs (keyword %)) (keys inv-coverage))
+        bad-scenarios      (remove (fn [[_ scenarios]]
+                                     (every? #(contains? valid-prefixes %) scenarios))
+                                   inv-coverage)]
+    (when (seq bad-keys)
+      (println "WARN: inv-coverage references unknown invariants:" bad-keys))
+    (when (seq bad-scenarios)
+      (println "WARN: inv-coverage references unknown scenario prefixes:" bad-scenarios))))
+
+;; ---------------------------------------------------------------------------
 ;; Canonical state machine diagram generator
 ;;
 ;; Derives a Mermaid stateDiagram-v2 source string directly from:
@@ -591,48 +675,9 @@ Scenario S12 (governance snapshot isolation) provides deterministic regression c
  (suite-section
   "Invariant Coverage"
   (fn [suite]
-    (let [inv-ids (sort (map name invariants/canonical-ids))
-          results (:results suite)
-          ;; Map invariant-id → set of scenario names that exercise it
-          ;; (derived from scenario IDs that are tagged with known invariant coverage)
-          inv-coverage
-          {"solvency"                      ["S09" "S24" "S25" "S37"]
-           "fees-non-negative"             ["S11" "S25" "S36"]
-           "held-non-negative"             ["S09" "S24" "S25"]
-           "all-status-combinations-valid" ["S08" "S10" "S22"]
-           "pending-settlement-consistent" ["S05" "S13" "S21" "S25" "S32"]
-           "dispute-timestamp-consistent"  ["S04" "S05" "S17" "S21"]
-           "dispute-level-bounded"         ["S20" "S28" "S30"]
-           "slash-status-consistent"       ["S25" "S34" "S35" "S36"]
-           "appeal-bond-conserved"         ["S25" "S35" "S36"]
-           "appeal-bond-custody-consistent" ["S25" "S35" "S36"]
-           "no-auto-fraud-execute"         ["S25" "S34"]
-           "bond-liquidity"                ["S24" "S38" "S39"]
-           "bond-slash-bounded"            ["S24" "S41"]
-           "fee-cap"                       ["S11" "S12a" "S12b"]
-           "no-stale-automatable-escrows"  ["S04" "S17"]
-           "conservation-of-funds"         ["S24" "S25" "S31" "S37"]
-           "dispute-resolution-path"       ["S02" "S03" "S18" "S26" "S27"]
-           "slash-distribution-consistent" ["S24" "S34" "S37"]
-           "resolver-bond-mix-valid"       ["S38"]
-           "senior-coverage-not-exceeded"  ["S39"]
-           "resolver-not-frozen-on-assign" ["S40"]
-           "slash-epoch-cap-respected"     ["S40" "S41"]
-           "reversal-slash-disabled"       ["S41"]
-           "resolver-capacity"             ["S24" "S38"]
-           "yield-position-consistency"    []
-           "yield-exposure"                []
-           "terminal-states-unchanged"     ["S08" "S10" "S19" "S25"]
-           "time-non-decreasing"           ["S04" "S05" "S21"]
-           "time-no-action-after-finality" ["S08" "S10"]
-           "finalization-accounting-correct" ["S02" "S03" "S09" "S25"]
-           "escalation-level-monotonic"    ["S21" "S28" "S32"]
-           "no-withdrawal-during-dispute"  ["S45"]
-           "time-lock-integrity"           ["S66"]
-           "token-tax-reconciliation"      ["S11"]
-           "fees-monotone"                 ["S11" "S25" "S37"]
-           "single-resolution-payout-consistent" ["S02" "S03" "S31"]
-           "fraud-slash-executions-accounted"    ["S25" "S34" "S35"]}
+     (validate-inv-coverage!)
+     (let [inv-ids (sort (map name invariants/canonical-ids))
+           results (:results suite)
           covered?   (fn [inv] (seq (get inv-coverage inv)))
           total-inv  (count inv-ids)
           covered-n  (count (filter covered? inv-ids))
@@ -1106,22 +1151,9 @@ Kleros protocol team before production deployment.")
  (suite-section
   "Kleros Scenario Results"
   (fn [suite]
-    (let [results      (:results suite [])
-          kleros-ids   #{"S18  dr3-kleros-l0-resolves"
-                         "S19  dr3-kleros-escalation-rejected-l0-resolves"
-                         "S20  dr3-kleros-max-escalation-guard"
-                         "S21  dr3-kleros-pending-cleared-on-escalation"
-                         "S22  status-leak-agree-cancel-over-dispute"
-                         "S23  preemptive-escalation-blocked"
-                         "S26  forking-strategist-l1-reversal"
-                         "S27  forking-strategist-l2-fork"
-                         "S28  forking-strategist-late-escalation-rejected"
-                         "S29  forking-strategist-seller-escalates"
-                         "S30  forking-strategist-double-loss"
-                         "S31  forking-strategist-all-levels-confirm"
-                         "S32  forking-strategist-premature-settlement-rejected"
-                         "S33  forking-strategist-two-escrow-fork-isolation"}
-          kleros-res   (filter #(kleros-ids (:name %)) results)
+     (let [results      (:results suite [])
+           kleros-ids   (kleros-scenario-names)
+           kleros-res   (filter #(kleros-ids (:name %)) results)
           pass-n       (count (filter :pass? kleros-res))
           total-n      (count kleros-res)]
       [:div
@@ -1494,13 +1526,9 @@ This section documents the deterministic stress-testing of appeal windows, dispu
  (suite-section
   "Appeal Status"
   (fn [suite]
-    (let [results      (:results suite [])
-          appeal-ids   #{"S05  pending-settlement-execute"
-                         "S13  pending-settlement-refund"
-                         "S21  dr3-kleros-pending-cleared-on-escalation"
-                         "S57  pending-settlement-expiry-boundary-1s"
-                         "S74  appeal-deadline-boundary"}
-          appeal-res   (filter #(appeal-ids (:name %)) results)
+     (let [results      (:results suite [])
+           appeal-ids   (appeal-scenario-names)
+           appeal-res   (filter #(appeal-ids (:name %)) results)
           pass-n       (count (filter :pass? appeal-res))
           total-n      (count appeal-res)]
       [:div

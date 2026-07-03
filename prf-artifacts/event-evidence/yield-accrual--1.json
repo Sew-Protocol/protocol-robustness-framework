@@ -1,0 +1,144 @@
+{
+  "evidence\/schema-version": "event-evidence.v1",
+  "evidence\/chain-prev-hash": "2902e2c60e64da5fcd8ab626a512f32f804114a1160c30dfd72cee31b272e148",
+  "evidence\/importance": "core",
+  "world\/before-full-hash": "c70dc64646269773a6b0810421b9fa0fb5c810545933c230817ba8e2d930c08f",
+  "evidence\/context": {
+    "accrual\/token": "USDC",
+    "accrual\/deferred-delta": 0,
+    "accrual\/previous-index": {
+      "num": "1",
+      "den": "1"
+    },
+    "accrual\/module-id": "liquid-lending",
+    "accrual\/position-id": "user-1",
+    "accrual\/accrual-mode": "normal",
+    "ctx\/event-index": 1,
+    "accrual\/yield-delta": 500,
+    "accrual\/short-circuits": [],
+    "accrual\/final-index": {
+      "num": "21",
+      "den": "20"
+    },
+    "ctx\/run-id": null,
+    "ctx\/scenario-id": null,
+    "accrual\/now": 31537000,
+    "ctx\/event-type": "yield_accrue"
+  },
+  "post-state": {
+    "accrual\/after": {
+      "total-held": {
+        "USDC": 500
+      }
+    }
+  },
+  "evidence\/chain-self-hash": "2902e2c60e64da5fcd8ab626a512f32f804114a1160c30dfd72cee31b272e148",
+  "inputs": {
+    "accrual\/decision": {
+      "haircut-yield-delta": 0,
+      "accrual-dust-carry": 0,
+      "workflow-id": null,
+      "final-index": 1.05,
+      "short-circuits": [],
+      "deferred-yield-delta": 0,
+      "now": 31537000,
+      "config": {
+        "min-accrual-delta": 1,
+        "max-index-delta-ratio": 0.05,
+        "max-index-delta-policy": "cap",
+        "stale-oracle-max-seconds": 86400,
+        "stale-oracle-floor-bps": 0
+      },
+      "dt": 31536000,
+      "evidence": {
+        "delta-exact": {
+          "num": "500",
+          "den": "1"
+        },
+        "dust-carry-after": {
+          "num": "0",
+          "den": "1"
+        },
+        "final-index": {
+          "num": "21",
+          "den": "20"
+        },
+        "short-circuits": [],
+        "dust-carry-prior": {
+          "num": "0",
+          "den": "1"
+        },
+        "now": 31537000,
+        "dt": 31536000,
+        "schema-version": "accrual-decision.v2",
+        "final-units": 500,
+        "previous-index": {
+          "num": "1",
+          "den": "1"
+        },
+        "accrual-mode": "normal",
+        "base-apy-bps": 500,
+        "effective-apy-bps": 500,
+        "shares": {
+          "num": "10000",
+          "den": "1"
+        },
+        "attempted-index": {
+          "num": "21",
+          "den": "20"
+        }
+      },
+      "realized-yield-delta": 0,
+      "exact-final-value": 10500,
+      "final-accrual-delta": 500,
+      "token": "USDC",
+      "module-id": "liquid-lending",
+      "exact-prev-value": 10000,
+      "position-id": "user-1",
+      "previous-index": 1.0,
+      "accrual-mode": "normal",
+      "attempted-accrual-delta": 500,
+      "position": {
+        "owner\/id": "user-1",
+        "oracle-stale-affected?": false,
+        "capital-event-affected?": false,
+        "entry-index": 1.0,
+        "module\/id": "liquid-lending",
+        "partial-fill-affected?": false,
+        "position\/id": [
+          "position",
+          "user-1",
+          "liquid-lending",
+          "USDC"
+        ],
+        "deferred-yield": 0,
+        "principal-impairment": 0,
+        "realized-yield": 0,
+        "token": "USDC",
+        "status": "active",
+        "unrealized-yield": 0,
+        "principal": 10000,
+        "shortfall-affected?": false,
+        "accrual-dust-remainder": 0,
+        "shares": 10000.0,
+        "haircut-yield": 0
+      },
+      "base-apy-bps": 500,
+      "effective-apy-bps": 500,
+      "exact-accrual-delta": 500,
+      "attempted-index": 1.05,
+      "unrealized-yield-delta": 500
+    }
+  },
+  "world\/after-hash": "e4bebbbe10d395dae157f7f411a03f74c777b87c04fb14a34c4017a30a67ef69",
+  "evidence\/type": "yield-accrual",
+  "evidence\/chain-seq": 10,
+  "calculation": null,
+  "pre-state": {
+    "accrual\/before": {}
+  },
+  "world\/before-hash": "03747bcc1a38e47069420025f1338938cbe623ea9ecd0f7b7d8947950080f12c",
+  "world\/after-full-hash": "6758cd39c90d58c97beb3bdbbc1f9311631ed53635c719d7bf87dea3a481a53e",
+  "evidence\/hash": "2902e2c60e64da5fcd8ab626a512f32f804114a1160c30dfd72cee31b272e148",
+  "event\/seq": 1
+}

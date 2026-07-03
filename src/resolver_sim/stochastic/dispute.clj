@@ -72,7 +72,11 @@
              fixed-or oracle-roll-trace-enabled? evidence-quality?]
       :or {senior-resolver-skill 0.95
            resolver-bond-bps 1000
-           l2-detection-prob 0
+           l2-detection-prob 0  ; default 0 means MC Kleros detection disabled unless explicitly set.
+                                 ; The closed-form fraud-survival-probability defaults has-kleros? to true,
+                                 ; creating a potential mismatch: analytical docs show Kleros protection
+                                 ; but MC runs have none.  Enable explicitly via :l2-detection-prob or
+                                 ; load phase-e1-kleros.edn params.
            slashing-detection-delay-weeks 0
            allow-slashing? true
            unstaking-delay-days 14

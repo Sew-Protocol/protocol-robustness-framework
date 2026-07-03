@@ -65,7 +65,7 @@
 
 (def always-resolver-fn
   "A resolution-module-fn that authorises any resolver."
-  (fn [_world _wf caller] {:authorised? true :resolver caller}))
+  (fn [_world _wf caller] {:authorized? true :resolver caller}))
 
 ;; ---------------------------------------------------------------------------
 ;; Section 1: Accessor correctness

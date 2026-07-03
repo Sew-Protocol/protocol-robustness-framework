@@ -1,11 +1,12 @@
 (ns build
   "Build source-bundled uberjar (no AOT) for PRF scenario runner.
-   Three variants: core, sew, and benchmark.
+   Four variants: core, sew, benchmark, and cli.
 
    Usage:
      clojure -T:build uberjar :variant core
      clojure -T:build uberjar :variant sew
-     clojure -T:build uberjar :variant benchmark"
+     clojure -T:build uberjar :variant benchmark
+     clojure -T:build uberjar :variant cli"
   (:require [clojure.java.io :as io]
             [clojure.tools.build.api :as b]))
 
@@ -18,8 +19,10 @@
   (let [vname (name variant)
         is-core (= vname "core")
         is-benchmark (= vname "benchmark")
+        is-cli (= vname "cli")
         main-cls (or main (cond
                             is-benchmark "resolver-sim.benchmark.cli"
+                            is-cli "resolver-sim.cli.main"
                             (not is-core) "resolver-sim.minimal-runner"
                             :else "resolver-sim.replay-core"))
         lib (symbol (str "resolver-sim/prf-runner-" vname))
@@ -53,11 +56,11 @@
                        "/prf-build-deps-" (System/nanoTime) ".edn")
         _ (spit deps-path deps-str)
         basis (b/create-basis {:project deps-path})
-        src-dirs (if (or is-benchmark (not is-core)) ["src" "protocols_src" "resources"] ["src" "resources"])
+         src-dirs (if (or is-benchmark (not is-core)) ["src" "protocols_src" "resources"] ["src" "resources"])
         class-dir (str (System/getProperty "java.io.tmpdir")
                        "/prf-build-" (System/nanoTime))
-        jar-file (str "target/prf-runner-" vname "-" version ".jar")
-        uber-file (str "target/prf-runner-" vname "-" version "-uber.jar")]
+         jar-file (if is-cli "target/prf.jar" (str "target/prf-runner-" vname "-" version ".jar"))
+         uber-file (if is-cli "target/prf-uber.jar" (str "target/prf-runner-" vname "-" version "-uber.jar"))]
 
     (println "\n=== Build: prf-runner-" vname " ===")
     (printf "  Main class: %s\n" main-cls)
@@ -70,6 +73,24 @@
         (when (.exists d)
           (printf "    %s\n" sd)
           (b/copy-dir {:src-dirs [sd] :target-dir class-dir}))))
+    ;; Remove test directories from class-dir to prevent AOT from picking them up
+    (doseq [test-dir ["test" "protocols_src/test"]]
+      (let [td (java.io.File. class-dir test-dir)]
+        (when (.exists td)
+          (printf "  Removing test dir: %s\n" test-dir)
+          (b/delete {:path (str td)}))))
+    ;; Copy data dirs preserving directory name (b/copy-dir flattens contents,
+    ;; so copy each dir into a subdirectory of class-dir)
+    (when (or is-benchmark is-cli)
+      (doseq [extra-dir (if is-cli
+                          ["resources/prf"]
+                          ["scenarios" "benchmarks" "data" "suites" "config"])]
+        (let [d (java.io.File. extra-dir)]
+          (when (.exists d)
+            (printf "    %s/ -> class-dir/%s/\n" extra-dir extra-dir)
+            (.mkdirs (java.io.File. class-dir extra-dir))
+            (b/copy-dir {:src-dirs [extra-dir]
+                         :target-dir (str class-dir "/" extra-dir)})))))
 
     ;; Build manifest for the JAR
     ;; Add a marker file to indicate this is a source-only JAR
@@ -78,20 +99,57 @@
           (pr-str {:variant vname :main main-cls :version version :source-only true
                    :built-at (str (java.time.Instant/now))}))
 
-    ;; Build JAR (source only, no AOT; Main-Class = clojure.main)
-    (println "  Building source JAR...")
-    (b/jar {:class-dir class-dir
-            :jar-file jar-file
-            :lib lib
-            :version version
-            :main 'clojure.main})
+    ;; AOT compile the bootstrapper for benchmark variant (minimal deps).
+    ;; Must be done before copying other sources to avoid namespace collisions.
+    (when is-benchmark
+      (println "  Compiling AOT for benchmark bootstrapper...")
+      (let [bs-deps (pr-str '{:deps {org.clojure/clojure {:mvn/version "1.12.0"}}
+                              :paths ["scripts/benchmark-bootstrap"]})
+            bs-deps-path (str (System/getProperty "java.io.tmpdir")
+                              "/prf-bs-deps-" (System/nanoTime) ".edn")]
+        (spit bs-deps-path bs-deps)
+        (let [bs-basis (b/create-basis {:project bs-deps-path})]
+          (b/compile-clj {:basis bs-basis
+                          :src-dirs ["scripts/benchmark-bootstrap"]
+                          :class-dir class-dir
+                          :ns-compile-command ['resolver-sim.benchmark.main]}))
+        (io/delete-file bs-deps-path)))
 
-    ;; Build uberjar (source + dependency JARs, no AOT; Main-Class = clojure.main)
-    (println "  Building source uberjar...")
-    (b/uber {:class-dir class-dir
-             :uber-file uber-file
-             :basis basis
-             :main 'clojure.main})
+    ;; Build JAR(s)
+    (if is-cli
+      ;; CLI variant: AOT compile a minimal bootstrapper (no protocol deps),
+      ;; then build standalone uberjar with Main-Class pointing at it.
+      (let [main-sym 'resolver-sim.cli-bootstrap
+            bs-deps (pr-str '{:deps {org.clojure/clojure {:mvn/version "1.12.0"}}
+                             :paths ["scripts/cli-bootstrap"]})
+            bs-deps-path (str (System/getProperty "java.io.tmpdir")
+                              "/prf-bs-deps-" (System/nanoTime) ".edn")]
+        (spit bs-deps-path bs-deps)
+        (let [bs-basis (b/create-basis {:project bs-deps-path})]
+          (b/compile-clj {:basis bs-basis
+                          :src-dirs ["scripts/cli-bootstrap"]
+                          :class-dir class-dir
+                          :ns-compile-command ['resolver-sim.cli-bootstrap]}))
+        (io/delete-file bs-deps-path)
+        (println "  Building CLI uberjar (Main-Class:" main-sym ")...")
+        (b/uber {:class-dir class-dir
+                 :uber-file "target/prf.jar"
+                 :basis basis
+                 :main main-sym}))
+      ;; Other variants: build both source JAR and uberjar
+      (let [main-sym (if is-benchmark 'resolver-sim.benchmark.main 'clojure.main)]
+        (println "  Building source JAR (Main-Class:" main-sym ")...")
+        (b/jar {:class-dir class-dir
+                :jar-file jar-file
+                :lib lib
+                :version version
+                :main main-sym})
+
+        (println "  Building source uberjar (Main-Class:" main-sym ")...")
+        (b/uber {:class-dir class-dir
+                 :uber-file uber-file
+                 :basis basis
+                 :main main-sym})))
 
     ;; Cleanup
     (b/delete {:path class-dir})
@@ -99,9 +157,10 @@
 
     ;; Report
     (println "\n=== Results ===")
-    (doseq [f [jar-file uber-file]]
+    (doseq [f (if is-cli ["target/prf.jar"] [jar-file uber-file])]
       (let [jf (java.io.File. f)]
-        (printf "  %-50s %d KB\n" (.getName jf) (quot (.length jf) 1024))))
+        (when (.exists jf)
+          (printf "  %-50s %d KB\n" (.getName jf) (quot (.length jf) 1024)))))
     (printf "\n  Source-only build (no AOT).\n")
     (println "  Done.\n")
     (flush)))

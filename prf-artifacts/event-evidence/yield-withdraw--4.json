@@ -1,0 +1,172 @@
+{
+  "evidence\/schema-version": "event-evidence.v1",
+  "evidence\/chain-prev-hash": "ca777892dadf8bf8ed7d580ab395536dae13bcb57cc3027095937bc2444a544e",
+  "evidence\/importance": "core",
+  "world\/before-full-hash": "0499d1ad1ed20b393177afc0acf46e87094b924faf370b810733cb93ba81fff0",
+  "evidence\/context": {
+    "ctx\/scenario-id": null,
+    "ctx\/run-id": null,
+    "ctx\/event-index": 4,
+    "ctx\/event-type": "yield_withdraw",
+    "withdraw\/module-id": "aave-v3",
+    "withdraw\/position-id": "0xOwnerA"
+  },
+  "post-state": {
+    "withdraw\/after-positions": {
+      "0xOwnerA": {
+        "owner\/id": "0xOwnerA",
+        "oracle-stale-affected?": false,
+        "capital-event-affected?": false,
+        "current-value": 1000,
+        "entry-index": 1.0,
+        "module\/id": "aave-v3",
+        "shortfall": {
+          "reason": "liquidity-only",
+          "basis-amount": 1000,
+          "available-ratio": 0,
+          "fulfilled-amount": 0,
+          "deferred-amount": 1000,
+          "haircut-amount": 0,
+          "as-of-index": 1.000253694424045
+        },
+        "partial-fill-affected?": true,
+        "position\/id": [
+          "position",
+          "0xOwnerA",
+          "aave-v3",
+          "USDC"
+        ],
+        "deferred-yield": 0,
+        "principal-impairment": 0,
+        "realized-yield": 0,
+        "last-accrual-index": 1.000253694424045,
+        "current-index": 1.000253694424045,
+        "token": "USDC",
+        "status": "unwinding",
+        "unrealized-yield": 0,
+        "last-accrual-time": 1200000,
+        "principal": 1000,
+        "shortfall-affected?": false,
+        "accrual-dust-remainder": 0,
+        "shares": 1000.0,
+        "haircut-yield": 0
+      },
+      "0xOwnerB": {
+        "owner\/id": "0xOwnerB",
+        "oracle-stale-affected?": false,
+        "capital-event-affected?": false,
+        "current-value": 2000,
+        "entry-index": 1.0,
+        "module\/id": "aave-v3",
+        "partial-fill-affected?": false,
+        "position\/id": [
+          "position",
+          "0xOwnerB",
+          "aave-v3",
+          "USDC"
+        ],
+        "deferred-yield": 0,
+        "principal-impairment": 0,
+        "realized-yield": 0,
+        "last-accrual-index": 1.000253694424045,
+        "current-index": 1.000253694424045,
+        "token": "USDC",
+        "status": "active",
+        "unrealized-yield": 0,
+        "last-accrual-time": 1100000,
+        "principal": 2000,
+        "shortfall-affected?": false,
+        "accrual-dust-remainder": 0.2537105122191616,
+        "shares": 2000.0,
+        "haircut-yield": 0
+      }
+    }
+  },
+  "evidence\/chain-self-hash": "ca777892dadf8bf8ed7d580ab395536dae13bcb57cc3027095937bc2444a544e",
+  "inputs": {
+    "withdraw\/params": {
+      "owner\/id": "0xOwnerA",
+      "module\/id": "aave-v3",
+      "token": "USDC",
+      "shortfall": {
+        "reason": "liquidity-only",
+        "basis-amount": 1000,
+        "available-ratio": 0,
+        "fulfilled-amount": 0,
+        "deferred-amount": 1000,
+        "haircut-amount": 0,
+        "as-of-index": 1.000253694424045
+      }
+    }
+  },
+  "world\/after-hash": "8eda80a02b8e7f7165f8c1f5f5ea84d17c2bbff514eceb56c312ae2732575e7a",
+  "evidence\/type": "yield-withdraw",
+  "evidence\/chain-seq": 18,
+  "calculation": null,
+  "pre-state": {
+    "withdraw\/before-positions": {
+      "0xOwnerA": {
+        "owner\/id": "0xOwnerA",
+        "oracle-stale-affected?": false,
+        "capital-event-affected?": false,
+        "current-value": 1000,
+        "entry-index": 1.0,
+        "module\/id": "aave-v3",
+        "partial-fill-affected?": false,
+        "position\/id": [
+          "position",
+          "0xOwnerA",
+          "aave-v3",
+          "USDC"
+        ],
+        "deferred-yield": 0,
+        "principal-impairment": 0,
+        "realized-yield": 0,
+        "last-accrual-index": 1.000126839167935,
+        "current-index": 1.000126839167935,
+        "token": "USDC",
+        "status": "active",
+        "unrealized-yield": 0,
+        "last-accrual-time": 1100000,
+        "principal": 1000,
+        "shortfall-affected?": false,
+        "accrual-dust-remainder": 0.1268391679350583,
+        "shares": 1000.0,
+        "haircut-yield": 0
+      },
+      "0xOwnerB": {
+        "owner\/id": "0xOwnerB",
+        "oracle-stale-affected?": false,
+        "capital-event-affected?": false,
+        "current-value": 2000,
+        "entry-index": 1.0,
+        "module\/id": "aave-v3",
+        "partial-fill-affected?": false,
+        "position\/id": [
+          "position",
+          "0xOwnerB",
+          "aave-v3",
+          "USDC"
+        ],
+        "deferred-yield": 0,
+        "principal-impairment": 0,
+        "realized-yield": 0,
+        "last-accrual-index": 1.000253694424045,
+        "current-index": 1.000253694424045,
+        "token": "USDC",
+        "status": "active",
+        "unrealized-yield": 0,
+        "last-accrual-time": 1100000,
+        "principal": 2000,
+        "shortfall-affected?": false,
+        "accrual-dust-remainder": 0.2537105122191616,
+        "shares": 2000.0,
+        "haircut-yield": 0
+      }
+    }
+  },
+  "world\/before-hash": "098e46284d5e3abe805fc32c983e7e852f2ae8360bffb92f7422b4fb60d98d05",
+  "world\/after-full-hash": "a0ddb30280c4ad77019859d85e5ce2cb7fb2674dd8af82cdd76bf0c6be8bedb5",
+  "evidence\/hash": "ca777892dadf8bf8ed7d580ab395536dae13bcb57cc3027095937bc2444a544e",
+  "event\/seq": 4
+}

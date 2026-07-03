@@ -1,0 +1,48 @@
+{
+  "evidence\/schema-version": "event-evidence.v1",
+  "scenario\/id": "s26-forking-strategist-l1-reversal",
+  "evidence\/chain-prev-hash": "db8f55ca5bddbb67a915615979f9c099c200a2c82ca498a2f3130a0bccde0df7",
+  "evidence\/importance": "core",
+  "run\/id": "s26-forking-strategist-l1-reversal-run",
+  "world\/before-full-hash": "3f7acc95eaeee799f1f7aa3898e76e09682ba6da3598f89d0e2283e88a56adad",
+  "evidence\/context": {
+    "ctx\/scenario-id": "s26-forking-strategist-l1-reversal",
+    "ctx\/run-id": "s26-forking-strategist-l1-reversal-run",
+    "ctx\/event-index": 3,
+    "ctx\/event-type": "escalate_dispute",
+    "subject\/type": "dispute",
+    "subject\/id": 0,
+    "action\/type": "escalate",
+    "evidence\/reason": "dispute-escalated"
+  },
+  "post-state": {
+    "escalation\/after": {
+      "dispute-level": 1,
+      "resolver": "0xl1"
+    }
+  },
+  "evidence\/chain-self-hash": "db8f55ca5bddbb67a915615979f9c099c200a2c82ca498a2f3130a0bccde0df7",
+  "inputs": {
+    "escalation\/workflow-id": 0,
+    "escalation\/caller": "0xbuyer",
+    "escalation\/from-level": 0,
+    "escalation\/to-level": 1,
+    "escalation\/new-resolver": "0xl1",
+    "escalation\/bond-amount": 0,
+    "escalation\/escalation-count": 0
+  },
+  "world\/after-hash": "0e6d2fcf52b3b1aef02e3f2cb455b9e8ba4edb4183499a1a4ac5f90b40d4a958",
+  "evidence\/type": "dispute-escalated",
+  "evidence\/chain-seq": 3,
+  "calculation": null,
+  "pre-state": {
+    "escalation\/before": {
+      "dispute-level": 0,
+      "resolver": null
+    }
+  },
+  "world\/before-hash": "7fefbb846ee55c301167d260eb0c0d3312cf0dbf82e4ae3a9891c601733f6ff6",
+  "world\/after-full-hash": "19e74f1c8d8b5439a9f1ffd016955c6a3c1ba5efccef1d7e945c89b5d2126147",
+  "evidence\/hash": "db8f55ca5bddbb67a915615979f9c099c200a2c82ca498a2f3130a0bccde0df7",
+  "event\/seq": 3
+}

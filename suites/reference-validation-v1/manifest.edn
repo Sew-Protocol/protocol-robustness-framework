@@ -88,9 +88,23 @@
    :simulator/scenario-path "scenarios/S05_pending-settlement-execute.json"
    :upgrade-path "maintain deterministic replay and trace hash stability"}
 
-  {:id "appeal-failure-cascade-v1"
+  {:id "kleros-module-authorization-v1"
    :ordinal 7
-   :trace-slug "007-appeal-failure-cascade"
+   :trace-slug "007-kleros-module-authorization"
+   :claim-id "kleros-module-authorizes-resolver"
+   :claim "Kleros arbitration module correctly authorizes resolvers per escalation level."
+   :threat "Escalation authorization bypass"
+   :primary-threat "escalation-authorization-bypass"
+   :classification :escalation-robust
+   :invariant-ids ["escalation-layer-protection" "active-escrow-module-snapshot-immutable"]
+   :expectations-passed 2
+   :invariants-passed 2
+   :simulator/scenario-path "scenarios/S18_dr3-kleros-l0-resolves.json"
+   :upgrade-path "maintain deterministic replay and trace hash stability"}
+
+   {:id "appeal-failure-cascade-v1"
+   :ordinal 8
+   :trace-slug "008-appeal-failure-cascade"
    :claim-id "corrupt-verdict-must-survive-escalation"
    :claim "Corrupt verdict capture requires escalation failure."
    :threat "Appeal layer breakdown"
@@ -102,9 +116,9 @@
    :simulator/scenario-path "scenarios/S20_dr3-kleros-max-escalation-guard.json"
    :upgrade-path "maintain deterministic replay and trace hash stability"}
 
-  {:id "yield-accrual-efficiency-v1"
-   :ordinal 8
-   :trace-slug "008-yield-accrual-efficiency"
+   {:id "yield-accrual-efficiency-v1"
+   :ordinal 9
+   :trace-slug "009-yield-accrual-efficiency"
    :claim-id :yield-accrual-covers-protocol-fees
    :claim "Long-duration yield accrual exceeds baseline escrow protocol fees."
    :threat "Fee drag on long escrows"
@@ -117,7 +131,7 @@
    :upgrade-path "Integrate with Aave-specific LST/LRT yield adapters to verify precision parity"}]
 
  :invariants
- [{:id "active-escrow-module-snapshot-immutable" :scenarios ["governance-sandwich-v1"]}
+  [{:id "active-escrow-module-snapshot-immutable" :scenarios ["governance-sandwich-v1" "kleros-module-authorization-v1"]}
   {:id "governance-forward-only" :scenarios ["governance-sandwich-v1"]}
   {:id "slashable-liability-preserved"
    :scenarios ["malicious-resolver-verdict-v1" "appeal-failure-cascade-v1"]}
@@ -125,7 +139,7 @@
   {:id "liability-gated-withdrawal" :scenarios ["bond-withdrawal-race-v1"]}
   {:id "no-double-settlement" :scenarios ["same-block-ordering-v1" "governance-sandwich-v1"]}
   {:id "pull-first-value-flow" :scenarios ["autopush-settlement-v1"]}
-  {:id "escalation-layer-protection" :scenarios ["appeal-failure-cascade-v1"]}
+   {:id "escalation-layer-protection" :scenarios ["appeal-failure-cascade-v1" "kleros-module-authorization-v1"]}
   {:id "yield-accrual-efficiency" :scenarios ["yield-accrual-efficiency-v1"]}]
 
  :claims
@@ -165,6 +179,12 @@
    :invariant-ids ["pull-first-value-flow"]
    :scenario-ids ["autopush-settlement-v1"]
    :upgrade-path "maintain deterministic replay and trace hash stability"}
+  {:claim-id :kleros-module-authorizes-resolver
+   :claim "Kleros arbitration module correctly authorizes resolvers per escalation level."
+   :threat "Escalation authorization bypass"
+   :invariant-ids ["escalation-layer-protection" "active-escrow-module-snapshot-immutable"]
+   :scenario-ids ["kleros-module-authorization-v1"]
+   :upgrade-path "maintain deterministic replay and trace hash stability"}
   {:claim-id :corrupt-verdict-must-survive-escalation
    :claim "Corrupt verdict capture requires escalation failure."
    :threat "Appeal layer breakdown"
@@ -179,7 +199,10 @@
    :upgrade-path "Integrate with Aave-specific LST/LRT yield adapters to verify precision parity"}]
 
  :economic-checks
- [{:check-id "malicious-verdict-not-profitable-under-baseline"
+  [{:check-id "kleros-module-correctly-authorizes"
+    :classification :escalation-guard
+    :scenario-id "kleros-module-authorization-v1"}
+   {:check-id "malicious-verdict-not-profitable-under-baseline"
    :classification :bounded-counterfactual
    :scenario-id "malicious-resolver-verdict-v1"}
   {:check-id "appeal-path-reduces-malicious-capture"

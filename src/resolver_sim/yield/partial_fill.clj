@@ -92,21 +92,23 @@
              weight/cap allocation. When absent, weight and cap are both
              derived from the requested amount (existing behavior)."
   [available-liquidity requested policy & [opts]]
-  (let [total (sum-requested requested)
-        shortage (max 0 (- total available-liquidity))
-        rows (:rows opts)]
-    (if (zero? shortage)
-      (let [filled (if rows
-                     (into {} (map (fn [r] [(:key r) (long (:owed r))]) rows))
-                     requested)]
-        {:settlement-mode :full-fill
-         :requested (if rows (into {} (map (fn [r] [(:key r) (long (:owed r))]) rows)) requested)
-         :filled filled
-         :deferred {}
-         :haircut {}
-         :unrealized {}
-         :policy policy
-         :evidence (make-evidence policy available-liquidity total 0 :pro-rata)})
+  (let [rows (:rows opts)
+        total (if rows
+                (reduce + 0 (map #(long (:owed %)) rows))
+                (sum-requested requested))
+        shortage (max 0 (- total available-liquidity))]
+    (if (and (zero? shortage) (not rows))
+      ;; Full-fill: only when no rows (backward compat) or shortage is truly zero.
+      ;; When rows are present with caps, always go through the capped allocator
+      ;; to respect per-row caps even when total liquidity is sufficient.
+      {:settlement-mode :full-fill
+       :requested requested
+       :filled requested
+       :deferred {}
+       :haircut {}
+       :unrealized {}
+       :policy policy
+       :evidence (make-evidence policy available-liquidity total 0 :pro-rata)}
       (if rows
         ;; Decoupled weight/cap path via payoffs allocator with redistribution.
         ;; Effective cap = min(owed, cap) so the allocator enforces both limits.
@@ -183,48 +185,121 @@
 
 (defn calculate-fulfillment-principal-first
   "Principal-first fill: principal claims are satisfied in full before any
-   yield claims are filled."
-  [available-liquidity requested policy]
-  (let [principal-requested (long (get requested :principal 0))
-        principal-filled (min principal-requested available-liquidity)
-        remaining (- available-liquidity principal-filled)
-        yield-requested (dissoc requested :principal)
-        yield-total (sum-requested yield-requested)
-        shortage (max 0 (- (+ principal-requested yield-total) available-liquidity))]
-    (if (zero? shortage)
-      {:settlement-mode :full-fill
-       :requested requested
-       :filled requested
-       :deferred {}
-       :haircut {}
-       :unrealized {}
-       :policy policy
-       :evidence (make-evidence policy available-liquidity (+ principal-requested yield-total) 0 :principal-first)}
-      (let [principal-deferred (max 0 (- principal-requested principal-filled))
-            filled (cond-> {:principal principal-filled}
-                     (pos? remaining)
-                     (merge (let [claims (mapv (fn [[k v]] {:key k :amount (long v)})
-                                               (seq yield-requested))
-                                  rounding-policy (:rounding-policy policy :floor-and-carry)
-                                  alloc (case rounding-policy
-                                          :largest-remainder (m/largest-remainder-alloc remaining claims)
-                                          :principal-protective-floor (m/principal-protective-floor-alloc
-                                                                       remaining claims
-                                                                       (fn [c] (= :principal (:key c))))
-                                          :adversarial-rounding (m/adversarial-rounding remaining claims)
-                                          (m/floor-and-carry-alloc remaining claims))]
-                              (into {} (map (fn [a] [(:key a) (:filled a)]) (:allocations alloc))))))
-            deferred (merge (when (pos? principal-deferred) {:principal principal-deferred})
-                            (into {} (map (fn [[k v]] [k (max 0 (- (long v) (long (get filled k 0))))])
-                                          yield-requested)))]
-        {:settlement-mode :partial-fill
-         :requested requested
-         :filled filled
-         :deferred deferred
-         :haircut {}
-         :unrealized {}
-         :policy policy
-         :evidence (make-evidence policy available-liquidity (+ principal-requested yield-total) shortage :principal-first)}))))
+   yield claims are filled.
+
+   Optional opts:
+     :rows — vector of {:key k :owed v :weight w :cap c} for decoupled
+             weight/cap allocation. When absent, weight and cap are both
+             derived from the requested amount (existing behavior)."
+  [available-liquidity requested policy & [opts]]
+  (let [rows (:rows opts)]
+    (if rows
+      ;; Decoupled rows path
+      (let [principal-row (first (filter #(= :principal (:key %)) rows))
+            yield-rows (remove #(= :principal (:key %)) rows)
+            principal-owed (long (if principal-row (:owed principal-row) 0))
+            principal-cap (:cap principal-row)
+            principal-effective-cap (if (some? principal-cap)
+                                      (min principal-owed principal-cap)
+                                      principal-owed)
+            principal-filled (min principal-effective-cap available-liquidity)
+            principal-deferred (max 0 (- principal-owed principal-filled))
+            remaining (- available-liquidity principal-filled)
+            yield-total (reduce + 0 (map #(long (:owed %)) yield-rows))
+            total (+ principal-owed yield-total)
+            shortage (max 0 (- total available-liquidity))]
+        ;; When rows are present, always use the capped path
+        ;; (full-fill shortcut would ignore per-row caps)
+        (let [yield-items (mapv (fn [r]
+                                  {:id (:key r)
+                                   :weight (or (:weight r) (long (:owed r)))
+                                   :cap (let [c (:cap r)]
+                                          (if (some? c) (min (long (:owed r)) c) (long (:owed r))))})
+                                yield-rows)
+              rounding-policy (:rounding-policy policy :floor-and-carry)
+              yield-alloc (when (and (pos? remaining) (seq yield-items))
+                            (payoffs/allocate-pro-rata-with-redistribution
+                             {:amount remaining
+                              :items yield-items
+                              :id-fn :id :weight-fn :weight :cap-fn :cap
+                              :rounding (if (#{:floor :floor-with-largest-remainder} rounding-policy)
+                                          rounding-policy
+                                          :floor-with-largest-remainder)}))
+              yield-filled (when yield-alloc
+                             (into {} (map (fn [a] [(:id a) (:allocated a)]) (:allocations yield-alloc))))
+              filled (cond-> {}
+                       (pos? principal-filled)
+                       (assoc :principal principal-filled)
+                       yield-filled
+                       (merge yield-filled))
+              row-evidence (mapv (fn [r]
+                                   (let [k (:key r)
+                                         f (long (get filled k 0))
+                                         d (max 0 (- (long (:owed r)) f))
+                                         cap (:cap r)
+                                         effective-cap (if (some? cap)
+                                                         (min (long (:owed r)) cap)
+                                                         (long (:owed r)))]
+                                     {:key k
+                                      :owed (long (:owed r))
+                                      :weight (or (:weight r) (long (:owed r)))
+                                      :cap (when cap (long cap))
+                                      :filled f
+                                      :deferred d
+                                      :cap-hit? (if (some? cap) (>= f effective-cap) false)}))
+                                 rows)
+              deferred (into {} (map (fn [r] [(:key r) (:deferred r)]) row-evidence))]
+          {:settlement-mode :partial-fill
+           :requested (into {} (map (fn [r] [(:key r) (long (:owed r))]) rows))
+           :filled filled
+           :deferred deferred
+           :haircut {}
+           :unrealized {}
+           :policy policy
+           :evidence (assoc (make-evidence policy available-liquidity total shortage :principal-first)
+                            :allocation-rows row-evidence
+                            :redistribution (:redistribution yield-alloc))}))
+      ;; Backward compatible path (no explicit rows)
+      (let [principal-requested (long (get requested :principal 0))
+            principal-filled (min principal-requested available-liquidity)
+            remaining (- available-liquidity principal-filled)
+            yield-requested (dissoc requested :principal)
+            yield-total (sum-requested yield-requested)
+            shortage (max 0 (- (+ principal-requested yield-total) available-liquidity))]
+        (if (zero? shortage)
+          {:settlement-mode :full-fill
+           :requested requested
+           :filled requested
+           :deferred {}
+           :haircut {}
+           :unrealized {}
+           :policy policy
+           :evidence (make-evidence policy available-liquidity (+ principal-requested yield-total) 0 :principal-first)}
+          (let [principal-deferred (max 0 (- principal-requested principal-filled))
+                filled (cond-> {:principal principal-filled}
+                         (pos? remaining)
+                         (merge (let [claims (mapv (fn [[k v]] {:key k :amount (long v)})
+                                                   (seq yield-requested))
+                                      rounding-policy (:rounding-policy policy :floor-and-carry)
+                                      alloc (case rounding-policy
+                                              :largest-remainder (m/largest-remainder-alloc remaining claims)
+                                              :principal-protective-floor (m/principal-protective-floor-alloc
+                                                                           remaining claims
+                                                                           (fn [c] (= :principal (:key c))))
+                                              :adversarial-rounding (m/adversarial-rounding remaining claims)
+                                              (m/floor-and-carry-alloc remaining claims))]
+                                  (into {} (map (fn [a] [(:key a) (:filled a)]) (:allocations alloc))))))
+                deferred (merge (when (pos? principal-deferred) {:principal principal-deferred})
+                                (into {} (map (fn [[k v]] [k (max 0 (- (long v) (long (get filled k 0))))])
+                                              yield-requested)))]
+            {:settlement-mode :partial-fill
+             :requested requested
+             :filled filled
+             :deferred deferred
+             :haircut {}
+             :unrealized {}
+             :policy policy
+             :evidence (make-evidence policy available-liquidity (+ principal-requested yield-total) shortage :principal-first)}))))))
 
 (defn calculate-fulfillment-waterfall
   "Waterfall fill: claims are satisfied in strict fill-order priority.
@@ -329,7 +404,8 @@
        (case mode
          :pro-rata        (calculate-fulfillment-pro-rata available requested policy
                                                           (select-keys opts [:rows]))
-         :principal-first (calculate-fulfillment-principal-first available requested policy)
+         :principal-first (calculate-fulfillment-principal-first available requested policy
+                                                                 (select-keys opts [:rows]))
          :waterfall       (calculate-fulfillment-waterfall available requested policy))))))
 
 (defn partial-fill?

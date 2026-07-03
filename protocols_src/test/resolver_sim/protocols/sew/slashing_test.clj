@@ -123,27 +123,84 @@
   (let [buyer "0xBuyer"
         seller "0xSeller"
         resolver-addr "0xRes"
+        l1-resolver "0xL1"
         gov "0xGov"
         non-gov "0xUser"
-        snap (snap-fix/escrow-snapshot {:appeal-window-duration 100})
+        snap (snap-fix/escrow-snapshot {:dispute-resolver resolver-addr
+                                        :appeal-window-duration 100
+                                        :challenge-window-duration 100
+                                        :reversal-slash-bps 2500
+                                        :max-dispute-level 2})
         world0 (reg/register-stake (t/empty-world 1000) resolver-addr 1000)
+        world0-force (-> (t/empty-world 1000)
+                         (reg/register-stake resolver-addr 10000)
+                         (reg/register-stake l1-resolver 10000))
         {:keys [world workflow-id]}
         (world-ready-for-fraud-slash-propose world0 buyer "0xT" seller resolver-addr 1000 snap)
+        {:keys [world force-workflow-id]}
+        (let [{:keys [world workflow-id]}
+              (lc/create-escrow world0-force buyer "USDC" seller 5000 {} snap)
+              after-raise (:world (lc/raise-dispute world workflow-id buyer))
+              after-l0 (:world (res/execute-resolution after-raise workflow-id resolver-addr true "0xhash" nil))
+              esc-fn (fn [_ _ _ _] {:ok true :new-resolver l1-resolver})
+              after-esc (:world (res/escalate-dispute after-l0 workflow-id buyer esc-fn))]
+          {:world after-esc :force-workflow-id workflow-id})
         agent-index {"gov"  {:id "gov" :address gov :role "governance"}
                      "user" {:id "user" :address non-gov :role "honest"}}
         ctx {:agent-index agent-index}
         propose-ev {:agent "user" :action "propose_fraud_slash"
                     :params {:workflow-id workflow-id :resolver-addr resolver-addr :amount 100}}
-        world2 (-> (sew/apply-action (assoc ctx :agent-index {"gov" {:id "gov" :address gov :role "governance"}})
-                                     world
-                                     (assoc propose-ev :agent "gov"))
-                   :world
+        r-propose-gov (sew/apply-action (assoc ctx :agent-index {"gov" {:id "gov" :address gov :role "governance"}})
+                                        world
+                                        (assoc propose-ev :agent "gov"))
+        world2 (-> (:world r-propose-gov)
                    (assoc-in [:pending-fraud-slashes workflow-id :status] :appealed))
         resolve-ev {:agent "user" :action "resolve_appeal"
                     :params {:workflow-id workflow-id :upheld? true}}
-        r-resolve-non-gov (sew/apply-action ctx world2 resolve-ev)]
+        force-ev {:action "force_reversal_slash"
+                  :params {:workflow-id force-workflow-id :slash-bps 2500}}
+        r-resolve-non-gov (sew/apply-action ctx world2 resolve-ev)
+        r-force-non-gov (sew/apply-action ctx world (assoc force-ev :agent "user"))
+        r-force-gov (sew/apply-action ctx world (assoc force-ev :agent "gov"))
+        propose-entry (get-in (:world r-propose-gov) [:pending-fraud-slashes workflow-id])
+        force-slash-id (str force-workflow-id "-force-reversal-0")
+        force-entry (get-in (:world r-force-gov) [:pending-fraud-slashes force-slash-id])]
     (is (false? (:ok r-resolve-non-gov)))
-    (is (= :not-governance (:error r-resolve-non-gov)))))
+    (is (= :not-governance (:error r-resolve-non-gov)))
+    (is (false? (:ok r-force-non-gov)))
+    (is (= :not-governance (:error r-force-non-gov)))
+    (is (= :scenario-declared
+           (get-in propose-entry [:authorization/provenance :authorization/basis])))
+    (is (= :governance
+           (get-in propose-entry [:authorization/provenance :authorization/type])))
+    (is (= :with-governance-actor
+           (get-in propose-entry [:authorization/provenance :authorization/check])))
+    (is (= "gov"
+           (get-in propose-entry [:authorization/provenance :authorization/actor-id])))
+    (is (= :replay-context/agent-index
+           (get-in propose-entry [:authorization/provenance :authorization/source])))
+    (is (= "propose-fraud-slash"
+           (get-in propose-entry [:authorization/last-action])))
+    (is (:ok r-force-gov))
+    (is (= (get-in r-force-gov [:extra :authorization/provenance])
+           (:authorization/provenance force-entry)))
+    (is (= :executed (:status force-entry)))
+    (is (= "governance-authorization.v1"
+           (get-in force-entry [:authorization/provenance :authorization/schema-version])))
+    (is (= :governance
+           (get-in force-entry [:authorization/provenance :authorization/type])))
+    (is (= :scenario-declared
+           (get-in force-entry [:authorization/provenance :authorization/basis])))
+    (is (= "gov"
+           (get-in force-entry [:authorization/provenance :authorization/actor-id])))
+    (is (= gov
+           (get-in force-entry [:authorization/provenance :authorization/address])))
+    (is (= :with-governance-actor
+           (get-in force-entry [:authorization/provenance :authorization/check])))
+    (is (= :replay-context/agent-index
+           (get-in force-entry [:authorization/provenance :authorization/source])))
+    (is (= "force-reversal-slash"
+           (get-in force-entry [:authorization/provenance :authorization/action])))))
 
 (deftest execute-fraud-slash-tracks-unavailability-and-circuit-breaker
   (let [resolver-addr "0xRes"
@@ -165,6 +222,45 @@
     (is (contains? (:resolver-unavailable world3) resolver-addr))
     (is (= 1 (get-in world3 [:unavailability-stats :unavailable-count])))
     (is (true? (get-in world3 [:circuit-breaker :active?])))))
+
+(deftest execute-fraud-slash-dispatch-records-executor-provenance
+  (let [resolver-addr "0xRes"
+        gov "0xGov"
+        keeper "0xKeeper"
+        buyer "0xBuyer"
+        seller "0xSeller"
+        snap (snap-fix/escrow-snapshot {:appeal-window-duration 10})
+        world0 (reg/register-stake (t/empty-world 1000) resolver-addr 1000)
+        {:keys [world workflow-id]}
+        (world-ready-for-fraud-slash-propose world0 buyer "USDC" seller resolver-addr 1000 snap)
+        world1 (-> (res/propose-fraud-slash world workflow-id gov resolver-addr 200) :world)
+        world2 (time-ctx/advance-time world1 {:to 1011})
+        ctx {:agent-index {"keeper" {:id "keeper" :address keeper :role "honest"}}}
+        event {:agent "keeper"
+               :action "execute_fraud_slash"
+               :params {:workflow-id workflow-id}}
+        result (sew/apply-action ctx world2 event)
+        slash-entry (get-in (:world result) [:pending-fraud-slashes workflow-id])]
+    (is (:ok result) "resolved non-governance actor can execute matured fraud slash")
+    (is (= :executed (:status slash-entry)))
+    (is (= (get-in result [:extra :execution/provenance])
+           (:execution/provenance slash-entry)))
+    (is (= "execution-provenance.v1"
+           (get-in slash-entry [:execution/provenance :execution/schema-version])))
+    (is (= :public-execution
+           (get-in slash-entry [:execution/provenance :execution/type])))
+    (is (= :scenario-declared
+           (get-in slash-entry [:execution/provenance :execution/basis])))
+    (is (= "keeper"
+           (get-in slash-entry [:execution/provenance :execution/actor-id])))
+    (is (= keeper
+           (get-in slash-entry [:execution/provenance :execution/address])))
+    (is (= :with-resolved-actor
+           (get-in slash-entry [:execution/provenance :execution/check])))
+    (is (= :replay-context/agent-index
+           (get-in slash-entry [:execution/provenance :execution/source])))
+    (is (= "execute-fraud-slash"
+           (get-in slash-entry [:execution/provenance :execution/action])))))
 
 (deftest unfreeze-resolver-clears-unavailability-idempotently
   (let [resolver-addr "0xRes"

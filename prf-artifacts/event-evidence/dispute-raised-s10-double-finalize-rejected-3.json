@@ -1,0 +1,45 @@
+{
+  "evidence\/schema-version": "event-evidence.v1",
+  "scenario\/id": "s10-double-finalize-rejected",
+  "evidence\/chain-prev-hash": "0fa953d78427919ff44fc0487910d81fa985a74cf7d4cac0e7a3df45bd1223a4",
+  "evidence\/importance": "core",
+  "run\/id": "s10-double-finalize-rejected-run",
+  "world\/before-full-hash": "4247b2f6c57f9c02fe14c8a0fd2a85d0b87b68bdb8ed236ba312510a640695ed",
+  "evidence\/context": {
+    "ctx\/scenario-id": "s10-double-finalize-rejected",
+    "ctx\/run-id": "s10-double-finalize-rejected-run",
+    "ctx\/event-index": 3,
+    "ctx\/event-type": "raise_dispute",
+    "subject\/type": "dispute",
+    "subject\/id": 1,
+    "action\/type": "raise",
+    "evidence\/reason": "dispute-raised"
+  },
+  "post-state": {
+    "dispute\/after": {
+      "escrow-state": "disputed",
+      "resolver-capacity": null
+    }
+  },
+  "evidence\/chain-self-hash": "0fa953d78427919ff44fc0487910d81fa985a74cf7d4cac0e7a3df45bd1223a4",
+  "inputs": {
+    "dispute\/workflow-id": 1,
+    "dispute\/caller": "0xresolver",
+    "dispute\/resolver": "0xresolver",
+    "dispute\/level": 0
+  },
+  "world\/after-hash": "9ed0bf335edc666a926f35db8fae12c8884414c87c217323dc27332198d2e377",
+  "evidence\/type": "dispute-raised",
+  "evidence\/chain-seq": 4,
+  "calculation": null,
+  "pre-state": {
+    "dispute\/before": {
+      "escrow-state": "pending",
+      "resolver": "0xresolver"
+    }
+  },
+  "world\/before-hash": "59c6013da12b99d5af28e04c20edb9b49c06bca1880cf39ab0a6c952f63e65a7",
+  "world\/after-full-hash": "48e59af8abef225c22e0c987a9f1811f2b9bfcfe9131bea0be7d01ca3c935c8a",
+  "evidence\/hash": "0fa953d78427919ff44fc0487910d81fa985a74cf7d4cac0e7a3df45bd1223a4",
+  "event\/seq": 3
+}

@@ -1,0 +1,34 @@
+{
+  "evidence\/schema-version": "event-evidence.v1",
+  "evidence\/chain-prev-hash": "976305f4a0064e5a92fc0545a6dc747dfa08d0a2a11f908084fad09ddc4e237f",
+  "evidence\/importance": "core",
+  "evidence\/context": {
+    "subject\/type": "token",
+    "subject\/id": "0xUSDC",
+    "action\/type": "withdraw",
+    "evidence\/reason": "fees-withdrawn"
+  },
+  "post-state": {
+    "fee\/after": {
+      "total-fees": 0,
+      "total-withdrawn": 5
+    }
+  },
+  "evidence\/chain-self-hash": "976305f4a0064e5a92fc0545a6dc747dfa08d0a2a11f908084fad09ddc4e237f",
+  "inputs": {
+    "fee\/token": "0xUSDC",
+    "fee\/amount": 5
+  },
+  "world\/after-hash": "f49507a625e37b28ee30b42772ba4626fd2ba74b6e0f21e9a49be9bc39d21cef",
+  "evidence\/type": "fees-withdrawn",
+  "evidence\/chain-seq": 3,
+  "calculation": null,
+  "pre-state": {
+    "fee\/before": {
+      "total-fees": 5
+    }
+  },
+  "world\/before-hash": "1477fb1beb1c1600eec3ec0742dc8936945f9bd491536c321b30c72002e81d72",
+  "evidence\/hash": "976305f4a0064e5a92fc0545a6dc747dfa08d0a2a11f908084fad09ddc4e237f",
+  "event\/seq": 0
+}

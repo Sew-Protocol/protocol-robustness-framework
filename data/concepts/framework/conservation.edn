@@ -6,7 +6,9 @@
  :concept/stakeholder-question "Is the quantity fully accounted for?"
  :concept/protocols #{:protocol/sew-v1}
  :concept/frameworks #{:framework/prf}
- :concept/related [:allocation/shortfall :allocation/partial-fill]
+ :concept/related [:allocation/shortfall :allocation/partial-fill :allocation/pro-rata-fairness]
+ :concept/benchmark-domains #{:domain/protocol-value-conservation}
+ :concept/benchmark-concepts [:robustness/protocol-value-conservation]
  :concept/roles
  {:role/reviewer
   {:description "Evaluates whether the result is understandable, reproducible, and appropriately qualified."}

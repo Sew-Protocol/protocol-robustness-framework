@@ -1,0 +1,37 @@
+{
+  "evidence\/schema-version": "event-evidence.v1",
+  "scenario\/id": "reversal-vindication-test",
+  "evidence\/chain-prev-hash": "66f7a70470fe040d4581edf71a7e3d5482bd2b77ff5084c9ae9550fb7a4a7c13",
+  "evidence\/importance": "core",
+  "run\/id": "reversal-vindication-test-run",
+  "world\/before-full-hash": "36c4cd2768267ca0e7d8fed57eca50df1efe67e14e6ecd2e4e45367268568829",
+  "evidence\/context": {
+    "ctx\/scenario-id": "reversal-vindication-test",
+    "ctx\/run-id": "reversal-vindication-test-run",
+    "ctx\/event-index": 9,
+    "ctx\/event-type": "execute_resolution",
+    "subject\/type": "resolver",
+    "subject\/id": "0xl1",
+    "action\/type": "slash",
+    "evidence\/reason": "slashing"
+  },
+  "post-state": {
+    "resolver-stake": 6000
+  },
+  "evidence\/chain-self-hash": "66f7a70470fe040d4581edf71a7e3d5482bd2b77ff5084c9ae9550fb7a4a7c13",
+  "inputs": {
+    "requested-amount": 2000,
+    "actual-amount": 2000
+  },
+  "world\/after-hash": "d02aed375e5cdc5cc8516333181a63406bfbce53a0e2df6a557062be82eceb28",
+  "evidence\/type": "slashing",
+  "evidence\/chain-seq": 9,
+  "calculation": null,
+  "pre-state": {
+    "resolver-stake": 8000
+  },
+  "world\/before-hash": "81fbed59bba9bfd079594721a80022dd9c36558c3222629ab6d1d6441b8e5699",
+  "world\/after-full-hash": "0dbc2294c2e5eeea33370db3fc8e5de4ba8aad8a74220c4cee6d344306ec356d",
+  "evidence\/hash": "66f7a70470fe040d4581edf71a7e3d5482bd2b77ff5084c9ae9550fb7a4a7c13",
+  "event\/seq": 9
+}

@@ -1,0 +1,50 @@
+{
+  "evidence\/schema-version": "event-evidence.v1",
+  "scenario\/id": "s02-dr3-dispute-release",
+  "evidence\/chain-prev-hash": "8e8fba1dc07a739cd0521b542e2d51a07208639c5d673b0efd30b84f10998709",
+  "evidence\/importance": "core",
+  "run\/id": "s02-dr3-dispute-release-run",
+  "world\/before-full-hash": "6911749d3bc2b79110bd8b9462d9f54cff4b80065a1dc112847558c7fc0bbe20",
+  "evidence\/context": {
+    "ctx\/scenario-id": "s02-dr3-dispute-release",
+    "ctx\/run-id": "s02-dr3-dispute-release-run",
+    "ctx\/event-index": 2,
+    "ctx\/event-type": "execute_resolution",
+    "subject\/type": "escrow",
+    "subject\/id": 0,
+    "action\/type": "released",
+    "evidence\/reason": "escrow-released"
+  },
+  "post-state": {
+    "finalize\/after": {
+      "workflow-state": "released",
+      "total-held": 0
+    }
+  },
+  "evidence\/chain-self-hash": "8e8fba1dc07a739cd0521b542e2d51a07208639c5d673b0efd30b84f10998709",
+  "inputs": {
+    "finalize\/workflow-id": 0,
+    "finalize\/direction": "released",
+    "finalize\/recipient": "0xseller",
+    "finalize\/settled-amount": 3940,
+    "finalize\/sub-held-amount": 3940,
+    "finalize\/partial-yield?": false,
+    "finalize\/shortfall?": false,
+    "finalize\/resolver": "0xresolver"
+  },
+  "world\/after-hash": "03ae7a67416805ce2631749d8aba7fe0214e16764f20e9c2d6945e6a061eedb6",
+  "evidence\/type": "escrow-released",
+  "evidence\/chain-seq": 3,
+  "calculation": null,
+  "pre-state": {
+    "finalize\/before": {
+      "workflow-state": "disputed",
+      "total-held": 3940,
+      "resolver": "0xresolver"
+    }
+  },
+  "world\/before-hash": "5b1543809874dc71685aa1712755b19253aa6d5300cd2115adb5a3417dd128af",
+  "world\/after-full-hash": "460aae8a5b379fa50eda5898d4d0d780993a05ab9c66ad77a0159637b654e0ce",
+  "evidence\/hash": "8e8fba1dc07a739cd0521b542e2d51a07208639c5d673b0efd30b84f10998709",
+  "event\/seq": 2
+}

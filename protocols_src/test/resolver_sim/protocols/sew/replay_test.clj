@@ -1024,7 +1024,7 @@
   (let [gov {:id "gov" :type "governance" :address "0xGov"}
         keeper {:id "keeper" :type "keeper" :address "0xKeeper"}
         slash-at 1255
-        freeze-until (+ slash-at 259200)
+        freeze-until (+ slash-at (* 3 86400))
         r (sew/replay-with-sew-protocol
            (sb/sc :agents [alice bob resolver gov keeper]
                   :params (assoc default-params :appeal-window-duration 120)

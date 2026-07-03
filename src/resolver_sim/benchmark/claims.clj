@@ -10,8 +10,7 @@
    semantic property is proxied by invariant results from check-all.
 
    See benchmarks/DESIGN_CLAIM_VERIFICATION.md for maturity level definitions."
-  (:require [clojure.edn :as edn]
-            [clojure.java.io :as io]))
+  (:require [resolver-sim.io.resource-path :as rp]))
 
 ;; ── Claim ref normalization ───────────────────────────────────────────────────
 ;; Benchmark packs may declare claims as flat keywords or as maps with
@@ -63,6 +62,157 @@
                          invariant-ids)]
     {:holds?    (empty? failures)
      :violations (vec failures)}))
+
+(defn- scenario-group-key
+  [result]
+  (or (:scenario/id result)
+      (:simulator/scenario-path result)
+      (:file result)))
+
+(defn- duplicate-scenario-groups
+  [results]
+  (->> results
+       (group-by scenario-group-key)
+       (remove (fn [[scenario-key grouped-results]]
+                 (or (nil? scenario-key)
+                     (< (count grouped-results) 2))))
+       (into {})))
+
+(defn- scenario-groups
+  [results]
+  (->> results
+       (group-by scenario-group-key)
+       (remove (comp nil? key))
+       (into {})))
+
+(defn- result-fingerprint
+  [result]
+  (select-keys result [:outcome :halt-reason :invariant-results]))
+
+(defn- nondeterminism-fingerprint
+  [result]
+  (select-keys result [:outcome :halt-reason :invariant-results :scenario/evidence-root]))
+
+(defn- consistent-fingerprints?
+  [results fingerprint-fn]
+  (<= (count (distinct (map fingerprint-fn results))) 1))
+
+(defn- missing-scenario-identity-violations
+  [results]
+  (->> results
+       (keep (fn [result]
+               (when-not (scenario-group-key result)
+                 {:type :missing-scenario-identity
+                  :message "scenario result is missing :scenario/id, :simulator/scenario-path, and :file"})))
+       vec))
+
+(defn- positive-int?
+  [x]
+  (and (int? x) (pos? x)))
+
+(defn- run-pairing-violations
+  [grouped-results]
+  (let [scenario-id (some :scenario/id grouped-results)
+        scenario-path (some :simulator/scenario-path grouped-results)
+        file (some :file grouped-results)
+        run-counts (keep :benchmark/run-count grouped-results)
+        run-indices (keep :benchmark/run-index grouped-results)
+        distinct-run-counts (distinct run-counts)
+        declared-run-count (first distinct-run-counts)]
+    (cond
+      (not-every? #(contains? % :benchmark/run-count) grouped-results)
+      [{:type :missing-run-count
+        :scenario-id scenario-id
+        :scenario-path scenario-path
+        :file file
+        :message "scenario result is missing :benchmark/run-count"}]
+
+      (not-every? #(contains? % :benchmark/run-index) grouped-results)
+      [{:type :missing-run-index
+        :scenario-id scenario-id
+        :scenario-path scenario-path
+        :file file
+        :message "scenario result is missing :benchmark/run-index"}]
+
+      (not= 1 (count distinct-run-counts))
+      [{:type :inconsistent-run-count
+        :scenario-id scenario-id
+        :scenario-path scenario-path
+        :file file
+        :message "scenario results disagree on :benchmark/run-count"}]
+
+      (not (positive-int? declared-run-count))
+      [{:type :invalid-run-count
+        :scenario-id scenario-id
+        :scenario-path scenario-path
+        :file file
+        :message "scenario result has invalid :benchmark/run-count"}]
+
+      (not-every? positive-int? run-indices)
+      [{:type :invalid-run-index
+        :scenario-id scenario-id
+        :scenario-path scenario-path
+        :file file
+        :message "scenario result has invalid :benchmark/run-index"}]
+
+      (not= declared-run-count (count grouped-results))
+      [{:type :insufficient-replay-runs
+        :scenario-id scenario-id
+        :scenario-path scenario-path
+        :file file
+        :message (str "scenario expected " declared-run-count " replay runs, got " (count grouped-results))}]
+
+      (not= declared-run-count (count (distinct run-indices)))
+      [{:type :duplicate-run-index
+        :scenario-id scenario-id
+        :scenario-path scenario-path
+        :file file
+        :message "scenario replay results contain duplicate :benchmark/run-index values"}]
+
+      (not= (set run-indices) (set (range 1 (inc declared-run-count))))
+      [{:type :incomplete-run-pairing
+        :scenario-id scenario-id
+        :scenario-path scenario-path
+        :file file
+        :message "scenario replay results do not cover the full declared run index range"}]
+
+      :else
+      [])))
+
+(defn- benchmark-consistency-check
+  [results {:keys [required-fields fingerprint-fn violation-type mismatch-message require-run-pairing?]}]
+  (let [missing-identity (missing-scenario-identity-violations results)
+        grouped-results (scenario-groups results)
+        missing-fields (->> results
+                            (mapcat (fn [result]
+                                      (keep (fn [field]
+                                              (when (nil? (get result field))
+                                                {:type :missing-required-field
+                                                 :field field
+                                                 :scenario-id (:scenario/id result)
+                                                 :scenario-path (:simulator/scenario-path result)
+                                                 :file (:file result)
+                                                 :message (str "scenario result missing required field " field)}))
+                                            required-fields)))
+                            vec)
+        run-pairing (if require-run-pairing?
+                      (->> grouped-results
+                           vals
+                           (mapcat run-pairing-violations)
+                           vec)
+                      [])
+        mismatches (->> (duplicate-scenario-groups results)
+                        (keep (fn [[scenario-key grouped-results]]
+                                (when-not (consistent-fingerprints? grouped-results fingerprint-fn)
+                                  {:type violation-type
+                                   :scenario-id (some :scenario/id grouped-results)
+                                   :scenario-path (some :simulator/scenario-path grouped-results)
+                                   :file (some :file grouped-results)
+                                   :message (mismatch-message scenario-key)})))
+                        vec)
+        violations (vec (concat missing-identity missing-fields run-pairing mismatches))]
+    {:holds? (empty? violations)
+     :violations violations}))
 
 (def evaluator-registry
   {:evidence-root-present
@@ -126,6 +276,42 @@
                               :outcome (:outcome r)
                               :message (str "scenario " (:scenario/id r) " outcome is " (:outcome r))})
                            failures)}))}
+
+   :claim/replay-identical-results
+   {:scope :benchmark
+    :check (fn [ctx]
+             (benchmark-consistency-check
+              (:benchmark/results ctx)
+              {:required-fields [:outcome]
+               :require-run-pairing? true
+               :fingerprint-fn result-fingerprint
+               :violation-type :replay-results-mismatch
+               :mismatch-message (fn [scenario-key]
+                                   (str "scenario " scenario-key " produced non-identical replay results"))}))}
+
+   :claim/hash-consistency-across-runs
+   {:scope :benchmark
+    :check (fn [ctx]
+             (benchmark-consistency-check
+              (:benchmark/results ctx)
+              {:required-fields [:scenario/evidence-root]
+               :require-run-pairing? true
+               :fingerprint-fn :scenario/evidence-root
+               :violation-type :evidence-root-mismatch
+               :mismatch-message (fn [scenario-key]
+                                   (str "scenario " scenario-key " produced non-identical evidence roots"))}))}
+
+   :claim/no-nondeterminism
+   {:scope :benchmark
+    :check (fn [ctx]
+             (benchmark-consistency-check
+              (:benchmark/results ctx)
+              {:required-fields [:outcome :scenario/evidence-root]
+               :require-run-pairing? true
+               :fingerprint-fn nondeterminism-fingerprint
+               :violation-type :nondeterministic-replay
+               :mismatch-message (fn [scenario-key]
+                                   (str "scenario " scenario-key " exhibited nondeterministic replay artifacts"))}))}
 
    ;; ── Level 2: Sew protocol claims (invariant-backed) ─────────────────────────
    ;; Each maps a Sew semantic claim to one or more post-hoc invariants
@@ -228,18 +414,17 @@
              (check-invariants ctx [:slash-distribution-consistent :resolver/balances-conserved]))}})
 
 (def ^:private scoring-rule-paths
-  {:scoring/robustness-dimensions-v0 "benchmarks/scoring/robustness-dimensions-v0.edn"
-   :scoring/binary-claims-v1 "benchmarks/scoring/binary-claims-v1.edn"
-   :scoring/severity-weighted-robustness-v1 "benchmarks/scoring/severity-weighted-robustness-v1.edn"
-   :scoring/severity-weighted-v1 "benchmarks/scoring/severity-weighted-robustness-v1.edn"
-   :scoring/shortfall-allocation-v0 "benchmarks/scoring/shortfall-allocation-v0.edn"})
+  {:scoring/robustness-dimensions-v0 "resource:benchmarks/scoring/robustness-dimensions-v0.edn"
+   :scoring/binary-claims-v1 "resource:benchmarks/scoring/binary-claims-v1.edn"
+   :scoring/severity-weighted-robustness-v1 "resource:benchmarks/scoring/severity-weighted-robustness-v1.edn"
+   :scoring/severity-weighted-v1 "resource:benchmarks/scoring/severity-weighted-robustness-v1.edn"
+   :scoring/shortfall-allocation-v0 "resource:benchmarks/scoring/shortfall-allocation-v0.edn"})
 
 (defn- load-scoring
   [scoring-id]
   (when-let [path (get scoring-rule-paths scoring-id)]
-    (let [f (io/file path)]
-      (when (.exists f)
-        (edn/read-string (slurp f))))))
+    (try (rp/edn-read path)
+         (catch Exception _ nil))))
 
 (defn- severity-claims
   [scoring]

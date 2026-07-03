@@ -105,9 +105,16 @@
                   :marginBottom "8px"}}
      "Protocol Robustness Benchmark"]
     (when report
-      [:div {:style {:color "#94a3b8" :fontSize "14px"}}
-       (str (:benchmark/id report))
-       " · " (or (:purpose report) "")])
+      [:div
+       [:div {:style {:color "#94a3b8" :fontSize "14px" :marginBottom "6px"}}
+        (str (:benchmark/id report))
+        " · " (or (:purpose report) "")]
+       [:div {:style {:color "#cbd5e1" :fontSize "13px"}}
+        "Domain: "
+        [:span {:style {:fontFamily "monospace"}}
+         (str (:benchmark/domain report))]
+        (when-let [desc (:benchmark/domain-description report)]
+          (str " — " desc))]])
     [:div {:style {:display "flex" :gap "16px" :marginTop "16px"
                    :flexWrap "wrap"}}
       (views/render-card
@@ -116,7 +123,7 @@
          :value (if report
                   (let [cls (get-in report [:scoring/classification :classification-label])
                         maturity (get-in report [:scoring/classification :claim-maturity :label])]
-                    (or cls (if (:all-pass? report) "Scenario replay passed" "Scenario replay failed")))
+                   (or cls (if (:all-pass? report) "Scenario replay passed" "Scenario replay failed")))
                  "Not run")
          :note (if report
                  (let [cls (get-in report [:scoring/classification :classification-label])
@@ -126,6 +133,13 @@
                         (when cls (str " — " cls))
                         (when maturity (str " (" maturity ")"))))
                  "Run `bb benchmark:run` to generate evidence")})
+     (when report
+       (views/render-card
+        {:label "Domain"
+         :rag :neutral
+         :value (name (:benchmark/domain report))
+         :note (or (:benchmark/domain-description report)
+                   "Benchmark taxonomy area")}))
      (when report
        (views/render-card
         {:label "Evidence hash"
@@ -142,6 +156,41 @@
  "This v0 benchmark checks selected robustness dimensions over representative"
  "scenarios. It is evidence-backed and reproducible, but it is not a full audit,"
  "formal verification result, or protocol safety certification.")
+
+;; ── Benchmark concepts ────────────────────────────────────────────────────────
+
+^{::clerk/visibility {:code :hide :result :show}}
+(when report
+  (clerk/html
+   [:div
+    [:h2 {:style heading-style} "Benchmark concepts"]
+    [:table {:style (merge table-style {:marginBottom "24px"})}
+     [:thead {:style table-header-row-style}
+      [:tr
+       [:th {:style table-header-cell-style} "Concept"]
+       [:th {:style table-header-cell-style} "Source"]
+       [:th {:style table-header-cell-style} "Framework concepts"]]]
+     [:tbody
+      (for [concept (:benchmark/concept-summary report)]
+        [:tr {:key (str (:concept/id concept))}
+         [:td {:style table-cell-style}
+          [:div {:style {:fontWeight 600}}
+           (or (:concept/title concept) (name (:concept/id concept)))]
+          [:div {:style {:fontSize "13px"
+                         :opacity "0.75"
+                         :fontFamily "monospace"
+                         :marginTop "4px"}}
+           (str (:concept/id concept))]]
+         [:td {:style table-cell-style}
+          (views/badge (name (:concept/source concept))
+                       (case (:concept/source concept)
+                         :benchmark-local pass-badge
+                         :global warn-badge
+                         fail-badge))]
+         [:td {:style cell-mono-style}
+          (if (seq (:concept/framework-concepts concept))
+            (str/join ", " (map name (:concept/framework-concepts concept)))
+            "—")]])]]]))
 
 ;; ── Dimension results ─────────────────────────────────────────────────────────
 

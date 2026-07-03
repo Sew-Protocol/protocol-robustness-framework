@@ -42,11 +42,10 @@
           mid (:module/id module)
           ms (market-state/get-market-state world mid token (time-ctx/block-ts world))
           apy (:apy ms 0.05)
-          seconds-per-year 31536000
           old-index (or (get-in world [:yield/indices mid token]) 1.0)
           new-index (if-let [fixed-index (:index ms)]
                       fixed-index
-                      (+ old-index (/ (* apy dt) seconds-per-year)))
+                      (+ old-index (/ (* apy dt) time-ctx/seconds-per-year)))
           world-after-index (assoc-in world [:yield/indices mid token] new-index)
           world' (reduce (fn [w [oid pos]]
                            (if (and (= (:module/id pos) mid)

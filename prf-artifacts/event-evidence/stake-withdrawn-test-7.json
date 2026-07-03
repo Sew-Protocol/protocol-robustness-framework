@@ -1,0 +1,37 @@
+{
+  "evidence\/schema-version": "event-evidence.v1",
+  "scenario\/id": "test",
+  "evidence\/chain-prev-hash": "6703726e2ceefdeed579ae42c898babcdecc098f2a1192318f76c85f3ed4037c",
+  "evidence\/importance": "core",
+  "run\/id": "test-run",
+  "world\/before-full-hash": "9744af1932f867e1b6c9919c139d20ba5bd56ce818569a2502f33b2fda2e6089",
+  "evidence\/context": {
+    "ctx\/scenario-id": "test",
+    "ctx\/run-id": "test-run",
+    "ctx\/event-index": 7,
+    "ctx\/event-type": "withdraw_stake",
+    "subject\/type": "resolver",
+    "subject\/id": "0xResolver",
+    "action\/type": "withdraw",
+    "evidence\/reason": "stake-withdrawn"
+  },
+  "post-state": {
+    "stake\/after": 9400
+  },
+  "evidence\/chain-self-hash": "6703726e2ceefdeed579ae42c898babcdecc098f2a1192318f76c85f3ed4037c",
+  "inputs": {
+    "stake\/resolver": "0xResolver",
+    "stake\/amount": 100
+  },
+  "world\/after-hash": "b10b29c76d46d167ac31903b7f7d3344444d59f1b38057739844e8068b9081dc",
+  "evidence\/type": "stake-withdrawn",
+  "evidence\/chain-seq": 9,
+  "calculation": null,
+  "pre-state": {
+    "stake\/before": 9500
+  },
+  "world\/before-hash": "bb43444fcdfac8c228b0617c3197a994ed68e539169fe45db10b89ba07775ecf",
+  "world\/after-full-hash": "a1ee9ffab82d45ebb6f378819b13e4e3d6c772ffa1b5ea38dd6889aeadc58cdc",
+  "evidence\/hash": "6703726e2ceefdeed579ae42c898babcdecc098f2a1192318f76c85f3ed4037c",
+  "event\/seq": 7
+}

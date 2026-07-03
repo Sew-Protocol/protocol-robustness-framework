@@ -127,20 +127,59 @@
 ;; ---------------------------------------------------------------------------
 
 (defn- make-reversal-slash-entry
-  [slash-id prev-resolver prev-stake slash-bps slash-amt workflow-id status now appeal-deadline reversal-prob]
-  {:resolver                          prev-resolver
-   :basis-amount                      prev-stake
-   :basis-kind                        :stake
-   :slash-bps                         slash-bps
-   :amount                            slash-amt
-   :workflow-id                       workflow-id
-   :reason                            :reversal
-   :status                            status
-   :proposed-at                       now
-   :appeal-deadline                   appeal-deadline
-   :appeal-bond-held                  0
-   :contest-deadline                  0
-   :reversal-detection-probability    reversal-prob})
+  [slash-id prev-resolver prev-stake slash-bps slash-amt workflow-id status now appeal-deadline reversal-prob
+   & {:keys [authorization-provenance]}]
+  (let [entry {:resolver                       prev-resolver
+               :basis-amount                   prev-stake
+               :basis-kind                     :stake
+               :slash-bps                      slash-bps
+               :amount                         slash-amt
+               :workflow-id                    workflow-id
+               :reason                         :reversal
+               :status                         status
+               :proposed-at                    now
+               :appeal-deadline                appeal-deadline
+               :appeal-bond-held               0
+               :contest-deadline               0
+               :reversal-detection-probability reversal-prob}]
+    (if authorization-provenance
+      (-> entry
+          (assoc :authorization/provenance authorization-provenance
+                 :authorization/last-provenance authorization-provenance
+                 :authorization/last-action "force-reversal-slash")
+          (update :authorization/history
+                  (fnil conj [])
+                  {:authorization/action "force-reversal-slash"
+                   :authorization/provenance authorization-provenance}))
+      entry)))
+
+(defn- append-authorization-provenance
+  [entry action authorization-provenance]
+  (if authorization-provenance
+    (-> entry
+        (cond-> (nil? (:authorization/provenance entry))
+          (assoc :authorization/provenance authorization-provenance))
+        (assoc :authorization/last-provenance authorization-provenance
+               :authorization/last-action action)
+        (update :authorization/history
+                (fnil conj [])
+                {:authorization/action action
+                 :authorization/provenance authorization-provenance}))
+    entry))
+
+(defn- append-execution-provenance
+  [entry action execution-provenance]
+  (if execution-provenance
+    (-> entry
+        (cond-> (nil? (:execution/provenance entry))
+          (assoc :execution/provenance execution-provenance))
+        (assoc :execution/last-provenance execution-provenance
+               :execution/last-action action)
+        (update :execution/history
+                (fnil conj [])
+                {:execution/action action
+                 :execution/provenance execution-provenance}))
+    entry))
 
 ;; ---------------------------------------------------------------------------
 ;; Guard logging helper — returns (t/fail kw) with :guard-context attached
@@ -238,7 +277,7 @@
 
    Short-circuit analogue of `handle-reversal-slashing` — same slash-entry
    schema, same `slash-resolver-stake` call, same invariants apply."
-  [world workflow-id & {:keys [slash-bps track]
+  [world workflow-id & {:keys [slash-bps track authorization-provenance]
                         :or   {track :pending}}]
   (let [slash-id (str workflow-id "-force-reversal-0")]
     (if (get-in world [:pending-fraud-slashes slash-id])
@@ -262,11 +301,13 @@
                 (assoc-in [:pending-fraud-slashes slash-id]
                           (make-reversal-slash-entry slash-id prev-resolver prev-stake bps
                                                      slash-amt workflow-id :executed
-                                                     now 0 reversal-prob)))
+                                                     now 0 reversal-prob
+                                                     :authorization-provenance authorization-provenance)))
             (assoc-in world [:pending-fraud-slashes slash-id]
                       (make-reversal-slash-entry slash-id prev-resolver prev-stake bps
                                                  slash-amt workflow-id :pending now
-                                                  (+ now appeal-window) reversal-prob))))))))
+                                                 (+ now appeal-window) reversal-prob
+                                                 :authorization-provenance authorization-provenance))))))))
 
 (defn- reverse-reversal-slash-on-vindication
   "When a higher-level resolution agrees with a lower-level decision that was
@@ -365,7 +406,8 @@
 
    Emits :fraud-slash-proposed evidence and stores the evidence hash on the
    pending entry for causal linking by execute-fraud-slash."
-  [world slash-id workflow-id resolver slash-amt appeal-window reversal-prob]
+  [world slash-id workflow-id resolver slash-amt appeal-window reversal-prob
+   & {:keys [authorization-provenance]}]
   (let [now (time-ctx/block-ts world)
         evidence-map (attr/with-attribution
                        {:subject/type :slash
@@ -387,17 +429,20 @@
         evidence-hash (:evidence/hash evidence-map)]
     (attr/log-with-attr :debug "handle-fraud-slashing" {:now now :appeal-window appeal-window})
     (assoc-in world [:pending-fraud-slashes slash-id]
-              {:resolver                      resolver
-               :amount                        slash-amt
-               :workflow-id                   workflow-id
-               :reason                        :fraud
-               :status                        :pending
-               :proposed-at                   now
-               :appeal-deadline               (+ now appeal-window)
-               :appeal-bond-held              0
-               :contest-deadline              0
-               :reversal-detection-probability reversal-prob
-               :proposal-evidence-hash        evidence-hash})))
+              (append-authorization-provenance
+               {:resolver                       resolver
+                :amount                         slash-amt
+                :workflow-id                    workflow-id
+                :reason                         :fraud
+                :status                         :pending
+                :proposed-at                    now
+                :appeal-deadline                (+ now appeal-window)
+                :appeal-bond-held               0
+                :contest-deadline               0
+                :reversal-detection-probability reversal-prob
+                :proposal-evidence-hash         evidence-hash}
+               "propose-fraud-slash"
+               authorization-provenance))))
 
 (defn- update-unavailability
   "Idempotent resolver unavailability accounting + circuit breaker trigger.
@@ -998,7 +1043,7 @@
    reversal slashes (e.g. \"0-reversal-0\" for the reversal at level 1 on workflow 0).
    Mirrors: ResolverSlashingModuleV1.executeSlash"
   ([world workflow-id] (execute-fraud-slash world workflow-id workflow-id))
-  ([world workflow-id slash-id]
+  ([world workflow-id slash-id & {:keys [execution-provenance]}]
    (let [slash-id (resolve-reversal-slash-id world slash-id workflow-id)
          pending (get-in world [:pending-fraud-slashes slash-id])]
      (cond
@@ -1029,11 +1074,15 @@
            (t/fail :slash-epoch-cap-exceeded)
 
            :else
-           (let [freeze-duration 259200
-                 block-time      (time-ctx/block-ts world)
+           (let [freeze-duration (* (get-in world [:params :freeze-duration-days] 3) 86400)
+                  block-time      (time-ctx/block-ts world)
                  freeze-until    (+ block-time freeze-duration)
                  wf-for-token    (or (:workflow-id pending) workflow-id)
                  slashing-result (-> world
+                                     (update-in [:pending-fraud-slashes slash-id]
+                                                append-execution-provenance
+                                                "execute-fraud-slash"
+                                                execution-provenance)
                                      (assoc-in [:pending-fraud-slashes slash-id :status] :executed)
                                      (reg/slash-resolver-stake resolver amount nil 0 wf-for-token))
                   world-slashed   (:world slashing-result)
@@ -1114,7 +1163,7 @@
    Preconditions: workflow exists, entered dispute/resolution path, resolver matches
    escrow dispute-resolver, positive amount, no other pending/appealed slash on workflow-id.
    Timelock length uses :appeal-window-duration from the escrow module snapshot."
-  [world workflow-id caller resolver-addr amount]
+  [world workflow-id caller resolver-addr amount & {:keys [authorization-provenance]}]
   (let [wf-id (t/normalize-workflow-id workflow-id)
         reject!
         (fn [error-kw & extra-ctx]
@@ -1180,7 +1229,8 @@
                     appeal-days       (get-in world [:params :appeal-window-days] 7)
                     gov-delay         (or (:appeal-window-duration snap) (* appeal-days 86400))
                     reversal-prob     (or (:reversal-detection-probability snap) 0.0)]
-                (t/ok (handle-fraud-slashing world wf-id wf-id resolver-addr amount gov-delay reversal-prob))))))))))
+                (t/ok (handle-fraud-slashing world wf-id wf-id resolver-addr amount gov-delay reversal-prob
+                                             :authorization-provenance authorization-provenance))))))))))
 
 (defn resolve-appeal
   "Governance (TIMELOCK) resolves a slashing appeal.
@@ -1195,7 +1245,7 @@
    version with explicit slash-id MUST be used."
   ([world workflow-id caller appeal-upheld?]
    (resolve-appeal world workflow-id caller appeal-upheld? workflow-id))
-   ([world _workflow-id caller appeal-upheld? slash-id]
+   ([world _workflow-id caller appeal-upheld? slash-id & {:keys [authorization-provenance]}]
     (let [slash-id (resolve-reversal-slash-id world slash-id _workflow-id)
           ctx (attr/make-context {:workflow-id _workflow-id :slash-id slash-id})
           pending (get-in world [:pending-fraud-slashes slash-id])]
@@ -1223,13 +1273,16 @@
               world-base  (-> world
                               (assoc-in [:pending-fraud-slashes slash-id :appeal-bond-held] 0)
                               (update :appeal-bond-custody dissoc slash-id))
-              ;; Determine actual slash-status for evidence, distinct from appeal outcome
+              ;; Determine actual slash-status for evidence, distinct from appeal outcome.
+              ;; For rejected appeals the status in the world is set to :pending
+              ;; (deferred execution via execute-fraud-slash), not (:status pending)
+              ;; which would still read :appealed from the pre-resolution state.
               actual-slash-status
               (fn [outcome]
                 (case outcome
                   :reversed :reversed
                   (:rejected :rejected-no-bond :executed)
-                  (:status pending)))
+                  :pending))
               emit-appeal-resolution!
               (fn [world' outcome]
                 (let [slash-status (actual-slash-status outcome)]
@@ -1264,6 +1317,11 @@
                            (-> (acct/sub-held bond-token bond-held)
                                (acct/record-claimable-v2 wf-id :bond/refund resolver bond-held))
                            :always
+                           (update-in [:pending-fraud-slashes slash-id]
+                                      append-authorization-provenance
+                                      "resolve-appeal"
+                                      authorization-provenance)
+                           :always
                            (assoc-in [:pending-fraud-slashes slash-id :status] :reversed))]
               (emit-decision-evidence!
                {:decision-id (str "resolve-appeal-" slash-id)
@@ -1276,22 +1334,15 @@
               (emit-appeal-resolution! world' :reversed))
 
             (pos? bond-held)
-            (let [amount        (:amount pending)
-                  slash-core    (-> world-base
-                                    (acct/sub-held bond-token bond-held)
-                                    (assoc-in [:pending-fraud-slashes slash-id :status] :executed)
-                                    (reg/slash-resolver-stake resolver amount nil 0 wf-id))
-                  actual-debited (or (:slashed-from-stake slash-core) amount)
-                  epoch-slashed (get-in world [:resolver-epoch-slashed resolver :amount] 0)
-                  total-epoch   (+ epoch-slashed actual-debited)
-                  world'        (-> (:world slash-core)
-                                    (update-in [:appeal-bond-distributions-by-token bond-token] (fnil + 0) bond-held)
-                                    (update :appeal-bonds-forfeited-insurance (fnil + 0) bond-held)
-                                    (assoc-in [:resolver-frozen-until resolver]
-                                              (+ (time-ctx/block-ts world) 259200))
-                                    (assoc-in [:resolver-epoch-slashed resolver :amount] total-epoch)
-                                    (update-unavailability resolver true)
-                                    (cleanup-orphaned-slashes wf-id))]
+            (let [world' (-> world-base
+                             (acct/sub-held bond-token bond-held)
+                             (update-in [:pending-fraud-slashes slash-id]
+                                        append-authorization-provenance
+                                        "resolve-appeal"
+                                        authorization-provenance)
+                             (assoc-in [:pending-fraud-slashes slash-id :status] :pending)
+                             (update-in [:appeal-bond-distributions-by-token bond-token] (fnil + 0) bond-held)
+                             (update :appeal-bonds-forfeited-insurance (fnil + 0) bond-held))]
               (emit-decision-evidence!
                {:decision-id (str "resolve-appeal-" slash-id)
                 :step (time-ctx/block-ts world)
@@ -1304,19 +1355,12 @@
               (emit-appeal-resolution! world' :rejected))
 
             :else
-            (let [amount        (:amount pending)
-                  slash-result  (-> world-base
-                                    (assoc-in [:pending-fraud-slashes slash-id :status] :executed)
-                                    (reg/slash-resolver-stake resolver amount nil 0 wf-id))
-                  actual-debited (or (:slashed-from-stake slash-result) amount)
-                  epoch-slashed (get-in world [:resolver-epoch-slashed resolver :amount] 0)
-                  total-epoch   (+ epoch-slashed actual-debited)
-                  world'        (-> (:world slash-result)
-                                    (assoc-in [:resolver-frozen-until resolver]
-                                              (+ (time-ctx/block-ts world) 259200))
-                                    (assoc-in [:resolver-epoch-slashed resolver :amount] total-epoch)
-                                    (update-unavailability resolver true)
-                                    (cleanup-orphaned-slashes wf-id))]
+            (let [world' (-> world-base
+                             (update-in [:pending-fraud-slashes slash-id]
+                                        append-authorization-provenance
+                                        "resolve-appeal"
+                                        authorization-provenance)
+                             (assoc-in [:pending-fraud-slashes slash-id :status] :pending))]
               (emit-decision-evidence!
                {:decision-id (str "resolve-appeal-" slash-id)
                 :step (time-ctx/block-ts world)

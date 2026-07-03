@@ -1,0 +1,221 @@
+(ns resolver-sim.benchmark.game-theory-validation
+  "Game-theoretic validation orchestration.
+   Runs embedded equilibrium and cancellation-dominance fixture suites,
+   extracts theory/equilibrium results from each scenario, and produces
+   structured summary output.
+
+   Reuses existing pure validators from:
+     - resolver-sim.scenario.equilibrium
+     - resolver-sim.protocols.sew.equilibrium
+     - resolver-sim.sim.fixtures (run-suite, with resource: path support)"
+
+  (:require [clojure.java.io :as io]
+            [clojure.data.json :as json]
+            [resolver-sim.io.resource-path :as rp]
+            [resolver-sim.sim.fixtures :as fixtures]))
+
+;; ── Available suite definitions ─────────────────────────────────────────────
+
+(def equilibrium-suites
+  "Registered equilibrium fixture suites embedded in the JAR.
+   Suites are discovered via explicit list — no directory scan inside JAR."
+  [{:suite-key :suites/equilibrium-validation
+    :title "Trace-end mechanism-property and equilibrium-concept validation"
+    :description "12 traces covering budget-balance, dominant-strategy, incentive-compatibility, Nash, SPE, and collusion-resistance"}
+   {:suite-key :suites/cancellation-equilibrium-validation
+    :title "Cancellation equilibrium validation"
+    :description "9 traces covering mutual cancel, timeout auto-cancel, status leaks, and cancellation-time scenarios"}])
+
+;; ── Equilibrium check catalog ───────────────────────────────────────────────
+
+(def mechanism-properties
+  "Available mechanism-property validators across generic and Sew-specific.
+   These are merged from resolver-sim.scenario.equilibrium/mechanism-validators
+   and resolver-sim.protocols.sew.equilibrium/mechanism-property-validators."
+  [{:id :budget-balance
+    :source :generic
+    :title "Budget balance"
+    :summary "Total funds in = total funds out + protocol fees. No value creation or destruction."}
+   {:id :incentive-compatibility
+    :source :generic
+    :title "Incentive compatibility"
+    :summary "No actor obtains higher realised payoff through adversarial action than through honest baseline."}
+   {:id :sybil-resistance
+    :source :generic
+    :title "Sybil resistance"
+    :summary "An actor controlling multiple identities cannot obtain higher net payoff than through a single identity."}
+   {:id :individual-rationality
+    :source :sew
+    :title "Individual rationality"
+    :summary "No required honest participant has a negative net payoff."}
+   {:id :collusion-resistance
+    :source :sew
+    :title "Collusion resistance"
+    :summary "Labelled coalition does not profit relative to non-collusive baseline."}
+   {:id :stake-flow-conservation
+    :source :sew
+    :title "Stake flow conservation"
+    :summary "Resolver stakes flow correctly through lifecycle: register, freeze, slash, release."}
+   {:id :budget-balance-detailed
+    :source :sew
+    :title "Budget balance (Sew-specific)"
+    :summary "Sew-specific budget-balance check via the payout ledger."}
+   {:id :force-refund-path-integrity
+    :source :sew
+    :title "Force refund / reversal path integrity"
+    :summary "Guard-enforced refund paths exist and function correctly under resolution bypass."}
+   {:id :pending-lifecycle-integrity
+    :source :sew
+    :title "Pending lifecycle integrity"
+    :summary "Pending settlement lifecycle guards prevent double-finalization and stale-state claims."}])
+
+(def equilibrium-concepts
+  "Available equilibrium-concept validators across generic and Sew-specific."
+  [{:id :dominant-strategy-equilibrium
+    :source :generic
+    :title "Dominant strategy equilibrium"
+    :summary "Every player has a single strategy that is optimal regardless of opponents' choices."}
+   {:id :nash-equilibrium
+    :source :generic
+    :title "Nash equilibrium"
+    :summary "No player can improve their payoff by unilaterally deviating from their strategy."}
+   {:id :subgame-perfect-equilibrium
+    :source :sew
+    :title "Subgame perfect equilibrium (SPE)"
+    :summary "Backward-induction SPE: no player has an ex-post profitable deviation at any subgame."}
+   {:id :bounded-public-state-epsilon-spe
+    :source :sew
+    :title "Bounded public-state epsilon-SPE"
+    :summary "Epsilon-SPE under bounded rationality: deviations must exceed epsilon threshold to count."}
+   {:id :bounded-backward-induction-spe
+    :source :sew
+    :title "Bounded backward-induction SPE"
+    :summary "Backward induction with bounded lookahead depth and epsilon tolerance."}
+   {:id :resolver-reputation-spe
+    :source :sew
+    :title "Resolver reputation SPE"
+    :summary "SPE incorporating resolver reputation penalties that deter strategic slashing."}
+   {:id :resolver-reputation-profile-matrix
+    :source :sew
+    :title "Resolver reputation profile matrix"
+    :summary "Full profile-matrix analysis: payoff matrix across strategy profiles with reputation penalties."}
+   {:id :cancellation-dominance
+    :source :generic
+    :title "Cancellation dominance"
+    :summary "Mutual cancel strictly dominates unilateral default for honest participants."}])
+
+;; ── Orchestration ───────────────────────────────────────────────────────────
+
+(defn- equilibrium-check-summary
+  "Count equilibrium/mechanism results by status.
+   Results come from the :theory key in each scenario's fixture result."
+  [results]
+  (let [all (mapcat (fn [r]
+                      (let [theory (:theory r)]
+                        (concat
+                         (vals (:mechanism-results theory))
+                         (vals (:equilibrium-results theory)))))
+                    results)]
+    {:total (count all)
+     :passed (count (filter #(= :pass (:status %)) all))
+     :failed (count (filter #(= :fail (:status %)) all))
+     :inconclusive (count (filter #(= :inconclusive (:status %)) all))
+     :not-applicable (count (filter #(= :not-applicable (:status %)) all))}))
+
+(defn run-equilibrium-validation
+  "Run equilibrium fixture suites and return structured results.
+
+   opts:
+     :suite    — suite keyword or nil (default: run both equilibrium suites)
+     :out-dir  — output directory (default ./prf-out/game-theory)
+     :format   — :edn, :json, or :both (default :both)
+
+   Returns {:exit-code int :summary map :output-files [str] :checks-skipped [...]}."
+  [& {:keys [suite out-dir format]
+      :or {out-dir "./prf-out/game-theory"
+           format :both}}]
+  (let [suites-to-run (if suite
+                        (filter #(= (:suite-key %) suite) equilibrium-suites)
+                        equilibrium-suites)
+        suite-keys (mapv :suite-key suites-to-run)
+        run-id (str "gt-" (java.time.Instant/now))
+        effective-out-dir (str out-dir "/" run-id)
+        _ (io/make-parents (io/file effective-out-dir "placeholder"))
+        results (mapv (fn [sk]
+                        (try
+                          (let [suite-result (fixtures/run-suite sk nil nil {:silent? true})]
+                            (assoc suite-result :suite-key sk))
+                          (catch Exception e
+                            {:suite-key sk :error (.getMessage e) :ok? false :results []})))
+                      suite-keys)
+        all-ok? (every? :ok? results)
+        scenario-results (mapcat :results results)
+        eq-summary (equilibrium-check-summary scenario-results)
+        overall-pass? (and all-ok? (zero? (:failed eq-summary)))
+        exit-code (if overall-pass? 0 1)
+        summary {:valid? overall-pass?
+                 :exit-code exit-code
+                 :run-id run-id
+                 :suites-executed (count suite-keys)
+                 :suites-passed (count (filter :ok? results))
+                 :scenario-count (count scenario-results)
+                 :equilibrium-check-summary eq-summary
+                 :results-by-suite (mapv (fn [r]
+                                           (let [sres (remove nil? (map :theory (:results r)))]
+                                             {:suite-key (:suite-key r)
+                                              :status (if (:ok? r) :pass :fail)
+                                              :error (:error r)
+                                              :scenario-count (count (:results r))
+                                              :equilibrium-summary
+                                              {:mechanism (count (mapcat :mechanism-results sres))
+                                               :equilibrium (count (mapcat :equilibrium-results sres))}}))
+                                         results)
+                 :all-checks (count (remove nil? (mapcat (fn [r]
+                                                           (let [t (:theory r)]
+                                                             (when t
+                                                               (concat
+                                                                (keys (:mechanism-results t))
+                                                                (keys (:equilibrium-results t))))))
+                                                         scenario-results)))}
+        edn-path (str effective-out-dir "/game-theory-validation-summary.edn")
+        json-path (str effective-out-dir "/game-theory-validation-summary.json")
+        manifest-path (str effective-out-dir "/resolved-game-theory-validation-manifest.edn")
+        manifest {:manifest/version "game-theory-validation.v1"
+                  :manifest/at (str (java.time.Instant/now))
+                  :suites (mapv (fn [s]
+                                  {:suite-key (:suite-key s)
+                                   :resource-path (str "resource:data/fixtures/suites/"
+                                                       (name (:suite-key s)) ".edn")
+                                   :scenario-count (count (:results s))})
+                                results)}]
+    (spit edn-path (pr-str summary))
+    (spit json-path (json/write-str summary {:key-fn name}))
+    (spit manifest-path (pr-str manifest))
+    {:exit-code exit-code
+     :summary summary
+     :results results
+     :output-files [edn-path json-path manifest-path]}))
+
+(defn list-game-theory-checks
+  "Return structured list of available mechanism properties and equilibrium concepts."
+  []
+  {:mechanism-properties (mapv (fn [mp]
+                                 (assoc mp :type :mechanism-property))
+                               mechanism-properties)
+   :equilibrium-concepts (mapv (fn [ec]
+                                 (assoc ec :type :equilibrium-concept))
+                               equilibrium-concepts)})
+
+(defn explain-game-theory
+  "Return human-readable sections explaining what equilibrium validation covers."
+  []
+  [{:title "What equilibrium validation covers"
+    :body "Equilibrium validation checks whether realised terminal trace outcomes are consistent with claimed economic properties. Each check is a trace-consistency test: a single replay cannot prove an equilibrium exists (that requires comparing deviations across many traces), but it can falsify one.\n\nAll results carry a :basis field declaring the strength of the check."}
+   {:title "Mechanism properties"
+    :body "Properties of the protocol's incentive structure checked against terminal world state and accumulated metrics:\n\n- Budget balance — total funds in = total funds out + fees\n- Incentive compatibility — no actor profits from adversarial action\n- Individual rationality — honest participants don't end with negative payoff\n- Collusion resistance — coalitions don't profit relative to baseline\n- Sybil resistance — multiple identities don't increase payoff\n- Stake flow conservation — resolver stakes flow correctly through lifecycle"}
+   {:title "Equilibrium concepts"
+    :body "Game-theoretic solution concepts checked against the trace:\n\n- Nash equilibrium — no unilateral profitable deviation\n- Dominant strategy — every player has a strategy optimal against all opponents\n- Subgame perfect equilibrium (SPE) — backward-induction: no ex-post profitable deviation at any subgame\n- Bounded epsilon-SPE — deviations must exceed epsilon threshold\n- Reputation SPE — resolver reputation penalties deter strategic slashing\n- Cancellation dominance — mutual cancel dominates unilateral default"}
+   {:title "Claim-strength taxonomy"
+    :body "Each result declares its evidential basis:\n\n- :single-trace-terminal-proxy — terminal world state only\n- :single-trace-metric-proxy — accumulated metrics from one trace\n- :absent-evidence — required fields missing → inconclusive\n- :not-applicable — property cannot apply in this context\n- :multi-trace-required — only meaningful across N traces\n- :multi-epoch-required — only meaningful across epochs"}
+   {:title "Severity"
+    :body ":hard — a :fail blocks the suite (same as scenario failure)\n:soft — a :fail is a warning; :inconclusive is always soft"}])

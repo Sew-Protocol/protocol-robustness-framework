@@ -1,0 +1,44 @@
+{
+  "evidence\/schema-version": "event-evidence.v1",
+  "scenario\/id": "test",
+  "evidence\/chain-prev-hash": "eb42e3d866b1855392981d3b7d66886ff23039388d7dbc999b3ac27047f1258c",
+  "evidence\/importance": "core",
+  "run\/id": "test-run",
+  "evidence\/context": {
+    "ctx\/scenario-id": "test",
+    "ctx\/run-id": "test-run",
+    "ctx\/event-index": 3,
+    "ctx\/event-type": "withdraw_escrow",
+    "subject\/type": "escrow",
+    "subject\/id": 0,
+    "action\/type": "withdraw",
+    "evidence\/reason": "escrow-withdrawn"
+  },
+  "post-state": {
+    "withdraw\/after": {
+      "claimable": 0,
+      "total-withdrawn": 3000
+    }
+  },
+  "evidence\/chain-self-hash": "eb42e3d866b1855392981d3b7d66886ff23039388d7dbc999b3ac27047f1258c",
+  "inputs": {
+    "withdraw\/workflow-id": 0,
+    "withdraw\/recipient": "0xBob",
+    "withdraw\/token": "0xUSDC",
+    "withdraw\/amount": 2985
+  },
+  "world\/after-hash": "4d8248b7039a94f2e1a1234a1dbbb94515544c096d232cd4ce6e10b3f40459cd",
+  "evidence\/type": "escrow-withdrawn",
+  "evidence\/chain-seq": 4,
+  "calculation": null,
+  "pre-state": {
+    "withdraw\/before": {
+      "claimable": 2985,
+      "workflow-id": 0,
+      "recipient": "0xBob"
+    }
+  },
+  "world\/before-hash": "adb28790bc8f451e72a8caed027645fdabc9163d25350149abd9e1dedf47fc39",
+  "evidence\/hash": "eb42e3d866b1855392981d3b7d66886ff23039388d7dbc999b3ac27047f1258c",
+  "event\/seq": 3
+}

@@ -1,6 +1,6 @@
 {:benchmark/id              :benchmark/sew-yield-shortfall-v1
   :benchmark/version         1
-  :benchmark/domain          :domain/yield-shortfall
+  :benchmark/domain          :domain/protocol-value-conservation
   :benchmark/protocol        :protocol/sew
    :benchmark/scenario-suite  :suite/sew-yield-safety-v1
   :benchmark/scenario-suite-description
@@ -17,13 +17,13 @@
    under liquidity constraints, and prevention of value leakage beyond
    declared shortfall bounds. This is an independent benchmark (does not
    share a suite with the other Sew benchmarks)."
-   :benchmark/concepts        [:ecommerce/purchase
+   :benchmark/concepts        [:robustness/protocol-value-conservation
+                              :ecommerce/purchase
                               :event/deposit
                               :yield/yield-bearing
                               :consensus/authority
                               :consensus/evidence
                               :consensus/legitimacy
-                              :concept/conservation
                               :concept/confidence
                               :concept/configuration]
   :benchmark/purpose
@@ -42,4 +42,3 @@
                               :claim/role :supporting
                               :claim/rationale "No value should leak beyond the declared shortfall bounds."
                               :claim/failure-meaning "Value leaked beyond the shortfall boundary."}]}
-

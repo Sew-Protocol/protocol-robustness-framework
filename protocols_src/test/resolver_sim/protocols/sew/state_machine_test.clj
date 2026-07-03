@@ -223,6 +223,41 @@
   (let [w (assoc-in (base-world 2000) [:escrow-transfers 0 :auto-cancel-time] 1500)]
     (is (true? (sm/auto-cancel-due? w 0)))))
 
+;; ---------------------------------------------------------------------------
+;; auto-cancel-due-on-disputed?
+;; ---------------------------------------------------------------------------
+
+(deftest auto-cancel-due-on-disputed-true
+  (let [w (-> (disputed-world 2000)
+              (assoc-in [:escrow-transfers 0 :auto-cancel-time] 1500))]
+    (is (true? (sm/auto-cancel-due-on-disputed? w 0)))))
+
+(deftest auto-cancel-due-on-disputed-false-not-disputed
+  (let [w (-> (base-world 2000)
+              (assoc-in [:escrow-transfers 0 :auto-cancel-time] 1500))]
+    (is (false? (sm/auto-cancel-due-on-disputed? w 0)))))
+
+(deftest auto-cancel-due-on-disputed-false-time-not-passed
+  (let [w (-> (disputed-world 1000)
+              (assoc-in [:escrow-transfers 0 :auto-cancel-time] 1500))]
+    (is (false? (sm/auto-cancel-due-on-disputed? w 0)))))
+
+(deftest auto-cancel-due-on-disputed-false-has-pending-settlement
+  (let [pending {:exists true :is-release true :appeal-deadline 9999 :resolution-hash nil}
+        w       (-> (disputed-world 2000)
+                    (assoc-in [:escrow-transfers 0 :auto-cancel-time] 1500)
+                    (assoc-in [:pending-settlements 0] pending))]
+    (is (false? (sm/auto-cancel-due-on-disputed? w 0)))))
+
+(deftest auto-cancel-due-on-disputed-false-zero-time
+  (let [w (-> (disputed-world 2000)
+              (assoc-in [:escrow-transfers 0 :auto-cancel-time] 0))]
+    (is (false? (sm/auto-cancel-due-on-disputed? w 0)))))
+
+;; ---------------------------------------------------------------------------
+;; dispute-timeout-exceeded?
+;; ---------------------------------------------------------------------------
+
 (deftest dispute-timeout-exceeded-true
   (let [snap {:max-dispute-duration 3600 :appeal-window-duration 0}
         ;; dispute raised at t=1000; now t=5000 > 1000+3600

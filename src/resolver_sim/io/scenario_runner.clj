@@ -804,7 +804,7 @@
         (chain/with-fresh-registry
           (chain/with-fresh-chain-cursor
             (binding [ts/*tsa-url* (or tsa-url ts/*tsa-url*)
-                      evcfg/*artifact-dir* (str "results/runs/" run-id)]
+                      evcfg/*artifact-dir* (str "./prf-runs/" run-id)]
               (let [exec-spec (build-execution-node-spec
                                dispatch opts runner-selection
                                canonical? non-canonical-reason protocol-id

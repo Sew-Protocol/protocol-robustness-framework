@@ -17,6 +17,11 @@
   (when (file-exists? path)
     (edn/read-string (slurp path))))
 
+(defn path-str [path]
+  (if (instance? java.io.File path)
+    (.getPath ^java.io.File path)
+    (str path)))
+
 (defn scoring-path-for [scoring-id]
   (let [filename (case scoring-id
                    :scoring/robustness-dimensions-v0 "robustness-dimensions-v0.edn"
@@ -293,7 +298,7 @@
                                         :when data
                                         :let [concept (first (filter #(= (:concept/id %) cid) (:concepts data)))]
                                         :when concept]
-                                    (.getPath path)))
+                                    (path-str path)))
                 shadows-global? (some (fn [c]
                                         (and (= (:concept/id c) cid)
                                              (:concept/shadows-global? c)))
@@ -304,36 +309,36 @@
                   (println "    FAIL concept" cid "shadows global concept — add :concept/shadows-global? true to" local-file))))))
 
       (doseq [path concept-files]
-        (validate-file-exists! errors (.getPath path) "concept file")
+        (validate-file-exists! errors (path-str path) "concept file")
         (let [[data parse-err] (parse-edn path)]
           (if parse-err
-            (do (swap! errors conj (str (.getPath path) ": " parse-err))
-                (println "    FAIL" (.getPath path) "-" parse-err))
+            (do (swap! errors conj (str (path-str path) ": " parse-err))
+                (println "    FAIL" (path-str path) "-" parse-err))
             (let [concepts (:concepts data)]
               (when-not (:concepts/version data)
-                (swap! errors conj (str (.getPath path) " missing :concepts/version"))
-                (println "    FAIL" (.getPath path) "missing :concepts/version"))
+                (swap! errors conj (str (path-str path) " missing :concepts/version"))
+                (println "    FAIL" (path-str path) "missing :concepts/version"))
               (doseq [c concepts]
                 (let [id (:concept/id c)]
                   (doseq [k [:concept/title :concept/summary :concept/stakeholder-language
                              :concept/why-it-matters]]
                     (when-not (get c k)
-                      (swap! errors conj (str (.getPath path) " concept " id " missing " k))
-                      (println "    FAIL" (.getPath path) "concept" id "missing" k)))
+                      (swap! errors conj (str (path-str path) " concept " id " missing " k))
+                      (println "    FAIL" (path-str path) "concept" id "missing" k)))
                   (let [maps-to (:concept/maps-to c)]
                     (when-not (map? maps-to)
-                      (swap! errors conj (str (.getPath path) " concept " id " :concept/maps-to must be a map"))
-                      (println "    FAIL" (.getPath path) "concept" id ":concept/maps-to must be a map"))
+                      (swap! errors conj (str (path-str path) " concept " id " :concept/maps-to must be a map"))
+                      (println "    FAIL" (path-str path) "concept" id ":concept/maps-to must be a map"))
                     (when (map? maps-to)
                       (let [scenarios (:scenarios maps-to)]
                         (when-not (vector? scenarios)
-                          (swap! errors conj (str (.getPath path) " concept " id " :maps-to :scenarios must be a vector"))
-                          (println "    FAIL" (.getPath path) "concept" id ":maps-to :scenarios must be a vector"))
+                          (swap! errors conj (str (path-str path) " concept " id " :maps-to :scenarios must be a vector"))
+                          (println "    FAIL" (path-str path) "concept" id ":maps-to :scenarios must be a vector"))
                         (doseq [[k expected-type] [[:claims vector?] [:invariants vector?] [:evidence vector?]]]
                           (let [v (get maps-to k)]
                             (when (and v (not (expected-type v)))
-                              (swap! errors conj (str (.getPath path) " concept " id " :maps-to " k " must be a vector"))
-                              (println "    FAIL" (.getPath path) "concept" id ":maps-to" k "must be a vector"))))))))))))
+                              (swap! errors conj (str (path-str path) " concept " id " :maps-to " k " must be a vector"))
+                              (println "    FAIL" (path-str path) "concept" id ":maps-to" k "must be a vector"))))))))))))
       )
 
        (println "  Checking scoring definitions...")

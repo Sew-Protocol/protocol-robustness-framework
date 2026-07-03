@@ -162,8 +162,21 @@
    :extra-deps {dev.weavejester/cljfmt {:mvn/version "0.16.4"}}
    :main-opts ["-m" "cljfmt.main" "fix" "src" "test"]}
 
-  :run
-  {:main-opts ["-m" "resolver-sim.core"]}
+  :fmt/check
+  {:mvn/repos {"clojars" {:url "https://repo.clojars.org/"}}
+   :extra-deps {dev.weavejester/cljfmt {:mvn/version "0.16.4"}}
+   :main-opts ["-m" "cljfmt.main" "check" "src" "test"]}
+
+   :run
+   {:main-opts ["-m" "resolver-sim.core"]}
+
+   :cli
+   {:main-opts ["-m" "resolver-sim.cli.main"]
+    :extra-paths ["resources"]}
+
+   :cli/sew
+   {:main-opts ["-m" "resolver-sim.cli.main"]
+    :extra-paths ["protocols_src" "protocols_src/test" "resources"]}
 
   :diff-traces
   {:main-opts ["-m" "resolver-sim.io.diff-runner"]}

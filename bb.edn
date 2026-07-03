@@ -525,6 +525,9 @@ cli-args (cond-> ["-M:run:with-sew" "--invariants" "--scenario" scenario]
   fmt {:doc "Format code with cljfmt"
        :task (shell "clojure -M:fmt")}
 
+  fmt:check {:doc "Check code formatting with cljfmt without rewriting files"
+             :task (shell "clojure -M:fmt/check")}
+
   validate {:doc "Structural validation pipeline: lint + notebook namespace check"
             :task (let [ok? (fn [ok?-label ok?-f]
                               (print (str "▶ " ok?-label "... "))
@@ -552,6 +555,10 @@ cli-args (cond-> ["-M:run:with-sew" "--invariants" "--scenario" scenario]
   scenario:run:family
   {:doc "DEPRECATED — use `run:scenario:search`."
    :task (apply shell "bb" "run:scenario:search" *command-line-args*)}
+
+  scenarios:validate
+  {:doc "Compatibility alias for `scenario-registry:validate`."
+   :task (run 'scenario-registry:validate)}
 
   validation:artifact-registry
   {:doc "Validate an artifact registry (test-artifacts.json) and write a
@@ -850,6 +857,43 @@ cli-args (cond-> ["-M:run:with-sew" "--invariants" "--scenario" scenario]
    {:doc "Validate benchmark pack: parsing, required fields, scenario/concept/scoring references."
     :task (clojure "-M" "scripts/benchmarks_validate.clj")}
 
+   benchmark:validate
+   {:doc "Compatibility alias for `benchmarks:validate`."
+    :task (run 'benchmarks:validate)}
+
+   artifact-registry:validate
+   {:doc "Compatibility alias for `validation:artifact-registry`."
+    :task (apply shell "bb" "validation:artifact-registry" *command-line-args*)}
+
+   replay:determinism
+   {:doc "Run the minimal-runner self-test for deterministic replay. Defaults to --suite suite/reference-validation-v1.
+          Accepts --suite/--scenario/--fixtures. Ignores --runs for now because the current self-test is fixed at two passes."
+    :task (let [args (vec *command-line-args*)
+                args-no-runs (loop [remaining args
+                                    acc []]
+                               (if-let [arg (first remaining)]
+                                 (if (= "--runs" arg)
+                                   (recur (nnext remaining) acc)
+                                   (recur (next remaining) (conj acc arg)))
+                                 acc))
+                has-suite-or-scenario? (boolean (some #{"--suite" "--scenario" "--fixture-suite"} args-no-runs))
+                final-args (if has-suite-or-scenario?
+                             args-no-runs
+                             (into ["--suite" "suite/reference-validation-v1"] args-no-runs))]
+            (apply clojure "-M:with-sew" "-m" "resolver-sim.minimal-runner" "--self-test" final-args))}
+
+   backstop
+   {:doc "Run the default registered review gate (delegates to CLI)."
+    :task (clojure "-M:cli" "backstop")}
+
+   backstop:fast
+   {:doc "Run the fast registered edit-loop review gate (delegates to CLI)."
+    :task (clojure "-M:cli" "backstop" "--fast")}
+
+   commands:validate
+   {:doc "Validate the registered review-gate command surface (delegates to CLI)."
+    :task (clojure "-M:cli" "commands" "validate")}
+
    benchmark:report
    {:doc "Open the protocol robustness benchmark report in Clerk (requires running server)."
     :task (shell "bash" "-c" "xdg-open http://localhost:7777/notebooks/benchmark_protocol_robustness 2>/dev/null || open http://localhost:7777/notebooks/benchmark_protocol_robustness 2>/dev/null || echo 'Navigate to: http://localhost:7777/notebooks/benchmark_protocol_robustness'")}
@@ -1080,9 +1124,18 @@ Usage: bb forensic:mailbox:keygen --runner-id <id> --out <dir>"
          java -jar target/prf-runner-sew-0.1.0-uber.jar -m resolver-sim.minimal-runner --scenario <trace.json>"
    :task (clojure "-T:build" "uberjar" ":variant" "sew")}
 
+  build:benchmarks
+  {:doc "Build prf-runner-benchmarks uberjar"
+   :task (clojure "-T:build" "uberjar" ":variant" "benchmarks")}
+
+  build:cli
+  {:doc "Build prf.jar — unified CLI uberjar (same deps as sew + CLI commands).
+         java -jar target/prf.jar help"
+   :task (clojure "-T:build" "uberjar" ":variant" "cli")}
+
   build
-  {:doc "Build both uberjars (core + sew)."
-   :depends [build:core build:sew]}
+  {:doc "Build core, sew, and CLI uberjars."
+   :depends [build:core build:sew build:cli]}
 
   sign:core
   {:doc "GPG-sign the core uberjar for distribution.

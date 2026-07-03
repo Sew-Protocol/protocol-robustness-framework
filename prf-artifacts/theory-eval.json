@@ -1,0 +1,9 @@
+{
+  "claim-status": "evaluated",
+  "falsification-status": "not-falsified",
+  "evidence-completeness": "complete",
+  "grounded?": true,
+  "assumption-status": "not-declared",
+  "declared-assumptions": [],
+  "theory-eval-profile": "regression"
+}

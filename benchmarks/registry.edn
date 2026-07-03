@@ -4,8 +4,10 @@
  :domains
  [{:domain/id :domain/escrow-dispute-resolution
    :domain/description "Escrow release/cancel, dispute lifecycle, resolver behaviour"}
-  {:domain/id :domain/evidence-integrity
+ {:domain/id :domain/evidence-integrity
    :domain/description "Evidence chain integrity, attestation, proof verification"}
+  {:domain/id :domain/protocol-value-conservation
+   :domain/description "Protocol value accounting, allocation correctness, shortfall visibility, and liability classification across settlement, yield, bonds, and slashing"}
    {:domain/id :domain/yield-shortfall
     :domain/description "Yield provider shortfall, partial fill, liquidity disruption"}
    {:domain/id :domain/allocation-shortfall

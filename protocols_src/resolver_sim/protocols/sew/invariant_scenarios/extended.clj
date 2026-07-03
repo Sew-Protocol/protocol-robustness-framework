@@ -921,6 +921,7 @@
                      {:id "resolver" :address "0xresolver" :role "resolver"}
                      {:id "keeper"   :address "0xkeeper"  :role "keeper"}]
    :protocol-params appeal
+   :expected-errors [{:seq 2 :action "recipient_cancel" :error :transfer-not-pending}]
    :notes "After dispute raised, receiver attempts to cancel escrow. Tests authorization: can receiver override dispute?"
    :events
    [{:seq 0 :time 1000 :agent "buyer" :action "create_escrow"
@@ -945,6 +946,7 @@
                      {:id "resolver" :address "0xresolver" :role "resolver"}
                      {:id "keeper"   :address "0xkeeper"  :role "keeper"}]
    :protocol-params appeal
+   :expected-errors [{:seq 3 :action "sender_cancel" :error :transfer-not-pending}]
    :notes "Sender attempts to cancel during appeal window. Tests that cancel is blocked during appeal period."
    :events
    [{:seq 0 :time 1000 :agent "buyer" :action "create_escrow"

@@ -1,0 +1,37 @@
+{
+  "evidence\/schema-version": "event-evidence.v1",
+  "scenario\/id": "test",
+  "evidence\/chain-prev-hash": "8c9306de237114e850dcf465321e7cef4f2a72448ba35b64ed5ee9d396c09ade",
+  "evidence\/importance": "core",
+  "run\/id": "test-run",
+  "world\/before-full-hash": "7f3b14b48e47da6210979cbaa5ea34d546c1d7a52e815d1479bd938c7001f31d",
+  "evidence\/context": {
+    "ctx\/scenario-id": "test",
+    "ctx\/run-id": "test-run",
+    "ctx\/event-index": 2,
+    "ctx\/event-type": "auto_cancel_disputed",
+    "subject\/type": "resolver",
+    "subject\/id": "0xResolver",
+    "action\/type": "slash",
+    "evidence\/reason": "slashing"
+  },
+  "post-state": {
+    "resolver-stake": 0
+  },
+  "evidence\/chain-self-hash": "8c9306de237114e850dcf465321e7cef4f2a72448ba35b64ed5ee9d396c09ade",
+  "inputs": {
+    "requested-amount": 7960,
+    "actual-amount": 0
+  },
+  "world\/after-hash": "90d0abc69225e417090107aadebae7d0b5b01d4b687dddf749d78adb9d1324f8",
+  "evidence\/type": "slashing",
+  "evidence\/chain-seq": 4,
+  "calculation": null,
+  "pre-state": {
+    "resolver-stake": 0
+  },
+  "world\/before-hash": "90d0abc69225e417090107aadebae7d0b5b01d4b687dddf749d78adb9d1324f8",
+  "world\/after-full-hash": "dcdd2f8b0f8315b381dc084893eb35a46f4e914e1922b8e06921c600b7443118",
+  "evidence\/hash": "8c9306de237114e850dcf465321e7cef4f2a72448ba35b64ed5ee9d396c09ade",
+  "event\/seq": 2
+}

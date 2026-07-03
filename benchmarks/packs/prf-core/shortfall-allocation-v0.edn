@@ -1,6 +1,6 @@
 {:benchmark/id              :benchmark/prf-shortfall-allocation-v0
   :benchmark/version         0
-  :benchmark/domain          :domain/allocation-shortfall
+  :benchmark/domain          :domain/protocol-value-conservation
   :benchmark/protocol        :protocol/prf
   :benchmark/scenario-suite  :suite/sew-shortfall-allocation-v0
  :benchmark/scenario-suite-description
@@ -25,7 +25,8 @@
   shortfall with partial fill, negative yield cascade with deferred
   recovery, and resolver stake shortfall. Each scenario exercises
   shortfall detection, pro-rata allocation, and deferred claim recording."
- :benchmark/concepts        [:allocation/partial-fill
+ :benchmark/concepts        [:robustness/protocol-value-conservation
+                             :allocation/partial-fill
                              :allocation/shortfall
                              :allocation/pro-rata-fairness
                              :consensus/evidence

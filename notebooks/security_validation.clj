@@ -27,7 +27,36 @@
             [clojure.java.io :as io]
             [resolver-sim.notebook-support.common :as common]
             [resolver-sim.notebook-support.nav :as nav]
-            [resolver-sim.notebook-support.security :as sec]))
+            [resolver-sim.notebook-support.security :as sec]
+            [resolver-sim.io.scenario-fixture-sync :as sync]
+            [resolver-sim.protocols.sew.invariant-scenarios :as scenarios]))
+
+;; Hardcoded scenario display entries validated against canonical list at load time.
+(def ^:private adversarial-panel-entries
+  [["S08" "State machine attack gauntlet"]
+   ["S09" "Multi-escrow solvency"]
+   ["S10" "Double-finalize rejected"]
+   ["S18" "Kleros L0 resolution"]
+   ["S19" "Escalation rejected, L0 resolves"]
+   ["S20" "Max escalation guard"]
+   ["S26" "Forking strategist L1 reversal"]
+   ["S37" "Escalation abuse"]
+   ["S38" "Resolver cartel inactivity"]])
+
+(def ^:private yield-panel-display-ids
+  ["S68 Aave long-horizon 10y accrual"
+   "S69 Fixed long-horizon 10y quarterly"
+   "S73 Rounding drift, repeated small"
+   "S78 Aave partial liquidity release"
+   "S79 Aave partial liquidity dispute"
+   "S80 Governance disable post-create"
+   "S88 Resolver yield accrual"
+   "S82 Shortfall recovery cycle"])
+
+(when-not (every? (fn [[sid _]]
+                    (some #(str/starts-with? (first %) sid) scenarios/all-scenarios))
+                  adversarial-panel-entries)
+  (println "WARN: adversarial-panel-entries contains scenario IDs not in all-scenarios"))
 
 ;; ---------------------------------------------------------------------------
 ;; Notebook header
@@ -324,16 +353,7 @@
    [:h3 {:style {:color "#93c5fd" :font-size "13px" :margin "0 0 12px 0"}}
     "Adversarial Scenario Coverage"]
    [:div {:style {:display "grid" :grid-template-columns "repeat(3, 1fr)" :gap "8px"}}
-    (for [[scenario-id label]
-          [["S08" "State machine attack gauntlet"]
-           ["S09" "Multi-escrow solvency"]
-           ["S10" "Double-finalize rejected"]
-           ["S18" "Kleros L0 resolution"]
-           ["S19" "Escalation rejected, L0 resolves"]
-           ["S20" "Max escalation guard"]
-           ["S26" "Forking strategist L1 reversal"]
-           ["S37" "Escalation abuse"]
-           ["S38" "Resolver cartel inactivity"]]]
+     (for [[scenario-id label] adversarial-panel-entries]
       [:div {:key scenario-id
              :style {:background "#0d1117" :border "1px solid #1e293b" :padding "8px 10px"}}
        [:div {:style {:color "#7dd3fc" :font-family "JetBrains Mono, monospace"
@@ -428,14 +448,7 @@
     [:div
      [:div {:style {:color "#fbbf24" :font-size "11px" :font-weight "700" :margin-bottom "8px"}}
       "Yield-Specific Scenarios"]
-     (for [s ["S68 Aave long-horizon 10y accrual"
-              "S69 Fixed long-horizon 10y quarterly"
-              "S73 Rounding drift, repeated small"
-              "S78 Aave partial liquidity release"
-              "S79 Aave partial liquidity dispute"
-              "S80 Governance disable post-create"
-              "S88 Resolver yield accrual"
-              "S82 Shortfall recovery cycle"]]
+      (for [s yield-panel-display-ids]
        [:div {:key s :style {:color "#fde68a" :font-size "11px" :margin-bottom "3px"}}
         (str "> " s)])]))
 

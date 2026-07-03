@@ -1,0 +1,50 @@
+{
+  "evidence\/schema-version": "event-evidence.v1",
+  "scenario\/id": "test",
+  "evidence\/chain-prev-hash": "621154cf12081f718804f6325e886dc8783bc5c4adcf1c668085aec964dc6a11",
+  "evidence\/importance": "core",
+  "run\/id": "test-run",
+  "world\/before-full-hash": "310a3fd85d1fe7be4ebef13e5b3beca9b9234801ea5c9d0cb163528f579a40db",
+  "evidence\/context": {
+    "ctx\/scenario-id": "test",
+    "ctx\/run-id": "test-run",
+    "ctx\/event-index": 6,
+    "ctx\/event-type": "resolve_appeal",
+    "subject\/type": "slash",
+    "subject\/id": 0,
+    "action\/type": "resolve-appeal",
+    "evidence\/reason": "reversed"
+  },
+  "post-state": {
+    "appeal-resolution\/after": {
+      "appeal-status": "reversed",
+      "slash-status": "reversed",
+      "appeal-bond-held": 0
+    }
+  },
+  "evidence\/chain-self-hash": "621154cf12081f718804f6325e886dc8783bc5c4adcf1c668085aec964dc6a11",
+  "inputs": {
+    "appeal-resolution\/slash-id": 0,
+    "appeal-resolution\/workflow-id": 0,
+    "appeal-resolution\/resolver": "0xResolver",
+    "appeal-resolution\/outcome": "reversed",
+    "appeal-resolution\/slash-status": "reversed",
+    "appeal-resolution\/bond-forfeited?": false,
+    "appeal-resolution\/bond-amount": 70,
+    "appeal-resolution\/bond-token": "USDC"
+  },
+  "world\/after-hash": "0bdf52d7d1af35c60b7cd6fa0563167a55939aaf0d7d7456bb3766a0e10221a7",
+  "evidence\/type": "reversed",
+  "evidence\/chain-seq": 6,
+  "calculation": null,
+  "pre-state": {
+    "appeal-resolution\/before": {
+      "slash-status": "appealed",
+      "appeal-bond-held": 70
+    }
+  },
+  "world\/before-hash": "62b5e6a9cefc0cb231d0541b99708346166fa0bc9a09a5e06bcfdd60dbdf7673",
+  "world\/after-full-hash": "b437034f1e636510aa9d5bee608a6c047d2d08ffb249e53a4108e747e683e188",
+  "evidence\/hash": "621154cf12081f718804f6325e886dc8783bc5c4adcf1c668085aec964dc6a11",
+  "event\/seq": 6
+}

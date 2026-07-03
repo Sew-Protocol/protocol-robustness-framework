@@ -143,6 +143,7 @@
    ["S105 escalate-challenger-on-reversal"             reversal/s105]
    ["S106 reversal-track2-evidence-appeal"             reversal/s106]
    ["S107 reversal-track2-appeal-rejected-executes"    reversal/s107]
+   ["S43k dr3-kleros-reversal-slash"                    reversal/s43-kleros-reversal-slash]
    ["S66  cooldown-boundary-reorg"                      adversarial/s66]
    ["S67  reentrancy-callback"                          adversarial/s67]
    ["EXT-unilateral-cancel"                             cancellation-ext/s-extortion-unilateral-cancel]
@@ -153,7 +154,12 @@
     ["EXT-auto-cancel-time-boundary"                       cancellation-ext/s-auto-cancel-time-boundary]
      ["EXT-auto-cancel-time-orphaned-by-dispute"             cancellation-ext/s-auto-cancel-time-orphaned-by-dispute]
      ["EXT-same-timestamp-auto-cancel-vs-dispute"            cancellation-ext/s-same-timestamp-auto-cancel-vs-dispute]
-     ["EXT-same-timestamp-dispute-vs-auto-cancel"            cancellation-ext/s-same-timestamp-dispute-vs-auto-cancel]])
+      ["EXT-same-timestamp-dispute-vs-auto-cancel"            cancellation-ext/s-same-timestamp-dispute-vs-auto-cancel]
+      ["EXT-cancel-strategy-mutual-only"                      cancellation-ext/s-cancel-strategy-mutual-only]
+      ["EXT-cancel-strategy-can-cancel-dominates"             cancellation-ext/s-cancel-strategy-can-cancel-dominates]
+      ["EXT-sender-cancel-after-auto-cancel-deadline"          cancellation-ext/s-sender-cancel-after-auto-cancel-deadline]
+      ["EXT-auto-cancel-due-on-disputed-time-not-passed"       cancellation-ext/s-auto-cancel-due-on-disputed-time-not-passed]
+      ["EXT-auto-cancel-due-on-disputed-pending-settlement"    cancellation-ext/s-auto-cancel-due-on-disputed-pending-settlement]])
 
     ;; ---------------------------------------------------------------------------
 
@@ -295,6 +301,10 @@
    "s43-auth-rejected-then-authorized-recovery"
    {:scenario/type :edge-case
     :tests #{:authorization-recovery :unauthorized-rejection}}
+
+   "s43-dr3-kleros-reversal-slash"
+   {:scenario/type :reversal
+    :asserts #{:reversal-slash-executed :challenge-bounty-paid :escalation-layer-protection}}
 
    "s44-escalation-tier-mismatch-rejected"
    {:scenario/type :edge-case
@@ -603,7 +613,28 @@
    "s-same-timestamp-dispute-vs-auto-cancel"
    {:scenario/type :timing-boundary
     :tests #{:same-timestamp :auto-cancel-time :automate-timed-actions :dispute-ordering
-             :griefing-closed}}})
+             :griefing-closed}}
+
+   ;; ── Cancel strategy gap fills ──────────────────────────────────
+   "s-cancel-strategy-mutual-only"
+   {:scenario/type :cancellation
+    :tests #{:cancel-strategy :mutual-only :unilateral-cancel-false}}
+
+   "s-cancel-strategy-can-cancel-dominates"
+   {:scenario/type :cancellation
+    :tests #{:cancel-strategy :can-cancel-dominates :authorization-enforcement}}
+
+   "s-sender-cancel-after-auto-cancel-deadline"
+   {:scenario/type :cancellation
+    :tests #{:auto-cancel-time :manual-cancel-before-keeper :unilateral-cancel}}
+
+   "s-auto-cancel-due-on-disputed-time-not-passed"
+   {:scenario/type :timing-boundary
+    :tests #{:auto-cancel-due-on-disputed :time-not-passed :automate-timed-actions :griefing-protection}}
+
+   "s-auto-cancel-due-on-disputed-pending-settlement"
+   {:scenario/type :griefing-protection
+    :tests #{:auto-cancel-due-on-disputed :pending-settlement-blocks :keeper-dispatch}}})
 
 (defn- scenario-registry-entries []
   (mapcat (fn [[display-name entry]]

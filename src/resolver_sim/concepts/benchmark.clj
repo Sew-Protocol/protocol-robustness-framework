@@ -1,23 +1,33 @@
 (ns resolver-sim.concepts.benchmark
   "Shared benchmark concept resolution for runner, report, and validation."
-  (:require [clojure.edn :as edn]
-            [clojure.java.io :as io]
+  (:require [clojure.java.io :as io]
             [clojure.string :as str]
             [resolver-sim.concepts.registry :as concepts-registry]
             [resolver-sim.concepts.reporting :as concepts-reporting]
+            [resolver-sim.io.resource-path :as rp]
             [resolver-sim.logging :as log]))
+
+(def ^:private embedded-benchmark-concept-paths
+  "Reference benchmark concept files embedded in the JAR.
+   Discovered via explicit list — no directory scan inside JAR."
+  ["resource:benchmarks/concepts/evidence-integrity-v1.edn"
+   "resource:benchmarks/concepts/protocol-value-conservation-v1.edn"
+   "resource:benchmarks/concepts/protocol-robustness-v0.edn"
+   "resource:benchmarks/concepts/shortfall-allocation-v0.edn"])
 
 (defn benchmark-concept-files
   []
   (let [root (io/file "benchmarks/concepts")]
-    (when (.exists root)
+    (if (.exists root)
       (->> (file-seq root)
            (filter #(.isFile %))
-           (filter #(str/ends-with? (.getName %) ".edn"))))))
+           (filter #(str/ends-with? (.getName %) ".edn"))
+           (mapv #(.getPath %)))
+      embedded-benchmark-concept-paths)))
 
 (defn- load-concept-file
   [path]
-  (:concepts (edn/read-string (slurp path))))
+  (:concepts (rp/edn-read path)))
 
 (defn load-benchmark-local-concepts
   ([] (load-benchmark-local-concepts (benchmark-concept-files)))

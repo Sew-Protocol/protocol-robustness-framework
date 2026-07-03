@@ -1,0 +1,46 @@
+{
+  "evidence\/schema-version": "event-evidence.v1",
+  "scenario\/id": "test",
+  "evidence\/chain-prev-hash": "37fd1afb0c3683376104089b3a3c298dc46e06e0428f12e158ac7409205005a7",
+  "evidence\/importance": "core",
+  "run\/id": "test-run",
+  "world\/before-full-hash": "2041f6d020c25dfc1c34acfe2abfe578c82dd15f798948d5fb2c2cf92972db2b",
+  "evidence\/context": {
+    "ctx\/scenario-id": "test",
+    "ctx\/run-id": "test-run",
+    "ctx\/event-index": 5,
+    "ctx\/event-type": "appeal_slash",
+    "subject\/type": "resolver",
+    "subject\/id": "0xResolver",
+    "action\/type": "appeal",
+    "evidence\/reason": "fraud-slash-appealed"
+  },
+  "post-state": {
+    "appeal\/after": {
+      "slash-status": "appealed",
+      "appeal-bond-held": 80
+    }
+  },
+  "evidence\/chain-self-hash": "37fd1afb0c3683376104089b3a3c298dc46e06e0428f12e158ac7409205005a7",
+  "inputs": {
+    "appeal\/slash-id": 0,
+    "appeal\/workflow-id": 0,
+    "appeal\/resolver": "0xResolver",
+    "appeal\/bond-amount": 80,
+    "appeal\/bond-token": "USDC"
+  },
+  "world\/after-hash": "c1a3bfd135091e92db11a42c1ae311bed1cb15d3518d23454c23b7bf32b277b8",
+  "evidence\/type": "fraud-slash-appealed",
+  "evidence\/chain-seq": 5,
+  "calculation": null,
+  "pre-state": {
+    "appeal\/before": {
+      "slash-status": "pending",
+      "slash-amount": 500
+    }
+  },
+  "world\/before-hash": "7ec70eb05e51dfff24a39698b730c13dafd3f0e7c3d6c3023aa88a30c001fb07",
+  "world\/after-full-hash": "da169e48a2346dc3bd38857ca077d86a97b81d9e672cf6e17be7ed30ab14de99",
+  "evidence\/hash": "37fd1afb0c3683376104089b3a3c298dc46e06e0428f12e158ac7409205005a7",
+  "event\/seq": 5
+}
