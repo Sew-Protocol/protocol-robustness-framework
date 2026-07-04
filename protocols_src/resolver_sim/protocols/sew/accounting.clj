@@ -21,25 +21,326 @@
 ;; total-held tracking
 ;; ---------------------------------------------------------------------------
 
+(def ^:private exceptional-held-reasons
+  #{:governance-authorised-correction
+    :replay-fixture-setup
+    :replay-migration})
+
+(def ^:private held-position-policy
+  {:escrow-principal-deposited {:held/account :escrow-principal
+                                :scope-keys [:held/workflow-id]}
+   :escrow-settlement-released {:held/account :escrow-principal
+                                :scope-keys [:held/workflow-id]}
+   :escrow-settlement-refunded {:held/account :escrow-principal
+                                :scope-keys [:held/workflow-id]}
+   :appeal-bond-posted {:held/account :appeal-bond
+                        :scope-keys [:held/slash-id :held/bond-id :held/workflow-id :held/actor]}
+   :appeal-bond-returned {:held/account :appeal-bond
+                          :scope-keys [:held/slash-id :held/bond-id :held/workflow-id :held/actor]}
+   :appeal-bond-slashed {:held/account :appeal-bond
+                         :scope-keys [:held/slash-id :held/bond-id :held/workflow-id :held/actor]}
+   :appeal-bond-forfeited {:held/account :appeal-bond
+                           :scope-keys [:held/slash-id :held/bond-id :held/workflow-id :held/actor]}
+   :yield-distributed {:held/account :yield-custody
+                       :scope-keys [:held/workflow-id]}
+   :deferred-yield-claimed {:held/account :yield-custody
+                            :scope-keys [:held/owner-id :held/workflow-id]}
+   :resolver-yield-withdrawn {:held/account :resolver-yield
+                              :scope-keys [:held/owner-id :held/resolver]}
+   :resolver-slash-custody-debited {:held/account :resolver-slash-custody
+                                    :scope-keys [:held/resolver :held/workflow-id]}})
+
+(defn- validate-held-inputs!
+  [token amount]
+  (when (nil? token)
+    (throw (ex-info "held adjustment requires token"
+                    {:type :invalid-held-adjustment
+                     :reason :missing-token})))
+  (when (or (nil? amount) (neg? amount))
+    (throw (ex-info "held adjustment requires non-negative amount"
+                    {:type :invalid-held-adjustment
+                     :reason :invalid-amount
+                     :amount amount}))))
+
+(defn- next-held-adjustment-id
+  [world]
+  (str "held-adjustment-" (count (:held-adjustments world []))))
+
+(defn- record-legacy-held-usage
+  [world direction token amount]
+  (-> world
+      (update-in [:held-adjustments/legacy-uses :count] (fnil inc 0))
+      (update-in [:held-adjustments/legacy-uses :entries] (fnil conj [])
+                 {:held/direction direction
+                  :token token
+                  :amount amount})))
+
+(defn- ensure-held-ledger-not-complete!
+  [world direction]
+  (when (get-in world [:params :held-adjustments/complete?])
+    (throw (ex-info "legacy held arity is forbidden when held-adjustments are declared complete"
+                    {:type :invalid-held-adjustment
+                     :reason :legacy-held-arity-forbidden
+                     :held/direction direction}))))
+
+(defn- preferred-held-value
+  [m preferred-key fallback-key]
+  (or (get m preferred-key)
+      (get m fallback-key)))
+
+(defn- held-position-components
+  [token reason extra]
+  (let [scope (merge {:held/workflow-id (preferred-held-value extra :held/workflow-id :workflow-id)
+                      :held/bond-id (preferred-held-value extra :held/bond-id :bond-id)
+                      :held/slash-id (preferred-held-value extra :held/slash-id :slash-id)
+                      :held/actor (preferred-held-value extra :held/actor :actor)
+                      :held/resolver (preferred-held-value extra :held/resolver :resolver)
+                      :held/owner-id (preferred-held-value extra :held/owner-id :owner-id)
+                      :held/from (preferred-held-value extra :held/from :from)
+                      :held/to (preferred-held-value extra :held/to :to)
+                      :held/recipient (preferred-held-value extra :held/recipient :recipient)
+                      :owner/address (preferred-held-value extra :owner/address :address)}
+                     extra)
+        account-override (:held/account scope)
+        position-override (:held/position-id scope)
+        owner-address-override (:owner/address scope)
+        policy (get held-position-policy reason)
+        account (or account-override (:held/account policy))
+        scope-values (cond
+                       position-override nil
+                       (seq (:scope-keys policy))
+                       (->> (:scope-keys policy)
+                            (keep #(get scope %))
+                            vec)
+                       :else nil)
+        position-id (or position-override
+                        (when (and account (seq scope-values))
+                          (into [:held/position token account] scope-values)))
+        owner-address (or owner-address-override
+                          (:held/actor scope)
+                          (:held/from scope)
+                          (:held/resolver scope)
+                          (:held/recipient scope))]
+    (cond-> {:held/account account
+             :held/position-id position-id}
+      owner-address
+      (assoc :owner/address owner-address))))
+
+(defn- update-ledger-index
+  [world adjustment]
+  (let [{direction :held/direction
+         token :token
+         amount :amount
+         position-id :held/position-id
+         held-account :held/account
+         owner-address :owner/address} adjustment
+        workflow-id (:held/workflow-id adjustment)
+        step-fn (case direction
+                  :in +
+                  :out -)
+        world* (-> world
+                   (update :held-ledger/index
+                           (fn [idx]
+                             (merge {:by-token (:total-held world {})
+                                     :by-position (:held/positions world {})
+                                     :by-account {}
+                                     :by-owner {}
+                                     :by-workflow {}}
+                                    idx))))]
+    (let [world' (cond-> (update-in world* [:held-ledger/index :by-token token] (fnil step-fn 0) amount)
+                   position-id
+                   (update-in [:held-ledger/index :by-position position-id] (fnil step-fn 0) amount)
+
+                   held-account
+                   (update-in [:held-ledger/index :by-account held-account] (fnil step-fn 0) amount)
+
+                   owner-address
+                   (update-in [:held-ledger/index :by-owner owner-address] (fnil step-fn 0) amount)
+
+                   workflow-id
+                   (update-in [:held-ledger/index :by-workflow workflow-id] (fnil step-fn 0) amount))]
+      (-> world'
+          (assoc :total-held (get-in world' [:held-ledger/index :by-token] {}))
+          (assoc :held/positions (get-in world' [:held-ledger/index :by-position] {}))))))
+
+(defn- build-held-adjustment
+  [world token amount direction action reason authorization-provenance extra]
+  (let [before (get-in world [:total-held token] 0)
+        after  (case direction
+                 :in  (+ before amount)
+                 :out (- before amount))
+        position-fields (held-position-components token reason extra)]
+    (merge {:held-adjustment/id (next-held-adjustment-id world)
+            :held/direction direction
+            :token token
+            :amount amount
+            :held/before before
+            :held/after after
+            :held/reason (or reason :held/unspecified)
+            :held/action action}
+           position-fields
+           (when authorization-provenance
+             {:authorization/provenance authorization-provenance})
+           extra)))
+
+(defn- append-held-adjustment
+  [world adjustment]
+  (update world :held-adjustments (fnil conj []) adjustment))
+
+(defn- adjust-held
+  [world token amount direction {:keys [action reason authorization-provenance extra]
+                                 :or {action "adjust-held"}}]
+  (validate-held-inputs! token amount)
+  (when (and (contains? exceptional-held-reasons reason)
+             (nil? authorization-provenance))
+    (throw (ex-info "exceptional held adjustment requires authorization provenance"
+                    {:type :invalid-held-adjustment
+                     :reason :missing-authorization-provenance
+                     :held/reason reason})))
+  (let [current (get-in world [:total-held token] 0)]
+    (when (and (= direction :out) (< current amount))
+      (throw (ex-info "sub-held underflow"
+                      {:type   :sub-held-underflow
+                       :token  token
+                       :held   current
+                       :amount amount})))
+    (let [adjustment (build-held-adjustment world
+                                            token
+                                            amount
+                                            direction
+                                            action
+                                            reason
+                                            authorization-provenance
+                                            extra)
+          world' (update-ledger-index world adjustment)]
+      (append-held-adjustment world' adjustment))))
+
+(defn replay-held-adjustment-state
+  "Replay a held-adjustment ledger into replay-verified materialized custody
+   views. The ledger is canonical; returned indexes and balances are derived."
+  ([adjustments] (replay-held-adjustment-state {} adjustments))
+  ([initial-held adjustments]
+   (let [initial-state {:held-ledger/index {:by-token initial-held
+                                            :by-position {}
+                                            :by-account {}
+                                            :by-owner {}
+                                            :by-workflow {}}
+                        :total-held initial-held
+                        :held/positions {}}]
+     (reduce (fn [{total-held :total-held
+                   index :held-ledger/index
+                   positions :held/positions} adjustment]
+             (let [{direction :held/direction
+                    token :token
+                    amount :amount
+                    before :held/before
+                    after :held/after
+                    position-id :held/position-id
+                    held-account :held/account
+                    owner-address :owner/address} adjustment
+                   workflow-id (:held/workflow-id adjustment)
+                   current (get total-held token 0)
+                   expected-after (case direction
+                                    :in  (+ current amount)
+                                    :out (- current amount)
+                                    (throw (ex-info "invalid held direction"
+                                                    {:type :invalid-held-adjustment
+                                                     :direction direction
+                                                     :adjustment adjustment})))]
+               (when (nil? token)
+                 (throw (ex-info "held adjustment missing token"
+                                 {:type :invalid-held-adjustment
+                                  :adjustment adjustment})))
+               (when (or (nil? amount) (neg? amount))
+                 (throw (ex-info "held adjustment amount must be non-negative"
+                                 {:type :invalid-held-adjustment
+                                  :adjustment adjustment})))
+               (when (neg? expected-after)
+                 (throw (ex-info "held adjustment replay underflow"
+                                 {:type :invalid-held-adjustment
+                                  :adjustment adjustment
+                                  :current current})))
+               (when (not= current before)
+                 (throw (ex-info "held adjustment before mismatch"
+                                 {:type :invalid-held-adjustment
+                                  :adjustment adjustment
+                                  :current current})))
+               (when (not= expected-after after)
+                 (throw (ex-info "held adjustment after mismatch"
+                                 {:type :invalid-held-adjustment
+                                  :adjustment adjustment
+                                  :expected-after expected-after})))
+               (let [step-fn (case direction
+                               :in +
+                               :out -)
+                     index' (cond-> (update-in index [:by-token token] (fnil step-fn 0) amount)
+                              position-id
+                              (update-in [:by-position position-id] (fnil step-fn 0) amount)
+
+                              held-account
+                              (update-in [:by-account held-account] (fnil step-fn 0) amount)
+
+                              owner-address
+                              (update-in [:by-owner owner-address] (fnil step-fn 0) amount)
+
+                              workflow-id
+                              (update-in [:by-workflow workflow-id] (fnil step-fn 0) amount))]
+                 {:held-ledger/index index'
+                  :total-held (:by-token index')
+                  :held/positions (:by-position index')})))
+           initial-state
+           adjustments))))
+
+(defn replay-held-adjustments
+  "Replay a held-adjustment ledger back into a token=>amount map.
+   Used for forensic reconstruction when a world declares that its held
+   adjustments are complete."
+  ([adjustments] (replay-held-adjustments {} adjustments))
+  ([initial-held adjustments]
+   (:total-held (replay-held-adjustment-state initial-held adjustments))))
+
 (defn add-held
-  "Increase total-held for token by amount. Called on createEscrow."
-  [world token amount]
-  (update-in world [:total-held token] (fnil + 0) amount))
+  "Increase protocol-held custody balance for token.
+
+   Use only when assets enter the escrow/bond custody pool.
+   Do not use for resolver stake, which is tracked separately in
+   :resolver-stakes.
+
+  Optional opts:
+   - :action                    logical mutation action string
+   - :reason                    economic custody reason keyword
+   - :authorization-provenance  structured authorization provenance
+   - :extra                     extra machine-readable held-adjustment metadata"
+  ([world token amount]
+   (do
+     (validate-held-inputs! token amount)
+     (ensure-held-ledger-not-complete! world :in)
+     (-> world
+         (update-in [:total-held token] (fnil + 0) amount)
+         (record-legacy-held-usage :in token amount))))
+  ([world token amount opts]
+   (adjust-held world token amount :in (merge {:action "add-held"} opts))))
 
 (defn sub-held
   "Decrease total-held for token by amount. Called on release/refund.
    Callers must have validated state. Throws a catchable ex-info on underflow
    so process-step's (catch Exception) handler converts it to :dispatch-exception
    rather than propagating an AssertionError past the catch boundary."
-  [world token amount]
-  (let [current (get-in world [:total-held token] 0)]
-    (when (< current amount)
-      (throw (ex-info "sub-held underflow"
-                      {:type   :sub-held-underflow
-                       :token  token
-                       :held   current
-                       :amount amount})))
-    (update-in world [:total-held token] - amount)))
+  ([world token amount]
+   (let [current (get-in world [:total-held token] 0)]
+     (validate-held-inputs! token amount)
+     (ensure-held-ledger-not-complete! world :out)
+     (when (< current amount)
+       (throw (ex-info "sub-held underflow"
+                       {:type   :sub-held-underflow
+                        :token  token
+                        :held   current
+                        :amount amount})))
+     (-> world
+         (update-in [:total-held token] - amount)
+         (record-legacy-held-usage :out token amount))))
+  ([world token amount opts]
+   (adjust-held world token amount :out (merge {:action "sub-held"} opts))))
 
 ;; ---------------------------------------------------------------------------
 ;; total-fees tracking
@@ -248,7 +549,14 @@
                    (update-in [:bond-balances workflow-id appellant] (fnil + 0) net)
                    (update-in [:bond-fees token] (fnil + 0) fee)
                    (update-in [:total-bonds-posted token] (fnil + 0) amount)
-                   (add-held token net))]
+                   (add-held token
+                             net
+                             {:action "post-appeal-bond"
+                              :reason :appeal-bond-posted
+                              :extra {:held/action "post-appeal-bond"
+                                      :held/workflow-id workflow-id
+                                      :held/bond-id (str workflow-id "-" appellant)
+                                      :held/actor appellant}}))]
     (attr/with-attribution {:subject/type :bond
                             :subject/id (str workflow-id "-" appellant)
                             :action/type :bond/post
@@ -342,7 +650,14 @@
       (do (reject-bond-evidence! world token workflow-id appellant amount :no-bond-to-slash :bond/slash-rejected :bond-slash-rejected)
           (t/fail :no-bond-to-slash))
       (let [world' (-> world
-                       (sub-held token amount)
+                       (sub-held token
+                                 amount
+                                 {:action "slash-bond"
+                                  :reason :appeal-bond-slashed
+                                  :extra {:held/action "slash-bond"
+                                          :held/workflow-id workflow-id
+                                          :held/bond-id (str workflow-id "-" appellant)
+                                          :held/actor appellant}})
                        (assoc-in [:bond-balances workflow-id appellant] 0)
                        (update-in [:bond-slashed workflow-id] (fnil + 0) amount)
                        (distribute-slashed-funds amount))]
@@ -378,7 +693,14 @@
       (do (reject-bond-evidence! world token workflow-id appellant amount :no-bond-to-return :bond/return-rejected :bond-return-rejected)
           (t/fail :no-bond-to-return))
       (let [world' (-> world
-                       (sub-held token amount)
+                       (sub-held token
+                                 amount
+                                 {:action "return-bond"
+                                  :reason :appeal-bond-returned
+                                  :extra {:held/action "return-bond"
+                                          :held/workflow-id workflow-id
+                                          :held/bond-id (str workflow-id "-" appellant)
+                                          :held/actor appellant}})
                        (assoc-in [:bond-balances workflow-id appellant] 0)
                        (record-claimable workflow-id appellant amount))]
         (attr/with-attribution {:subject/type :bond
@@ -412,7 +734,14 @@
         (reduce-kv (fn [w appellant amount]
                      (if (pos? amount)
                        (-> w
-                           (sub-held token amount)
+                           (sub-held token
+                                     amount
+                                     {:action "return-all-bonds-for-workflow"
+                                      :reason :appeal-bond-returned
+                                      :extra {:held/action "return-all-bonds-for-workflow"
+                                              :held/workflow-id workflow-id
+                                              :held/bond-id (str workflow-id "-" appellant)
+                                              :held/actor appellant}})
                            (assoc-in [:bond-balances workflow-id appellant] 0)
                            (record-claimable workflow-id appellant amount))
                        w))

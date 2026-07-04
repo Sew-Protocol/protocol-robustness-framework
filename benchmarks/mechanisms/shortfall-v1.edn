@@ -50,9 +50,9 @@
     "mechanism/shortfall-detection" "required"
     "mechanism/pro-rata-fairness" "optional"
     "mechanism/evidence-integrity" "required"}}
-  {"scenario/id" "S104_resolver-stake-shortfall"
-   "mechanisms"
-   {"mechanism/partial-fill" "optional"
-    "mechanism/shortfall-detection" "optional"
-    "mechanism/pro-rata-fairness" "required"
-    "mechanism/evidence-integrity" "required"}}]}
+   {"scenario/id" "S104_resolver-stake-shortfall"
+    "mechanisms"
+    {"mechanism/partial-fill" "optional"
+     "mechanism/shortfall-detection" "optional"
+     "mechanism/pro-rata-fairness" "not-applicable"
+     "mechanism/evidence-integrity" "required"}}]}

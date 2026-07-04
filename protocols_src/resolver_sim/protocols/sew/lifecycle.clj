@@ -24,6 +24,8 @@
             [resolver-sim.yield.registry               :as yield-reg]
             [resolver-sim.protocols.sew.yield.policy  :as yield-policy]
             [resolver-sim.util.attribution             :as attr]
+            [resolver-sim.util.attributed-monad        :as am]
+            [resolver-sim.util.state-monad             :as monad]
             [resolver-sim.util.math                    :as math]
             [resolver-sim.time.context                 :as time-ctx]
             [resolver-sim.evidence.capture            :as cap]))
@@ -173,7 +175,17 @@
                             :else fulfilled))
                         amt)
         result (-> world-after-policy
-                   (acct/sub-held token sub-held-amt)
+                   (acct/sub-held token
+                                  sub-held-amt
+                                  {:action (str "finalize-" (name direction))
+                                   :reason (if (= direction :released)
+                                             :escrow-settlement-released
+                                             :escrow-settlement-refunded)
+                                   :extra {:held/action (str "finalize-" (name direction))
+                                           :held/workflow-id workflow-id
+                                           :held/recipient recipient
+                                           :held/settlement-direction direction
+                                           :held/settled-amount settled-amt}})
                    (record-fn token settled-amt)
                    ;; Track outbound FoT fee
                    (update-in [:total-fot-fees token] (fnil + 0) (- amt net-amt))
@@ -334,7 +346,14 @@
                                               (t/make-escrow-settings settings))
                                     (assoc-in [:module-snapshots workflow-id] snapshot)
                                      (update-in [:total-principal-deposited token] (fnil + 0) amount)
-                                     (acct/add-held token afa)
+                                     (acct/add-held token
+                                                    afa
+                                                    {:action "create-escrow"
+                                                     :reason :escrow-principal-deposited
+                                                     :extra {:held/action "create-escrow"
+                                                             :held/workflow-id workflow-id
+                                                             :held/from caller
+                                                             :held/to to}})
                                      (acct/record-fee token fee)
                                     (update-in [:total-fot-fees token] (fnil + 0) (- amount afa fee)))
                 ;; Trigger yield deposit if module is configured
@@ -681,9 +700,6 @@
     (cancel-disputed-escrow-now world workflow-id)))
 
 ;; ── Monadic Transitions ──────────────────────────────────────────────────────
-
-(require '[resolver-sim.util.state-monad :as monad]
-         '[resolver-sim.util.attributed-monad :as am])
 
 (defn create-escrow-m
   "Monadic version of create-escrow."

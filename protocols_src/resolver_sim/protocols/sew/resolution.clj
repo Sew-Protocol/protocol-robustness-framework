@@ -30,29 +30,49 @@
 
 ;; ── Decision Evidence (Evidence Layer 4) ──────────────────────────────────
 
+(defn- build-decision-evidence
+  [{:keys [decision-id step alternatives selected reasoning caller workflow-id]}]
+  (let [data {:decision-id decision-id
+              :step step
+              :alternatives (vec alternatives)
+              :selected selected
+              :reasoning (str reasoning)
+              :caller caller
+              :workflow-id workflow-id}
+        evidence-hash (hc/hash-with-intent {:hash/intent :decision-evidence} data)]
+    {:data data
+     :evidence-hash evidence-hash
+     :evidence {:artifact-kind :decision-evidence
+                :evidence-hash evidence-hash
+                :decision/id decision-id
+                :decision/step step
+                :decision/selected selected
+                :decision/reasoning (str reasoning)}}))
+
+(defn- transfer-trace-decision-summary
+  [{:keys [decision-id step alternatives selected reasoning caller]} evidence-hash]
+  {:decision-id decision-id
+   :step step
+   :alternatives (vec alternatives)
+   :selected selected
+   :reasoning (str reasoning)
+   :caller caller
+   :decision-evidence-hash evidence-hash})
+
 (defn emit-decision-evidence!
   "Build and chain a decision evidence record.
-   Best-effort — failures are logged but do not halt execution."
-  [{:keys [decision-id step alternatives selected reasoning caller workflow-id]}]
+   Best-effort — failures are logged but do not halt execution.
+   Returns {:evidence-hash ...} on success when available."
+  [decision-info]
   (try
-    (let [data {:decision-id decision-id
-                :step step
-                :alternatives (vec alternatives)
-                :selected selected
-                :reasoning (str reasoning)
-                :caller caller
-                :workflow-id workflow-id}
-          h (hc/hash-with-intent {:hash/intent :decision-evidence} data)
-          evidence {:artifact-kind :decision-evidence
-                    :evidence-hash h
-                    :decision/id decision-id
-                    :decision/step step
-                    :decision/selected selected
-                    :decision/reasoning (str reasoning)}]
-      (chain/register-evidence! evidence))
+    (let [{:keys [evidence-hash evidence]} (build-decision-evidence decision-info)]
+      (chain/register-evidence! evidence)
+      {:evidence-hash evidence-hash})
     (catch Exception e
       (log/warn! :decision-evidence-failed
-                 {:decision-id decision-id :error (.getMessage e)}))))
+                 {:decision-id (:decision-id decision-info)
+                  :error (.getMessage e)})
+      nil)))
 
 (defn rotate-dispute-resolver
   "Governance-triggered resolver rotation for an in-flight dispute.
@@ -583,11 +603,6 @@
                         (reverse-reversal-slash-on-vindication workflow-id is-release))
             world''        (assoc-in world' [:previous-decisions workflow-id (t/dispute-level world workflow-id)]
                                      {:resolver caller :is-release is-release})
-            world'''       (assoc-in world'' [:escrow-transfers workflow-id :resolution]
-                                     {:resolved-by caller
-                                      :is-release is-release
-                                      :resolution-hash resolution-hash
-                                      :resolution-source (or resolution-source :normal)})
             decision-info {:decision-id (str "resolve-" workflow-id "-" (t/dispute-level world workflow-id))
                            :step (time-ctx/block-ts world)
                            :alternatives [:release :refund]
@@ -595,8 +610,20 @@
                            :reasoning (str "Resolver " caller " " (if is-release "releases" "refunds")
                                            " escrow " workflow-id)
                            :caller caller
-                           :workflow-id workflow-id}]
-        (emit-decision-evidence! decision-info)
+                           :workflow-id workflow-id}
+            decision-evidence (emit-decision-evidence! decision-info)
+            world'''       (assoc-in world'' [:escrow-transfers workflow-id :resolution]
+                                     (cond-> {:resolved-by caller
+                                              :is-release is-release
+                                              :resolution-hash resolution-hash
+                                              :resolution-source (or resolution-source :normal)}
+                                       true
+                                       (assoc :trace-decision
+                                              (transfer-trace-decision-summary
+                                               decision-info
+                                               (:evidence-hash decision-evidence)))
+                                       (:evidence-hash decision-evidence)
+                                       (assoc :decision-evidence-hash (:evidence-hash decision-evidence))))]
         (if (or final-round? (not (pos? window-dur)))
           (t/ok (if is-release
                   (finalize world''' workflow-id :released)
@@ -1314,7 +1341,16 @@
             appeal-upheld?
             (let [world' (cond-> world-base
                            (pos? bond-held)
-                           (-> (acct/sub-held bond-token bond-held)
+                           (-> (acct/sub-held bond-token
+                                              bond-held
+                                              {:action "resolve-appeal"
+                                               :reason :appeal-bond-returned
+                                               :authorization-provenance authorization-provenance
+                                               :extra {:held/action "resolve-appeal"
+                                                       :held/workflow-id wf-id
+                                                       :held/slash-id slash-id
+                                                       :held/actor caller
+                                                       :held/appeal-outcome :upheld}})
                                (acct/record-claimable-v2 wf-id :bond/refund resolver bond-held))
                            :always
                            (update-in [:pending-fraud-slashes slash-id]
@@ -1335,7 +1371,16 @@
 
             (pos? bond-held)
             (let [world' (-> world-base
-                             (acct/sub-held bond-token bond-held)
+                             (acct/sub-held bond-token
+                                            bond-held
+                                            {:action "resolve-appeal"
+                                             :reason :appeal-bond-forfeited
+                                             :authorization-provenance authorization-provenance
+                                             :extra {:held/action "resolve-appeal"
+                                                     :held/workflow-id wf-id
+                                                     :held/slash-id slash-id
+                                                     :held/actor caller
+                                                     :held/appeal-outcome :rejected}})
                              (update-in [:pending-fraud-slashes slash-id]
                                         append-authorization-provenance
                                         "resolve-appeal"
@@ -1408,7 +1453,7 @@
    reversal slashes (e.g. \"0-reversal-0\" for the reversal at level 1 on workflow 0).
    Mirrors: ResolverSlashingModuleV1.appealSlash"
   ([world workflow-id caller] (appeal-slash world workflow-id caller workflow-id))
-  ([world workflow-id caller slash-id]
+  ([world workflow-id caller slash-id & {:keys [authorization-provenance]}]
    (let [slash-id (resolve-reversal-slash-id world slash-id workflow-id)
          pending (get-in world [:pending-fraud-slashes slash-id])]
      (cond
@@ -1433,15 +1478,54 @@
              token       (:token et)
              bond-amount (sew-econ/calculate-appeal-bond-amount (:amount-after-fee et) snap)
              world'      (if (pos? bond-amount)
-                           (-> world
-                               (assoc-in [:pending-fraud-slashes slash-id :appeal-bond-held] bond-amount)
-                               (assoc-in [:appeal-bond-custody slash-id]
-                                         {:resolver caller :workflow-id workflow-id :amount bond-amount :token token})
-                               (acct/add-held token bond-amount)
-                               (update-in [:total-bonds-posted token] (fnil + 0) bond-amount)
-                               (update-in [:bond-posted-by-workflow workflow-id] (fnil + 0) bond-amount))
+                           (cond-> (-> world
+                                       (assoc-in [:pending-fraud-slashes slash-id :appeal-bond-held] bond-amount)
+                                       (assoc-in [:appeal-bond-custody slash-id]
+                                                 (cond-> {:resolver caller
+                                                          :workflow-id workflow-id
+                                                          :amount bond-amount
+                                                          :token token}
+                                                   authorization-provenance
+                                                   (assoc :authorization/provenance authorization-provenance
+                                                          :authorization/last-provenance authorization-provenance
+                                                          :authorization/last-action "appeal-slash"
+                                                          :authorization/history
+                                                          [{:authorization/action "appeal-slash"
+                                                            :authorization/provenance authorization-provenance}]))))
+                             authorization-provenance
+                             (acct/add-held token
+                                            bond-amount
+                                            {:action "appeal-slash"
+                                             :authorization-provenance authorization-provenance
+                                             :reason :appeal-bond-posted
+                                             :extra {:held/action "appeal-slash"
+                                                     :held/workflow-id workflow-id
+                                                     :held/slash-id slash-id
+                                                     :held/actor caller}})
+
+                             (not authorization-provenance)
+                             (acct/add-held token
+                                            bond-amount
+                                            {:action "appeal-slash"
+                                             :reason :appeal-bond-posted
+                                             :extra {:held/action "appeal-slash"
+                                                     :held/workflow-id workflow-id
+                                                     :held/slash-id slash-id
+                                                     :held/actor caller}})
+
+                             true
+                             (update-in [:total-bonds-posted token] (fnil + 0) bond-amount)
+
+                             true
+                             (update-in [:bond-posted-by-workflow workflow-id] (fnil + 0) bond-amount))
                            world)
-             world''     (assoc-in world' [:pending-fraud-slashes slash-id :status] :appealed)]
+             world''     (-> world'
+                             (assoc-in [:pending-fraud-slashes slash-id :status] :appealed)
+                             (cond-> authorization-provenance
+                               (update-in [:pending-fraud-slashes slash-id]
+                                          append-authorization-provenance
+                                          "appeal-slash"
+                                          authorization-provenance)))]
          (attr/with-attribution {:subject/type :resolver
                                  :subject/id caller
                                  :action/type :slash/appeal

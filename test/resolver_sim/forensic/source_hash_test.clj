@@ -73,3 +73,13 @@
                     sut/source-roots (constantly ["src"])]
         (is (= (sut/source-tree-hash* root ["src"])
                (vcs/code-hash)))))))
+
+(deftest default-source-roots-cover-replay-critical-surfaces
+  (is (= ["src"
+          "protocols_src"
+          "benchmarks"
+          "data/concepts"
+          "scenarios"
+          "suites"
+          "resources"]
+         sut/default-source-roots)))

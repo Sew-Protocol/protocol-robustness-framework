@@ -45,6 +45,16 @@
         r (res/execute-resolution w 0 resolver true "0xhash" direct-resolver-fn)]
     (is (true? (:ok r)))
     (is (= :released (t/escrow-state (:world r) 0)))
+    (is (= {:decision-id "resolve-0-0"
+            :step 1000
+            :alternatives [:release :refund]
+            :selected :release
+            :reasoning "Resolver 0xResolver releases escrow 0"
+            :caller resolver
+            :decision-evidence-hash
+            (get-in (:world r) [:escrow-transfers 0 :resolution :decision-evidence-hash])}
+           (get-in (:world r) [:escrow-transfers 0 :resolution :trace-decision])))
+    (is (string? (get-in (:world r) [:escrow-transfers 0 :resolution :decision-evidence-hash])))
     (is (nil? (get-in (:world r) [:pending-settlements 0]))
         "no pending settlement when appeal window = 0")))
 
@@ -471,6 +481,11 @@
     (is (= :released (t/escrow-state (:world r) 0))
         "final round executes immediately — no pending settlement")
     (is (not (:exists (t/get-pending (:world r) 0))))))
+
+(deftest resolution-trace-decision-absent-before-resolution
+  (let [w (base-world 0)]
+    (is (nil? (get-in w [:escrow-transfers 0 :resolution :trace-decision])))
+    (is (nil? (get-in w [:escrow-transfers 0 :resolution :decision-evidence-hash])))))
 
 ;; ---------------------------------------------------------------------------
 ;; replay: escalate_dispute action

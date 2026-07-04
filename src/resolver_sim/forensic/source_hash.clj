@@ -7,7 +7,14 @@
             [clojure.string :as str])
   (:import [java.security MessageDigest]))
 
-(def default-source-roots ["src" "protocols_src"])
+(def default-source-roots
+  ["src"
+   "protocols_src"
+   "benchmarks"
+   "data/concepts"
+   "scenarios"
+   "suites"
+   "resources"])
 (def source-tree-hash-algorithm "source-tree-hash.v1.path-content-sha256")
 
 (defn- sh! [& cmd]
@@ -26,7 +33,9 @@
   (sha256-hex (java.nio.file.Files/readAllBytes (.toPath f))))
 
 (defn source-roots
-  "Execution-relevant source roots. Defaults to src and protocols_src."
+  "Execution-relevant replay-critical roots.
+   Defaults cover code, benchmark manifests, concepts, scenarios, suites,
+   and packaged resources."
   []
   (let [raw (System/getenv "PRF_SOURCE_ROOTS")
         roots (some-> raw

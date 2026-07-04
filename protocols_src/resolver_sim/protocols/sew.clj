@@ -75,6 +75,132 @@
       (or (= :full mode)
           (governance-actor? agent)))))
 
+(defn- governance-authorization-provenance
+  [context event addr]
+  (let [action-name (.replace (name (:action event)) "_" "-")]
+    {:authorization/schema-version "governance-authorization.v1"
+     :authorization/type :governance
+     :authorization/basis :scenario-declared
+     :authorization/actor-id (:agent event)
+     :authorization/address addr
+     :authorization/check :with-governance-actor
+     :authorization/source :replay-context/agent-index
+     :authorization/action action-name
+     :authorization/governance-mode (get context :governance-mode :restricted)
+     :authorization/limitation
+     "Governance authority is scenario-declared in replay context; not registry-verified."}))
+
+(def ^:private forced-authorization-policy
+  {"execute-resolution"
+   {:reasons #{:missing-resolver
+               :resolver-overcapacity
+               :resolver-frozen
+               :circuit-breaker-active
+               :resolver-unavailable
+               :manual-override}
+    :authorization/class :interactive-override
+    :authorization/path :exceptional
+    :checks #{:force-authorized}
+    :sources #{:repl-interactive-session}
+    :capacity-context-required? true}
+
+   "activate-resolver-overflow"
+   {:reasons #{:resolver-overcapacity}
+    :authorization/class :capacity-failover
+    :authorization/path :capacity-failover
+    :checks #{:with-governance-actor}
+    :sources #{:replay-context/agent-index}
+    :capacity-context-required? true}
+
+   "appeal-slash"
+   {:reasons #{:appeal-bond-custody}
+    :authorization/class :governance-intervention
+    :authorization/path :exceptional
+    :checks #{:with-governance-actor}
+    :sources #{:replay-context/agent-index}
+    :capacity-context-required? true}
+
+   "force-reversal-slash"
+   {:reasons #{:governance-force-reversal-slash}
+    :authorization/class :governance-intervention
+    :authorization/path :exceptional
+    :checks #{:with-governance-actor}
+    :sources #{:replay-context/agent-index}
+    :capacity-context-required? true}})
+
+(defn build-force-authorization-provenance
+  "Build the canonical forced-authorization envelope for a narrow allowlisted
+   exceptional path. Rejects unknown actions, reasons, checks, and sources so
+   `:authorization/class :forced` cannot silently spread to ordinary flows."
+  [context event addr {:keys [reason capacity-context check source limitation]
+                       :or {check :with-governance-actor
+                            source :replay-context/agent-index
+                            limitation "Forced authorization is scenario-declared in replay context; not registry-verified."}}]
+  (let [action-name (.replace (name (:action event)) "_" "-")
+        {:keys [authorization/class authorization/path] :as policy}
+        (get forced-authorization-policy action-name)]
+    (when-not policy
+      (throw (ex-info "forced authorization is not allowed for this action"
+                      {:type :invalid-force-authorization
+                       :action action-name})))
+    (when-not (contains? (:reasons policy) reason)
+      (throw (ex-info "forced authorization reason is not allowed for this action"
+                      {:type :invalid-force-authorization
+                       :action action-name
+                       :reason reason
+                       :allowed-reasons (:reasons policy)})))
+    (when-not (contains? (:checks policy) check)
+      (throw (ex-info "forced authorization check is not allowed for this action"
+                      {:type :invalid-force-authorization
+                       :action action-name
+                       :check check
+                       :allowed-checks (:checks policy)})))
+    (when-not (contains? (:sources policy) source)
+      (throw (ex-info "forced authorization source is not allowed for this action"
+                      {:type :invalid-force-authorization
+                       :action action-name
+                       :source source
+                       :allowed-sources (:sources policy)})))
+    (when (and (:capacity-context-required? policy)
+               (nil? capacity-context))
+      (throw (ex-info "forced authorization requires capacity context"
+                      {:type :invalid-force-authorization
+                       :action action-name
+                       :reason reason})))
+    (cond-> (governance-authorization-provenance context event addr)
+      true
+      (assoc :authorization/class class
+             :authorization/path path
+             :authorization/check check
+             :authorization/source source
+             :authorization/reason reason
+             :authorization/limitation limitation)
+
+      capacity-context
+      (assoc :authorization/capacity-context capacity-context))))
+
+(defn- run-governance-action
+  "Single wrapper over with-governance-actor for governance-sensitive dispatch.
+   Every governance-sensitive defmethod apply-action MUST pass through this
+   helper so the governance dispatch audit test can verify coverage.
+   Builds authorization-provenance and passes it to the callback, then
+   stores it on the result's :extra for audit trail."
+  [{:keys [agent-index] :as context} world event f]
+  (actx/with-governance-actor
+    agent-index event
+    (governance-pred context)
+    (fn [addr agent]
+      (let [provenance (governance-authorization-provenance context event addr)
+            result (f addr agent provenance)]
+        (if (:ok result)
+          (update result :extra
+                  (fn [extra]
+                    (let [extra' (or extra {})]
+                      (if (:authorization/provenance extra')
+                        extra'
+                        (assoc extra' :authorization/provenance provenance)))))
+          result)))))
+
 (defn- event-workflow-id
   [event]
   (let [p (:params event)]
@@ -94,6 +220,24 @@
   "Optional logical event identifier used for replay dedupe."
   [event]
   (compat/event-id event))
+
+(def governance-sensitive-actions
+  "Actions that modify protocol-level governance state and must be dispatched
+   through with-governance-actor (via run-governance-action).
+   Source of truth for the governance dispatch audit test."
+  #{"rotate-dispute-resolver"
+    "activate-resolver-overflow"
+    "unfreeze-resolver"
+    "withdraw-fees"
+    "governance-update-fee"
+    "set-token-liquidity-crunch"
+    "set-paused"
+    "delegate-to-senior"
+    "propose-fraud-slash"
+    "appeal-slash"
+    "resolve-appeal"
+    "set-yield-risk"
+    "force-reversal-slash"})
 
 (def replay-sensitive-actions
   "Actions that should be replay-idempotent when a logical event-id is provided."
@@ -153,7 +297,7 @@
 
 (defn- sew-event-conflict-domains
   "Conservative serialization/conflict domains for same-timestamp batch replay.
-   
+
    Actions are grouped by what state they modify:
      Group 1 — workflow-scoped (escrow, dispute, resolution state)
               [:workflow wf-id] + optional [:resolver r] + optional [:token t]
@@ -164,7 +308,7 @@
      Group 2 — resolver-scoped (stake, bond, slash state)
      Group 3 — token-scoped (liquidity, yield risk)
      Group 4 — global (paused, fees, governance params)
-   
+
    agent-index is used to derive the resolver address from the event's :agent
    field for actions like register-stake where the actor IS the resolver."
   [world event agent-index]
@@ -326,11 +470,9 @@
           result)))))
 
 (defmethod apply-action "rotate-dispute-resolver"
-  [{:keys [agent-index] :as context} world event]
-  (actx/with-governance-actor
-    agent-index event
-    (governance-pred context)
-    (fn [addr _agent]
+  [context world event]
+  (run-governance-action context world event
+    (fn [addr _agent _provenance]
       (let [workflow-id   (compat/wf-id event)
             new-resolver  (get-in event [:params :new-resolver])
             result        (res/rotate-dispute-resolver world workflow-id new-resolver)]
@@ -340,14 +482,12 @@
           result)))))
 
 (defmethod apply-action "activate-resolver-overflow"
-  [{:keys [agent-index resolver-overflow-policy] :as context} world event]
-  (actx/with-governance-actor
-    agent-index event
-    (governance-pred context)
-    (fn [addr _agent]
+  [context world event]
+  (run-governance-action context world event
+    (fn [addr _agent _provenance]
       (let [pp       (:params event)
             now      (time-ctx/block-ts world)
-            policy   resolver-overflow-policy
+            policy   (:resolver-overflow-policy context)
             allowed  (:allowed-reasons policy #{:resolver-overcapacity})
             reason   (:reason pp)
             resolver (:resolver pp)
@@ -367,7 +507,15 @@
               (attr/log-with-attr :warn "activate-resolver-overflow"
                 {:resolver resolver :reason reason
                  :message "Resolver is not at capacity — activation may be premature"}))
-            (let [record {:overflow-id        overflow-id
+            (let [capacity-context {:resolver resolver
+                                    :reason reason
+                                    :current-active (get cap :current-active 0)
+                                    :max-concurrent (get cap :max-concurrent 0)}
+                  provenance (build-force-authorization-provenance
+                              context event addr
+                              {:reason reason
+                               :capacity-context capacity-context})
+                  record {:overflow-id        overflow-id
                           :resolver           resolver
                           :reason             reason
                           :authorized-by      addr
@@ -377,7 +525,13 @@
                           :max-workflows      max-wf
                           :failover-resolvers (set resolvers)
                           :used-workflows     #{}
-                          :status             :active}
+                          :status             :active
+                          :authorization/provenance provenance
+                          :authorization/last-provenance provenance
+                          :authorization/last-action "activate-resolver-overflow"
+                          :authorization/history
+                          [{:authorization/action "activate-resolver-overflow"
+                            :authorization/provenance provenance}]}
                   world' (-> world
                              (assoc-in [:resolver-overflows overflow-id] record)
                              (update :next-overflow-id inc))]
@@ -395,24 +549,50 @@
             resolution-hash (get pp :resolution-hash "0xoverflow")
             failover    (auth/authorized-overflow-resolver?
                           world workflow-id addr overflow-id)]
-        (if failover
-          (let [used' (conj (:used-workflows failover) workflow-id)
+        (if-not failover
+          (t/fail :not-authorized-resolver)
+          (let [action (.replace (name (:action event)) "_" "-")
+                used' (conj (:used-workflows failover) workflow-id)
                 cap   (:max-workflows failover)
                 status' (if (>= (count used') cap) :exhausted :active)
+                execution-provenance
+                {:execution/schema-version "execution-provenance.v1"
+                 :execution/type :forced-capacity-failover
+                 :execution/basis :overflow-record
+                 :execution/actor-id (:agent event)
+                 :execution/address addr
+                 :execution/check :authorized-overflow-resolver?
+                 :execution/source :resolver-overflow-record
+                 :execution/action action
+                 :execution/overflow-id overflow-id
+                 :execution/reason (:reason failover)}
                 world' (-> world
                            (assoc-in [:resolver-overflows overflow-id :used-workflows] used')
-                           (assoc-in [:resolver-overflows overflow-id :status] status'))]
-            (res/apply-resolution-transition
-              world' workflow-id addr is-release resolution-hash nil
-              :resolution-source :resolver-overflow))
-          (t/fail :not-authorized-resolver))))))
+                           (assoc-in [:resolver-overflows overflow-id :status] status'))
+                result (res/apply-resolution-transition
+                        world' workflow-id addr is-release resolution-hash nil
+                        :resolution-source :resolver-overflow)]
+            (if (:ok result)
+              (let [world'' (-> (:world result)
+                                (assoc-in [:escrow-transfers workflow-id :resolution :execution/provenance]
+                                          execution-provenance)
+                                (assoc-in [:resolver-overflows overflow-id :execution/last-provenance]
+                                          execution-provenance)
+                                (assoc-in [:resolver-overflows overflow-id :execution/last-action]
+                                          "execute-overflow-resolution")
+                                (update-in [:resolver-overflows overflow-id :execution/history]
+                                           (fnil conj [])
+                                           {:execution/action "execute-overflow-resolution"
+                                            :execution/provenance execution-provenance}))]
+                (-> result
+                    (assoc :world world'')
+                    (update :extra #(merge (or % {}) {:execution/provenance execution-provenance}))))
+              result)))))))
 
 (defmethod apply-action "unfreeze-resolver"
   [{:keys [agent-index] :as context} world event]
-  (actx/with-governance-actor
-    agent-index event
-    (governance-pred context)
-    (fn [addr _agent]
+  (run-governance-action context world event
+    (fn [addr _agent _provenance]
       (let [resolver (get-in event [:params :resolver])]
         (res/unfreeze-resolver world resolver)))))
 
@@ -435,9 +615,7 @@
             amount           (:amount p 0)
             token            (keyword (:token p "USDC"))
             yield-profile-id (:yield-profile-id p)
-            world            (reg/register-stake world addr amount yield-profile-id)
-            world            (acct/add-held world token amount)
-            world            (update-in world [:total-principal-deposited token] (fnil + 0) amount)]
+            world            (reg/register-stake world addr amount yield-profile-id)]
         (if yield-profile-id
           (let [{:keys [module-id]} (yield-proto/resolve-yield-profile yield-profile-id)
                 world' (-> world
@@ -490,13 +668,17 @@
                                  (+ (:unrealized-yield pos 0) (:realized-yield pos 0)))
                 res            (reg/withdraw-stake world-accrued resolver-addr amount)]
             (if (:ok res)
-              (let [world' (-> (:world res)
-                               (acct/sub-held token amount)
-                               (update-in [:total-withdrawn token] (fnil + 0) amount))]
+              (let [world' (:world res)]
                 (if (and yield-profile-id full-withdraw? (pos? yield-amt))
                   (let [{:keys [module-id]} (yield-proto/resolve-yield-profile yield-profile-id)
                         world'' (-> world'
-                                    (acct/sub-held token yield-amt)
+                                    (acct/sub-held token
+                                                   yield-amt
+                                                   {:action "withdraw-stake"
+                                                    :reason :resolver-yield-withdrawn
+                                                    :extra {:held/action "withdraw-stake"
+                                                            :held/resolver resolver-addr
+                                                            :held/owner-id owner-id}})
                                     (update-in [:total-withdrawn token] (fnil + 0) yield-amt)
                                     (yield-proto/apply-op {:op/type :yield/withdraw
                                                            :owner/id owner-id
@@ -535,7 +717,14 @@
                                   token     (:token et)
                                   recipient (if (#{:released :resolved-release} state) (:to et) (:from et))]
                               (-> world'
-                                  (acct/sub-held token reclaimed)
+                                  (acct/sub-held token
+                                                 reclaimed
+                                                 {:action "claim-deferred-yield"
+                                                  :reason :deferred-yield-claimed
+                                                  :extra {:held/action "claim-deferred-yield"
+                                                          :held/workflow-id escrow-id
+                                                          :held/owner-id owner-id
+                                                          :held/recipient recipient}})
                                   (acct/record-claimable-v2 escrow-id :settlement/yield recipient reclaimed)))
                             ;; Resolver stake: reclaimed deferred was already in :total-held via
                             ;; register-stake; closing the yield position is sufficient (no stake bump).
@@ -564,10 +753,8 @@
   [{:keys [agent-index] :as context} world event]
   (if (:paused? world)
     (t/fail :protocol-paused)
-    (actx/with-governance-actor
-      agent-index event
-      (governance-pred context)
-      (fn [_addr _agent]
+    (run-governance-action context world event
+      (fn [_addr _agent _provenance]
         (let [p     (:params event)
               token (:token p)
               token (when token (keyword token))]
@@ -575,10 +762,8 @@
 
 (defmethod apply-action "governance-update-fee"
   [{:keys [agent-index] :as context} world event]
-  (actx/with-governance-actor
-    agent-index event
-    (governance-pred context)
-    (fn [_addr _agent]
+  (run-governance-action context world event
+    (fn [_addr _agent _provenance]
       (let [p         (:params event)
             fee-bps   (or (:fee-bps p) (:resolver-fee-bps p) (:escrow-fee-bps p))]
         (if (nil? fee-bps)
@@ -587,10 +772,8 @@
 
 (defmethod apply-action "set-token-liquidity-crunch"
   [{:keys [agent-index] :as context} world event]
-  (actx/with-governance-actor
-    agent-index event
-    (governance-pred context)
-    (fn [_addr _agent]
+  (run-governance-action context world event
+    (fn [_addr _agent _provenance]
       (let [p       (:params event)
             token   (keyword (:token p))
             active? (get p :active? true)]
@@ -601,10 +784,8 @@
 
 (defmethod apply-action "set-paused"
   [{:keys [agent-index] :as context} world event]
-  (actx/with-governance-actor
-    agent-index event
-    (governance-pred context)
-    (fn [_addr _agent]
+  (run-governance-action context world event
+    (fn [_addr _agent _provenance]
       (t/ok (assoc world :paused? (get-in event [:params :paused?] true))))))
 
 (defmethod apply-action "register-resolver-bond"
@@ -630,10 +811,8 @@
 
 (defmethod apply-action "delegate-to-senior"
   [{:keys [agent-index] :as context} world event]
-  (actx/with-governance-actor
-    agent-index event
-    (governance-pred context)
-    (fn [_addr _agent]
+  (run-governance-action context world event
+    (fn [_addr _agent _provenance]
       (let [p           (:params event)
             senior-addr (:senior-addr p)
             coverage    (:coverage p 0)
@@ -649,15 +828,14 @@
 
 (defmethod apply-action "propose-fraud-slash"
   [{:keys [agent-index] :as context} world event]
-  (actx/with-governance-actor
-    agent-index event
-    (governance-pred context)
-    (fn [addr _agent]
+  (run-governance-action context world event
+    (fn [addr _agent provenance]
       (let [p             (:params event)
             workflow-id   (event-workflow-id event)
             resolver-addr (:resolver-addr p)
             amount        (:amount p)]
-        (res/propose-fraud-slash world workflow-id addr resolver-addr amount)))))
+        (res/propose-fraud-slash world workflow-id addr resolver-addr amount
+                                 :authorization-provenance provenance)))))
 
 (defmethod apply-action "challenge-resolution"
   [{:keys [agent-index escalation-fn]} world event]
@@ -676,30 +854,64 @@
                              {:evidence-hash (:evidence-hash p)})))))
 
 (defmethod apply-action "appeal-slash"
-  [{:keys [agent-index]} world event]
-  (actx/with-resolved-actor
-    agent-index event
-    (fn [addr]
-      (res/appeal-slash world (event-workflow-id event) addr
-                        (event-slash-id event)))))
+  [{:keys [agent-index] :as context} world event]
+  (run-governance-action context world event
+    (fn [addr _agent _provenance]
+      (let [workflow-id (event-workflow-id event)
+            slash-id (event-slash-id event)
+            slash-id' (if (get-in world [:pending-fraud-slashes slash-id])
+                        slash-id
+                        (or (some #(when (get-in world [:pending-fraud-slashes %]) %)
+                                  [(str workflow-id "-reversal-0")
+                                   (str workflow-id "-force-reversal-0")])
+                            slash-id))
+            slash-entry (get-in world [:pending-fraud-slashes slash-id'])
+            resolver-caller (or (:resolver slash-entry) addr)
+            provenance (build-force-authorization-provenance
+                        context event addr
+                        {:reason :appeal-bond-custody
+                         :capacity-context {:workflow-id workflow-id
+                                            :slash-id slash-id'
+                                            :resolver resolver-caller}})
+            result (res/appeal-slash world workflow-id resolver-caller slash-id'
+                                     :authorization-provenance provenance)]
+        (if (:ok result)
+          (update result :extra merge {:authorization/provenance provenance})
+          result)))))
 
 (defmethod apply-action "resolve-appeal"
   [{:keys [agent-index] :as context} world event]
-  (actx/with-governance-actor
-    agent-index event
-    (governance-pred context)
-    (fn [addr _agent]
+  (run-governance-action context world event
+    (fn [addr _agent provenance]
       (let [p (:params event)]
         (res/resolve-appeal world
                             (event-workflow-id event)
                             addr
                             (boolean (:upheld? p))
-                            (event-slash-id event))))))
+                            (event-slash-id event)
+                            :authorization-provenance provenance)))))
 
 (defmethod apply-action "execute-fraud-slash"
-  [_ctx world event]
-  (res/execute-fraud-slash world (event-workflow-id event)
-                           (event-slash-id event)))
+  [{:keys [agent-index]} world event]
+  (actx/with-resolved-actor
+    agent-index event
+    (fn [addr]
+      (let [action (.replace (name (:action event)) "_" "-")
+            agent-id (:agent event)
+            provenance {:execution/schema-version "execution-provenance.v1"
+                        :execution/type :public-execution
+                        :execution/basis :scenario-declared
+                        :execution/actor-id agent-id
+                        :execution/address addr
+                        :execution/check :with-resolved-actor
+                        :execution/source :replay-context/agent-index
+                        :execution/action action}
+            result (res/execute-fraud-slash world (event-workflow-id event)
+                                            (event-slash-id event)
+                                            :execution-provenance provenance)]
+        (if (:ok result)
+          (update result :extra merge {:execution/provenance provenance})
+          result)))))
 
 (defmethod apply-action "compute-prorata-slash-allocation"
   [_ctx world event]
@@ -717,20 +929,26 @@
     (t/ok (lc/accrue-yield world wf))))
 
 (defmethod apply-action "force-reversal-slash"
-  [_ctx world event]
-  (let [wf   (event-workflow-id event)
-        bps  (event-slash-bps event)]
-    (attr/log-with-attr :debug "force-reversal-slash" {:workflow-id wf :slash-bps bps})
-    (t/ok (res/force-reversal-slash world wf
-                                    :slash-bps bps
-                                    :track :immediate))))
+  [{:keys [agent-index] :as context} world event]
+  (run-governance-action context world event
+    (fn [addr _agent _provenance]
+      (let [wf   (event-workflow-id event)
+            bps  (event-slash-bps event)
+            provenance (build-force-authorization-provenance
+                        context event addr
+                        {:reason :governance-force-reversal-slash
+                         :capacity-context {:workflow-id wf
+                                            :slash-bps bps}})]
+        (attr/log-with-attr :debug "force-reversal-slash" {:workflow-id wf :slash-bps bps :caller addr})
+        (t/ok (res/force-reversal-slash world wf
+                                        :slash-bps bps
+                                        :track :immediate
+                                        :authorization-provenance provenance))))))
 
 (defmethod apply-action "set-yield-risk"
   [{:keys [agent-index] :as context} world event]
-  (actx/with-governance-actor
-    agent-index event
-    (governance-pred context)
-    (fn [_addr _agent]
+  (run-governance-action context world event
+    (fn [_addr _agent _provenance]
       (let [{:keys [module-id token]} (:params event)
             mid (yield-module/resolve-module-id world module-id)
             tok (keyword token)]
@@ -899,8 +1117,8 @@
           snapshot   (sew-snapshot/snapshot-from-protocol-params pp)
           rm-addr    (get pp :resolution-module nil)
           esc-map    (get pp :escalation-resolvers nil)
-          level-map  (when esc-map
-                       (into {} (map (fn [[k v]] [(parse-long (name k)) v]) esc-map)))
+           level-map  (when esc-map
+                        (into {} (map (fn [[k v]] [(parse-long (if (keyword? k) (name k) (str k))) v]) esc-map)))
           rm-fn      (when (and rm-addr (not= rm-addr "") (nil? level-map))
                        (auth/make-default-resolution-module rm-addr))
           esc-fn     (when level-map
@@ -912,7 +1130,6 @@
                              {:ok false :error :escalation-not-allowed}))))]
         (let [of-policy  (get pp :resolver-overflow-policy {})
               def-policy {:enabled?            true
-                          :governance-address  nil
                           :default-duration    3600
                           :max-duration        86400
                           :default-max-workflows 100

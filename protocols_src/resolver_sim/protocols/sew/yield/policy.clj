@@ -50,7 +50,14 @@
                          (cond-> (pos? recipient-amt)
                            (acct/record-claimable-v2 escrow-id :settlement/yield (:to et) recipient-amt))
                         ;; Yield pool reduction: funds move from "held" to "claimable/fees"
-                         (acct/sub-held token yield)
+                         (acct/sub-held token
+                                        yield
+                                        {:action "apply-yield-policy"
+                                         :reason :yield-distributed
+                                         :extra {:held/action "apply-yield-policy"
+                                                 :held/workflow-id escrow-id
+                                                 :held/settlement-outcome settlement-outcome
+                                                 :held/yield-preset preset}})
                         ;; Capture any remaining yield (not allocated to participants) as additional protocol fees
                          (cond-> (> net (+ sender-amt recipient-amt))
                            (acct/record-fee token (- net (+ sender-amt recipient-amt)))))]

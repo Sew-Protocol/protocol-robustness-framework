@@ -19,7 +19,7 @@
    ["-Y" "--phase-y" "Run Phase Y: evidence fog and attention budget constraint"]
    ["-Z" "--phase-z" "Run Phase Z: legitimacy and reflexive participation loop"]
    ["-A" "--phase-aa" "Run Phase AA: governance as adversary / selective enforcement gaming"]
-   ["-B" "--phase-ab" "Run Phase AB: per-dispute effort rewards (Phase Y safeguard)"]
+
    ["-C" "--phase-ac" "Run Phase AC: trust floor and emergency onboarding (Phase Z safeguard)"]
    ["-D" "--phase-ad" "Run Phase AD: governance bandwidth floor (Phase AA safeguard)"]
    ["-E" "--phase-ac-sweep" "Run Phase AC threshold search: min viable trust-floor config"]

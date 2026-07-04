@@ -47,7 +47,7 @@ All hardening and path constants can be overridden without editing source files:
 
 | Variable | Default | Purpose |
 |---|---|---|
-| `PRF_SOURCE_ROOTS` | `src,protocols_src` | Source directories for `code-hash` computation |
+| `PRF_SOURCE_ROOTS` | `src,protocols_src,benchmarks,data/concepts,scenarios,suites,resources` | Replay-critical source directories for `code-hash` computation |
 | `PRF_CODE_HASH_ALGORITHM` | `source-tree-hash.v1.path-content-sha256` | Algorithm name in bundle metadata |
 | `PRF_RUNS_ROOT` | `~/prf-runs` | Base output directory for forensic runs |
 | `PRF_ARTIFACT_DIR` | `results/test-artifacts` | Clojure pipeline output directory |
@@ -57,7 +57,7 @@ All hardening and path constants can be overridden without editing source files:
 Example:
 
 ```bash
-PRF_SOURCE_ROOTS="src,protocols_src,resources" \
+PRF_SOURCE_ROOTS="src,protocols_src,benchmarks,data/concepts,scenarios,suites,resources" \
 PRF_RUNS_ROOT=/mnt/evidence-archive \
 PRF_EVIDENCE_USER=dedicated-runner \
   bb forensic:run

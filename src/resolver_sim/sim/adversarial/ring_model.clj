@@ -15,12 +15,6 @@
    Enable via :use-ring-model? true in phase-ai params."
   (:require [resolver-sim.stochastic.rng :as rng]))
 
-(def ^:private cascade-threshold
-  "Number of members detected in one epoch before the entire ring lays low.
-   Hardcoded at 2 for the current ring model parameters; if ring sizes grow
-   significantly, this should be parameterized as a fraction of active members."
-  2)
-
 ;; ---------------------------------------------------------------------------
 ;; Data model
 ;; ---------------------------------------------------------------------------
@@ -132,7 +126,7 @@
               detection-results)
 
         ;; Step 4: cascade — enough concurrent detections triggers lay-low
-        cascade?  (>= (count exits) cascade-threshold)
+        cascade?  (>= (count exits) (:cascade-threshold params 2))
         members-after-exits
         (if cascade?
           (mapv (fn [m]

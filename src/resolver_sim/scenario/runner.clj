@@ -260,6 +260,7 @@
                          {:ok? (= expected-halt-reason (:halt-reason base-entry))
                           :expected expected-halt-reason
                           :actual (:halt-reason base-entry)})
+        scenario-refs (-> base-entry :scenario :fixture-refs)
         entry          (-> base-entry
                            (assoc :expected-outcome expected-outcome
                                   :expected-halt-reason expected-halt-reason
@@ -275,6 +276,7 @@
                                   :metrics metrics
                                   :expectations expectations
                                   :theory theory-res
+                                  :fixture-refs scenario-refs
                                   :name (or (:name base-entry) (str trace-id)))
                            (update :checks assoc
                                    :fixture-outcome fixture-outcome

@@ -138,6 +138,8 @@
   [trace last-world primary-wf-id]
   (when primary-wf-id
     (let [res-map          (meta/resolution-semantics last-world primary-wf-id)
+          resolution-state (get-in last-world [:escrow-transfers primary-wf-id :resolution])
+          trace-decision   (:trace-decision resolution-state)
           outcome          (normalize-resolution-field (:outcome res-map))
           finality         (normalize-resolution-field (:finality res-map))
           integrity        (normalize-resolution-field (:integrity res-map))
@@ -167,6 +169,7 @@
                :integrity integrity}
         beneficiary            (assoc :beneficiary beneficiary)
         resolver-agent         (assoc :resolver resolver-agent)
+        trace-decision         (assoc :trace_decision trace-decision)
         (seq exec-res-entries) (assoc :authorized_resolver       exec-res-ok?
                                       :pending_settlement_created pending-created?
                                       :settlement_executed        settle-ok?)))))

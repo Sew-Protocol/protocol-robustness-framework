@@ -10,6 +10,7 @@
             [resolver-sim.protocols.sew.accounting   :as acct]
             [resolver-sim.protocols.sew.registry     :as reg]
             [resolver-sim.protocols.sew.resolution   :as res]
+            [resolver-sim.protocols.sew              :as sew]
             [resolver-sim.time.context :as time-ctx]))
 
 ;; ---------------------------------------------------------------------------
@@ -461,3 +462,49 @@
               r (res/execute-resolution w 0 "0xResolver" true "0xhash" nil)]
           (is (false? (:ok r)))
           (is (= :transfer-not-in-dispute (:error r))))))))
+
+(deftest register-stake-via-command-handler-does-not-increase-total-held
+  "Regression: the apply-action \"register-stake\" command handler must
+   not increase :total-held or :total-principal-deposited.
+   Resolver stake is tracked separately in :resolver-stakes."
+  (let [agent-index {0 {:address "0xRes"}}
+        ctx         {:agent-index agent-index}
+        world0      (t/empty-world 1000)
+        event       {:params  {:resolver "0xRes" :amount 5000 :token "USDC"}
+                     :action  "register-stake"
+                     :agent   0}
+        result      (sew/apply-action ctx world0 event)
+        world1      (:world result)]
+    (is (true? (:ok result)) "register-stake should succeed")
+    (is (= 5000 (get-in world1 [:resolver-stakes "0xRes"]))
+        "stake registered in :resolver-stakes")
+    (is (= 0 (get-in world1 [:total-held :USDC] 0))
+        ":total-held not increased by register-stake")
+    (is (= 0 (get-in world1 [:total-principal-deposited :USDC] 0))
+        ":total-principal-deposited not increased by register-stake")))
+
+(deftest withdraw-stake-via-command-handler-does-not-decrease-total-held
+  "Regression: the apply-action \"withdraw-stake\" command handler must
+   not decrease :total-held for the principal portion (only for yield).
+   Resolver stake is tracked separately in :resolver-stakes."
+  (let [agent-index {0 {:address "0xRes"}}
+        ctx         {:agent-index agent-index}
+        world0      (t/empty-world 1000)
+        reg-event   {:params  {:resolver "0xRes" :amount 5000 :token "USDC"}
+                     :action  "register-stake"
+                     :agent   0}
+        world1      (:world (sew/apply-action ctx world0 reg-event))
+        initial-held   (get-in world1 [:total-held :USDC] 0)
+        initial-princ  (get-in world1 [:total-principal-deposited :USDC] 0)
+        wdraw-event {:params  {:amount 2000 :token "USDC"}
+                     :action  "withdraw-stake"
+                     :agent   0}
+        result      (sew/apply-action ctx world1 wdraw-event)
+        world2      (:world result)]
+    (is (true? (:ok result)) "withdraw-stake should succeed")
+    (is (= 3000 (reg/get-stake world2 "0xRes"))
+        "stake reduced in :resolver-stakes")
+    (is (= initial-held (get-in world2 [:total-held :USDC] 0))
+        ":total-held not decreased by withdraw-stake principal")
+    (is (= initial-princ (get-in world2 [:total-principal-deposited :USDC] 0))
+        ":total-principal-deposited unchanged by withdraw-stake")))

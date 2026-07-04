@@ -9,6 +9,7 @@
             [clojure.data.json :as json]
             [resolver-sim.evidence.config :as evcfg]
             [resolver-sim.io.resource-path :as rp]
+            [resolver-sim.io.fixtures :as io-fix]
             [resolver-sim.validation.suite-result :as suite]
             [resolver-sim.contract-model.replay :as replay]
             [resolver-sim.protocols.registry :as preg]
@@ -57,30 +58,12 @@
 
 (defn- fixture-key->path
   [k]
-  (let [ns (namespace k)
-        nm (name k)
-        ext (if (= ns "traces") ".trace.json" ".edn")]
-    (if ns
-      (str "data/fixtures/" ns "/" nm ext)
-      (str "data/fixtures/" nm ext))))
+  (io-fix/fixture-key->path k))
 
 (defn load-fixture
-  "Load a fixture by keyword. Tries classpath resource first, then filesystem."
+  "Load a fixture by keyword. Delegates to resolver-sim.io.fixtures."
   [k]
-  (let [path (fixture-key->path k)
-        resource-path (str "resource:" path)]
-    (if (rp/path-exists? resource-path)
-      (let [content (rp/slurp-path resource-path)]
-        (if (.endsWith path ".json")
-          (json/read-str content :key-fn keyword)
-          (edn/read-string content)))
-      (let [f (io/file path)]
-        (if (.exists f)
-          (with-open [r (io/reader f)]
-            (if (.endsWith path ".json")
-              (json/read r :key-fn keyword)
-              (edn/read (java.io.PushbackReader. r))))
-          (throw (ex-info "Fixture not found" {:key k :path path :resource-path resource-path})))))))
+  (io-fix/load-fixture k))
 
 (defn normalize-scenario
   "Delegate to `resolver-sim.scenario.normalize/normalize-scenario`."

@@ -116,7 +116,7 @@
     (chain/reset-registry!)
     (let [artifact-dir (temp-artifact-dir)
           built (node/build-execution-node (base-node-spec {:execution-id :execution/replay}))]
-      (with-redefs [evcfg/artifact-dir (constantly artifact-dir)]
+      (binding [evcfg/*artifact-dir* artifact-dir]
         (let [{:keys [path artifact-entry]} (node/persist-execution-node! built)
               readback (node/read-persisted-node path)
               registry (chain/build-registry)
@@ -143,7 +143,7 @@
                                                      :class :unexpected
                                                      :message "child failure"
                                                      :expected? false}]}))]
-      (with-redefs [evcfg/artifact-dir (constantly artifact-dir)]
+      (binding [evcfg/*artifact-dir* artifact-dir]
         (let [parent-result (node/persist-execution-node! parent)
               _ (node/register-node! parent)
               child-result (node/persist-execution-node! child)
@@ -278,7 +278,7 @@
   (node/with-fresh-registry
     (chain/reset-registry!)
     (let [artifact-dir (temp-artifact-dir)]
-      (with-redefs [evcfg/artifact-dir (constantly artifact-dir)]
+      (binding [evcfg/*artifact-dir* artifact-dir]
         (testing "pass node"
           (is (= 0
                  (node/with-execution-node

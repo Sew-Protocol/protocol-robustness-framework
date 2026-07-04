@@ -15,6 +15,7 @@
             [resolver-sim.evidence.timestamping :as ts]
             [resolver-sim.hash.canonical :as hc]
             [resolver-sim.forensic.provenance :as prov]
+            [resolver-sim.io.fixtures :as io-fix]
             [resolver-sim.io.scenarios :as io-sc]
             [resolver-sim.logging :as log]
             [resolver-sim.protocols.registry :as preg]
@@ -178,7 +179,10 @@
 
 (defn- scenario-file-details
   [scenario-path default-protocol-id]
-  (let [scenario (-> scenario-path io-sc/load-scenario-file normalize/normalize-scenario)
+  (let [scenario (-> scenario-path
+                     io-sc/load-scenario-file
+                     normalize/normalize-scenario
+                     io-fix/resolve-protocol-params-ref)
         protocol-id (or (:protocol scenario) default-protocol-id)]
     {:scenario scenario
      :protocol protocol-id}))

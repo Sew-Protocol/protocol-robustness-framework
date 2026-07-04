@@ -3,6 +3,11 @@
   (:require [clojure.string :as str]
             [resolver-sim.evidence.config :as evcfg]))
 
+(def success-patterns
+  [#"100\.0%"
+   #"REPLAY:\s*1\.00\s*MATCH"
+   #"Determinism verified at 100%"])
+
 (def artifact-paths
   {:test-summary (evcfg/artifact-path :test-summary)
    :test-run     (evcfg/artifact-path :test-run)

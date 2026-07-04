@@ -142,7 +142,15 @@
    :claim/invariants [:shortfall-fidelity]
    :claim/evaluator :claim/partial-fill-fairness}
 
-  {:claim/id :claim/no-leakage-beyond-shortfall
+   {:claim/id :claim/cap-adherence
+    :claim/title "Per-claimant cap adherence"
+    :claim/description "No allocation exceeds the declared per-claimant cap. When all claimants hit their caps, excess liquidity remains unallocated rather than being silently distributed."
+    :claim/property-types #{:fairness :safety}
+    :claim/concepts #{:allocation/partial-fill :allocation/pro-rata-fairness}
+    :claim/invariants [:yield/value-conservation :yield/shortfall-splits]
+    :claim/evaluator :claim/cap-adherence}
+
+   {:claim/id :claim/no-leakage-beyond-shortfall
    :claim/title "No leakage beyond shortfall"
    :claim/description "No value leaks beyond the declared shortfall bounds."
    :claim/property-types #{:safety}

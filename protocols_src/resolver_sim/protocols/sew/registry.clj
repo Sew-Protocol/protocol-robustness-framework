@@ -182,7 +182,15 @@
                      (update-in [:resolver-stakes resolver-addr] (fnil - 0) actual)
                      (acct/distribute-slashed-funds actual challenger bounty-bps workflow-id)
                      (update-in [:resolver-slash-total resolver-addr] (fnil + 0) actual)
-                     (cond-> sub-held? (acct/sub-held token actual)))]
+                     (cond-> sub-held?
+                       (acct/sub-held token
+                                      actual
+                                      {:action "slash-resolver-stake"
+                                       :reason :resolver-slash-custody-debited
+                                       :extra {:held/action "slash-resolver-stake"
+                                               :held/resolver resolver-addr
+                                               :held/workflow-id workflow-id
+                                               :held/challenger challenger}})))]
       ;; Phase 6: Capture Slashing Evidence — returns evidence map with :evidence/hash
      (let [stake-evidence
            (attr/with-attribution

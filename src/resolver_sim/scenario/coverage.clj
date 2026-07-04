@@ -84,8 +84,8 @@
 (defn- load-scenario-metadata-index
   "Index canonical scenario metadata by normalized scenario id."
   []
-  (let [scenario-dir (sc/*scenario-dir*)
-        scenario-ext (sc/*scenario-ext*)
+  (let [scenario-dir sc/*scenario-dir*
+        scenario-ext sc/*scenario-ext*
         scenario-files (->> (file-seq (io/file scenario-dir))
                             (filter #(.isFile %))
                             (filter #(str/ends-with? (.getName %) scenario-ext)))]

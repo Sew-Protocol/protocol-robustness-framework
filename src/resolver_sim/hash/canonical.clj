@@ -291,7 +291,19 @@
       (apply ba-concat (ba-of tag-map) count-enc elements))
 
     (instance? clojure.lang.IPersistentSet v)
-    (let [sorted (vec (sort (fn [a b] (compare (canonical-bytes a) (canonical-bytes b))) v))
+    (let [byte-cmp (fn [^bytes a ^bytes b]
+                     (let [alen (count a)
+                           blen (count b)
+                           minlen (min alen blen)]
+                       (loop [i 0]
+                         (if (= i minlen)
+                           (- alen blen)
+                           (let [ai (bit-and (int (aget a i)) 0xFF)
+                                 bi (bit-and (int (aget b i)) 0xFF)]
+                             (if (= ai bi)
+                               (recur (inc i))
+                               (- ai bi)))))))
+          sorted (vec (sort (fn [a b] (byte-cmp (canonical-bytes a) (canonical-bytes b))) v))
           count-enc (encode-varuint (count v))
           elements (map canonical-bytes sorted)]
       (apply ba-concat (ba-of tag-array) count-enc elements))

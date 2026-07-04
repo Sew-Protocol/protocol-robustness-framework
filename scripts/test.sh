@@ -220,6 +220,8 @@ run_unit() {
     resolver-sim.contract-model.replay-batch-appeal-test \
     resolver-sim.contract-model.replay-batch-slash-domain-test \
     resolver-sim.protocols.sew.dispute-resolution-coverage-test \
+    resolver-sim.protocols.sew.resolution-test \
+    resolver-sim.protocols.sew.trace-export-idempotency-test \
     resolver-sim.financial.pro-rata-characterization-test \
     resolver-sim.scenario.suites-test \
     resolver-sim.validation.scenario-registry-test \

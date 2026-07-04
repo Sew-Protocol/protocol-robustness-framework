@@ -203,7 +203,8 @@ disputes, this is too long.
 
 ### Mechanism
 
-A governance agent can override resolver authorization through `apply-event`:
+A governance agent can override resolver authorization through `apply-event`
+or the explicit `force-authorized` helper:
 
 ```clojure
 (ir/apply-event session
@@ -217,7 +218,10 @@ A governance agent can override resolver authorization through `apply-event`:
 
 The override works by patching the resolution-module slot in the workflow's
 module snapshot and providing a resolution-module function that always returns
-`{:authorized? true}`. The normal `authorized-resolver?` priority chain is:
+`{:authorized? true}`. The current implementation records a forced-authorization
+envelope and executes the resolution transition directly so the replay trace
+shows an exceptional path instead of looking like a normal resolver decision.
+The normal `authorized-resolver?` priority chain is:
 1. `custom-resolver` in escrow settings (exclusive)
 2. resolution-module from snapshot (delegates to module function)
 3. `et.dispute-resolver` on the escrow transfer
@@ -230,7 +234,7 @@ any caller, regardless of priority 1 or 3.
 | Control | Implementation |
 |---|---|
 | **Agent must exist** | `resolve-gov-agent` checks the named agent is in the session's agent list. Unknown agents are rejected. |
-| **Agent is recorded** | The step's `:governance-override` field stores the governance agent's address (`0xresolver`). This is preserved in exported scenarios. |
+| **Agent is recorded** | The exported step stores `:forensic/governed-by` plus `:forensic/authorization` with machine-readable provenance. |
 | **Console audit trail** | `[GOV] resolver overrides resolver authorization` and `[gov: 0xresolver]` in the step line. |
 | **No accidental use** | Only available through `apply-event`, not `pick`/`available-choices`. The researcher must explicitly construct the event and name the governance agent. |
 | **Resolver availability is advisory** | The `resolver-unavailable-reason` check runs and prints why the override was needed (overcapacity, frozen, opted out, circuit breaker), but does not gate the override. The governance agent's approval *is* the authorization. |

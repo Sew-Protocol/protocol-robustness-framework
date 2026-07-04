@@ -140,3 +140,53 @@
           "workflow tracked in overflow record")
       (is (= :active (:status record))
           "overflow still active (cap not reached)"))))
+
+(deftest force-authorized-resolution-records-forensic-provenance
+  (let [session (ir/start-session
+                 (assoc overflow-fixture :agents overflow-agents)
+                 [{:seq 0 :time 1000 :agent "buyer" :action "create-escrow"
+                   :params {:token "USDC" :to "0xseller" :amount 5000}}
+                  {:seq 1 :time 1060 :agent "buyer" :action "raise-dispute"
+                   :params {:workflow-id 0}}])
+        forced (ir/apply-event session
+                               {:action "execute-resolution"
+                                :params {:workflow-id 0 :is-release true
+                                         :resolution-hash "0xforced"}
+                                :agent "buyer"}
+                               {:governed-by "governance"
+                                :reason :resolver-overcapacity})
+        resolution (get-in (:world forced) [:escrow-transfers 0 :resolution])
+        step (last (:steps forced))]
+    (is (:exists (t/get-pending (:world forced) 0))
+        "forced authorization should still execute the resolution path")
+    (is (= "governance" (:governed-by step)))
+    (is (= :interactive-override
+           (get-in step [:authorization/provenance :authorization/class])))
+    (is (= :exceptional
+           (get-in step [:authorization/provenance :authorization/path])))
+    (is (= :force-authorized
+           (get-in step [:authorization/provenance :authorization/check])))
+    (is (= :resolver-overcapacity
+           (get-in step [:authorization/provenance :authorization/reason])))
+    (is (= "governance"
+           (get-in resolution [:authorization/provenance :authorization/actor-id])))
+    (is (= :scenario-declared
+           (get-in resolution [:authorization/provenance :authorization/basis])))))
+
+(deftest force-authorized-rejects-non-resolution-actions
+  (let [session (ir/start-session
+                 (assoc overflow-fixture :agents overflow-agents)
+                 [{:seq 0 :time 1000 :agent "buyer" :action "create-escrow"
+                   :params {:token "USDC" :to "0xseller" :amount 5000}}
+                  {:seq 1 :time 1060 :agent "buyer" :action "raise-dispute"
+                   :params {:workflow-id 0}}])
+        original-steps (:steps session)
+        original-world (:world session)
+        forced (ir/force-authorized session
+                                    {:action "set-paused"
+                                     :params {:paused? true}
+                                     :agent "buyer"}
+                                    {:governed-by "governance"
+                                     :reason :resolver-overcapacity})]
+    (is (= original-steps (:steps forced)))
+    (is (= original-world (:world forced)))))

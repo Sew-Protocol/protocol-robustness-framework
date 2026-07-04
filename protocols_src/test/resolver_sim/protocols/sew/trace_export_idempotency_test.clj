@@ -18,3 +18,19 @@
     (is (= "evt-exec-res-1" (get-in dup-exec [:attributes :event_id])))
     (is (= "no-op-duplicate" (get-in dup-set [:attributes :idempotency])))
     (is (= "evt-settle-1" (get-in dup-set [:attributes :event_id])))))
+
+(deftest export-includes-transfer-trace-decision-for-final-resolution
+  (let [scenario (scen-io/load-scenario-file "scenarios/edn/S11_zero-fee-edge-case.edn")
+        result (replay/replay-with-protocol sew/protocol scenario)
+        fixture (trace-export/export-trace-fixture result scenario)
+        decision (get-in fixture [:expected_semantics :resolution :trace_decision])]
+    (is (= :pass (:outcome result)))
+    (is (= {:decision-id "resolve-0-0"
+            :step 1120
+            :alternatives [:release :refund]
+            :selected :release
+            :reasoning "Resolver 0xresolver releases escrow 0"
+            :caller "0xresolver"
+            :decision-evidence-hash (get-in decision [:decision-evidence-hash])}
+           decision))
+    (is (string? (:decision-evidence-hash decision)))))

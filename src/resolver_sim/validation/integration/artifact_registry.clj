@@ -102,17 +102,17 @@
 
   (:require
    [clojure.data.json :as json]
+   [resolver-sim.evidence.config :as evcfg]
    [resolver-sim.validation.adapters.artifact-registry :as adapter]))
 
 ;; ── registry checks ──────────────────────────────────────────────────────────
 
-(def ^:private known-non-artifact-schemas
+(defn- known-non-artifact-schemas
   "Schema versions that are not provided by any artifact entry but are
-   referenced as verifies_against targets (e.g. evidence-contract,
-   scenario schemas, projection schemas)."
-  #{"evidence-contract.v1"
-    "scenario.v1"
-    "projection.v1"})
+   referenced as verifies_against targets.
+   Read from config/evidence.json :exempt_schemas key."
+  []
+  (set (get (evcfg/get-config) :exempt_schemas #{})))
 
 (defn- parse-verifies-against
   "Extract the set of schema versions an artifact depends on."
@@ -140,7 +140,7 @@
   (let [provided (provided-schemas artifacts)
         all-deps (mapcat parse-verifies-against artifacts)
         dangling (remove #(or (contains? provided %)
-                              (contains? known-non-artifact-schemas %))
+                              (contains? (known-non-artifact-schemas) %))
                          all-deps)]
     (mapv (fn [dep]
             {:check/id  :registry/dangling-dep

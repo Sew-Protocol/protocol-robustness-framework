@@ -21,7 +21,7 @@
    :concept/maps-to
    {:scenarios ["S-DR-043-payout-shortfall-deferred"]
     :claims [:evidence-root-present :replay-result-present]
-    :invariants ["allocation-complete" "shortfall-recorded" "proportionality-preserved"]
+    :invariants [:yield/shortfall-splits :yield/value-conservation :allocation-complete]
     :evidence [:evidence/settlement-path :evidence/value-transfer]}
    :concept/why-it-matters
    "This is the visible part of the benchmark's shortfall behavior: partial
@@ -39,26 +39,27 @@
    :concept/maps-to
    {:scenarios ["S103_negative-yield-shortfall-cascade"]
     :claims [:evidence-root-present :replay-result-present]
-    :invariants ["shortfall-recorded" "conservation-preserved"]
+    :invariants [:yield/shortfall-splits :yield/value-conservation :conservation]
     :evidence [:evidence/shortfall :evidence/metrics]}
    :concept/why-it-matters
    "If shortfall is not detected, later recovery logic cannot make a fair or
     auditable allocation."}
 
-  {:concept/id :allocation/pro-rata-fairness
-    :concept/shadows-global? true
-    :concept/title "Pro-rata fairness"
+  {:concept/id :allocation/stake-liquidity-blocking
+    :concept/title "Stake liquidity blocking"
    :concept/summary
-   "Equal-priority claimants receive proportionate recovery from the available
-    value."
+   "When a resolver's protocol stake is affected by a yield module shortfall,
+    the protocol blocks actions that require liquid stake instead of allowing
+    them to proceed with insufficient coverage."
    :concept/stakeholder-language
-   "Claimants at the same priority level should receive the same fraction of
-    what they are owed."
+   "A resolver whose stake is caught in a shortfall should not be able to act
+    as if their full stake is available when it is not."
    :concept/maps-to
    {:scenarios ["S104_resolver-stake-shortfall"]
     :claims [:evidence-root-present :replay-result-present]
-    :invariants ["proportionality-preserved" "priority-order-preserved"]
-    :evidence [:evidence/allocation :evidence/invariant-results]}
+    :invariants [:yield/shortfall-splits :yield/position-consistency :yield/exposure]
+    :evidence [:evidence/settlement-path :evidence/invariant-results]}
    :concept/why-it-matters
-   "If the allocation is not proportional, the benchmark is measuring ordering
-    or privilege rather than fair recovery."}]}
+   "If shortfall-affected stake is treated as fully liquid, resolvers can take
+    actions that exceed their actual backing, undermining the safety of the
+    resolution system."}]}

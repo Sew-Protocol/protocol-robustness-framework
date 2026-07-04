@@ -217,7 +217,7 @@
                :concept/source :benchmark-local}
               {:concept/id :allocation/shortfall
                :concept/source :benchmark-local}
-              {:concept/id :allocation/pro-rata-fairness
+               {:concept/id :allocation/stake-liquidity-blocking
                :concept/source :benchmark-local}
               {:concept/id :consensus/evidence
                :concept/source :global}

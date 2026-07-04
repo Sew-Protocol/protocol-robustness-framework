@@ -18,20 +18,20 @@
     shortfall detection, pro-rata allocation, and deferred claim recording.
     Uses :suite/sew-shortfall-allocation-v0 (3 scenarios)."
     :benchmark/deferred-scenario-claims #{:allocation-complete
-                                         :conservation
-                                         :ordering-independent}
+                                          :conservation
+                                          :no-invariant-errors}
    :benchmark/purpose
  "Evaluate shortfall handling across three conditions: yield liquidity
   shortfall with partial fill, negative yield cascade with deferred
   recovery, and resolver stake shortfall. Each scenario exercises
   shortfall detection, pro-rata allocation, and deferred claim recording."
- :benchmark/concepts        [:robustness/protocol-value-conservation
-                             :allocation/partial-fill
-                             :allocation/shortfall
-                             :allocation/pro-rata-fairness
-                             :consensus/evidence
-                             :consensus/finality
-                             :verifiable-assurance/forensic-confidence]
+  :benchmark/concepts        [:robustness/protocol-value-conservation
+                              :allocation/partial-fill
+                              :allocation/shortfall
+                              :allocation/stake-liquidity-blocking
+                              :consensus/evidence
+                              :consensus/finality
+                              :verifiable-assurance/forensic-confidence]
  :benchmark/scenarios
  [{:scenario/id "S-DR-043-payout-shortfall-deferred"
    :dimension   :allocation/partial-fill
@@ -39,9 +39,9 @@
   {:scenario/id "S103_negative-yield-shortfall-cascade"
    :dimension   :allocation/shortfall
    :claim       :conservation}
-  {:scenario/id "S104_resolver-stake-shortfall"
-   :dimension   :allocation/pro-rata-fairness
-   :claim       :ordering-independent}]
+   {:scenario/id "S104_resolver-stake-shortfall"
+    :dimension   :allocation/stake-liquidity-blocking
+    :claim       :no-invariant-errors}]
   :benchmark/claims
   [{:claim/id :evidence-root-present
     :claim/role :primary

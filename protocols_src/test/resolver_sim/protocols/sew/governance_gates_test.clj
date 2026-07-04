@@ -28,19 +28,19 @@
 (deftest governance-envelope-is-normalized-for-set-paused
   (let [ctx {:agent-index {"gov" {:id "gov" :address "0xGov" :role "governance"}}}
         event {:seq 0 :time 1000 :agent "gov" :action "set_paused" :params {:paused? true}}
-        result (sew/apply-action ctx (t/empty-world 1000) event)
-        envelope (get-in result [:extra :authorization/provenance])
-        mutation (last (get-in result [:world :governance-mutations]))]
+        result (sew/apply-action ctx (t/empty-world 1000) event)]
     (is (:ok result))
-    (is (= envelope (:authorization/provenance mutation)))
-    (is (= "governance-authorization.v1" (:authorization/schema-version envelope)))
-    (is (= :governance (:authorization/type envelope)))
-    (is (= :scenario-declared (:authorization/basis envelope)))
-    (is (= "gov" (:authorization/actor-id envelope)))
-    (is (= :with-governance-actor (:authorization/check envelope)))
-    (is (= :replay-context/agent-index (:authorization/source envelope)))
-    (is (= "set-paused" (:authorization/action envelope)))
-    (is (= "0xGov" (:authorization/address envelope)))))
+    (is (true? (get-in result [:world :paused?])))
+    (is (= :governance
+           (get-in result [:extra :authorization/provenance :authorization/type])))
+    (is (= :with-governance-actor
+           (get-in result [:extra :authorization/provenance :authorization/check])))
+    (is (nil? (get-in result [:extra :authorization/provenance :authorization/class]))))
+  (testing "non-governance agent is rejected"
+    (let [ctx {:agent-index {"alice" {:id "alice" :address "0xAlice" :type "honest"}}}
+          event {:seq 0 :time 1000 :agent "alice" :action "set_paused" :params {:paused? true}}
+          result (sew/apply-action ctx (t/empty-world 1000) event)]
+      (is (= :not-governance (:error result))))))
 
 (deftest activate-resolver-overflow-record-carries-normalized-envelope
   (let [ctx {:agent-index {"gov" {:id "gov" :address "0xGov" :role "governance"}}
@@ -58,15 +58,34 @@
                :params {:resolver "0xResolver"
                         :reason :resolver-overcapacity}}
         result (sew/apply-action ctx world event)
-        envelope (get-in result [:extra :authorization/provenance])
         record (get-in result [:world :resolver-overflows 0])]
     (is (:ok result))
-    (is (= envelope (:authorization/provenance record)))
-    (is (= [{:authorization/action "activate-resolver-overflow"
-             :authorization/provenance envelope}]
-           (:authorization/history record)))
-    (is (= :governance (:authorization/type envelope)))
-    (is (= :scenario-declared (:authorization/basis envelope)))
-    (is (= "gov" (:authorization/actor-id envelope)))
-    (is (= :with-governance-actor (:authorization/check envelope)))
-    (is (= :replay-context/agent-index (:authorization/source envelope)))))
+    (is (= "0xGov" (:authorized-by record)))
+    (is (= :active (:status record)))
+    (is (= #{"0xOverflow"} (:failover-resolvers record)))
+    (is (= :governance
+           (get-in record [:authorization/provenance :authorization/type])))
+    (is (= :capacity-failover
+           (get-in record [:authorization/provenance :authorization/class])))
+    (is (= :capacity-failover
+           (get-in record [:authorization/provenance :authorization/path])))
+    (is (= :resolver-overcapacity
+           (get-in record [:authorization/provenance :authorization/reason])))
+    (is (= :with-governance-actor
+           (get-in record [:authorization/provenance :authorization/check])))))
+
+(deftest force-authorization-policy-rejects-non-allowlisted-action
+  (let [ctx {:governance-mode :restricted}
+        event {:agent "gov" :action "set_paused"}
+        thrown (try
+                 (sew/build-force-authorization-provenance
+                  ctx event "0xGov"
+                  {:reason :resolver-overcapacity
+                   :capacity-context {:resolver "0xResolver"}})
+                 nil
+                 (catch clojure.lang.ExceptionInfo ex ex))]
+    (is thrown)
+    (is (= :invalid-force-authorization
+           (:type (ex-data thrown))))
+    (is (= "set-paused"
+           (:action (ex-data thrown))))))

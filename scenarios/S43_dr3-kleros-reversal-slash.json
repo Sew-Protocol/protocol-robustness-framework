@@ -27,18 +27,11 @@
     "address" : "0xkeeper",
     "role" : "keeper"
   } ],
+  "protocol-params-ref" : "protocol/kleros",
   "protocol-params" : {
-    "resolver-fee-bps" : 150,
-    "resolution-module" : "0xkleros-proxy",
-    "escalation-resolvers" : {
-      "0" : "0xl0",
-      "1" : "0xl1",
-      "2" : "0xl2"
-    },
     "appeal-window-duration" : 60,
     "reversal-slash-bps" : 2500,
-    "challenge-bounty-bps" : 1000,
-    "max-dispute-duration" : 2592000
+    "challenge-bounty-bps" : 1000
   },
   "events" : [ {
     "seq" : 0,

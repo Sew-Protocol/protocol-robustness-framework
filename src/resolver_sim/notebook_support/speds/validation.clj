@@ -1,6 +1,7 @@
 (ns resolver-sim.notebook-support.speds.validation
   "Lightweight SPEDS validation helpers for consistency checks."
-  (:require [clojure.java.io :as io]))
+  (:require [clojure.java.io :as io]
+            [resolver-sim.notebook-support.speds.config :as config]))
 
 (def required-frame-keys
   #{:header :footer-left :footer-right :content})
@@ -15,11 +16,6 @@
 (def required-finding-keys
   #{:finding_id :scenario_id :kind :severity :status_kind :title
     :summary :story :evidence_refs :provenance})
-
-(def hardcoded-success-patterns
-  [#"100\.0%"
-   #"REPLAY:\s*1\.00\s*MATCH"
-   #"Determinism verified at 100%"])
 
 (defn validate-frame-schema
   "Checks that every frame map contains required keys.
@@ -66,7 +62,7 @@
           (let [f (io/file p)]
             (if (.exists f)
               (let [txt (slurp f)]
-                (->> hardcoded-success-patterns
+                (->> config/success-patterns
                      (filter #(re-find % txt))
                      (map (fn [pat]
                             {:file p :issue :hardcoded-success-claim :pattern (str pat)}))))

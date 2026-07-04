@@ -15,6 +15,7 @@
      4. bond-boundedness (single)    — slash amount <= posted bond per workflow (vacuous until bonds added)
      5. no-double-finalize           — each workflow-id finalizes at most once (structural guarantee)"
   (:require [clojure.set :as set]
+            [resolver-sim.protocols.sew.accounting    :as acct]
             [resolver-sim.protocols.sew.authority     :as auth]
             [resolver-sim.protocols.sew.types         :as t]
             [resolver-sim.yield.accounting            :as yield-acct]
@@ -546,6 +547,51 @@
            :has-custody has-custody?})]
     {:holds?     (empty? violations)
      :violations (vec violations)}))
+
+(defn held-adjustments-reconstruct-total-held?
+  "When a world declares its held-adjustment ledger complete, replay it and
+   confirm that the replay-derived ledger index matches all materialized
+   custody views."
+  [world]
+  (if (get-in world [:params :held-adjustments/complete?])
+    (let [adjustments (:held-adjustments world [])
+          legacy-uses (get-in world [:held-adjustments/legacy-uses :count] 0)]
+      (cond
+        (pos? legacy-uses)
+        {:holds? false
+         :violations [{:type :held-adjustments-legacy-uses-present
+                       :count legacy-uses
+                       :entries (get-in world [:held-adjustments/legacy-uses :entries] [])}]}
+
+        :else
+        (try
+          (let [{replayed-total-held :total-held
+                 replayed-positions :held/positions
+                 replayed-index :held-ledger/index}
+                (acct/replay-held-adjustment-state adjustments)
+                actual-index (get world :held-ledger/index {})
+                actual-total-held (:total-held world {})
+                actual-positions (:held/positions world {})]
+            (if (and (= replayed-index actual-index)
+                     (= replayed-total-held actual-total-held)
+                     (= replayed-positions actual-positions)
+                     (= (get actual-index :by-token {}) actual-total-held)
+                     (= (get actual-index :by-position {}) actual-positions))
+              {:holds? true :violations nil}
+              {:holds? false
+               :violations [{:type :held-adjustments-replay-mismatch
+                             :replayed {:held-ledger/index replayed-index
+                                        :total-held replayed-total-held
+                                        :held/positions replayed-positions}
+                             :actual {:held-ledger/index actual-index
+                                      :total-held actual-total-held
+                                      :held/positions actual-positions}}]}))
+          (catch Exception e
+            {:holds? false
+             :violations [{:type :held-adjustments-invalid
+                           :message (.getMessage e)
+                           :data (ex-data e)}]}))))
+    {:holds? true :violations nil}))
 
 ;; ---------------------------------------------------------------------------
 ;; Invariant 16: Fraud slashes must not be auto-executed
@@ -1506,6 +1552,7 @@
                  :slash-status-consistent       (slash-status-consistent? world)
                  :appeal-bond-conserved         (appeal-bond-conserved? world)
                  :appeal-bond-custody-consistent (appeal-bond-custody-consistent? world)
+                 :held-adjustments-reconstruct-total-held (held-adjustments-reconstruct-total-held? world)
                  :no-auto-fraud-execute         (no-auto-fraud-execute? world)
                  :bond-liquidity                (bond-liquidity-holds? world)
                  :bond-slash-bounded            (bond-slash-bounded? world)

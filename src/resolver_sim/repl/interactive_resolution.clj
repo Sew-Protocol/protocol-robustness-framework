@@ -11,6 +11,8 @@
             [resolver-sim.time.context :as time-ctx]
             [resolver-sim.time.deadlines :as dl]))
 
+(declare apply-choice)
+
 (defn start-session
   "Create an interactive session from a scenario/fixture map."
   ([fixture] (start-session fixture nil))
@@ -195,13 +197,126 @@
                     :level (t/dispute-level world wf)}]))
         (:escrow-transfers world)))
 
+(defn- governance-agent?
+  [agent]
+  (contains? #{"governance" :governance} (or (:role agent) (:type agent))))
+
+(defn- resolve-governance-agent
+  [session governed-by]
+  (let [agent (some #(when (= governed-by (:id %)) %) (:agents session))]
+    (cond
+      (nil? agent)
+      {:ok false :error :unknown-governance-agent :detail {:agent-id governed-by}}
+
+      (not (governance-agent? agent))
+      {:ok false :error :not-governance :detail {:agent-id governed-by}}
+
+      :else
+      {:ok true :agent agent})))
+
+(defn- resolver-unavailable-reason
+  [world workflow-id]
+  (let [resolver (get-in world [:escrow-transfers workflow-id :dispute-resolver])
+        cap      (get-in world [:resolver-capacities resolver])
+        now      (time-ctx/block-ts world)]
+    (cond
+      (nil? resolver)
+      :missing-resolver
+
+      (and cap
+           (pos? (:max-concurrent cap 0))
+           (>= (:current-active cap 0) (:max-concurrent cap 0)))
+      :resolver-overcapacity
+
+      (> (get-in world [:resolver-frozen-until resolver] 0) now)
+      :resolver-frozen
+
+      (get-in world [:circuit-breaker :active?])
+      :circuit-breaker-active
+
+      (contains? (:resolver-unavailable world #{}) resolver)
+      :resolver-unavailable
+
+      :else
+      :manual-override)))
+
+(defn force-authorized
+  "Execute an exceptional resolution path with explicit governance provenance.
+   This is intentionally narrow: it only supports execute-resolution overrides."
+  [session event {:keys [governed-by reason] :as _opts}]
+  (let [action-name (:action event)]
+    (if (not= "execute-resolution" action-name)
+      (do
+        (println (str "[FAIL] force-authorized only supports execute-resolution, got " action-name))
+        session)
+      (let [gov-res (resolve-governance-agent session governed-by)]
+        (if-not (:ok gov-res)
+          (do
+            (println (str "[FAIL] force-authorized failed: " (:error gov-res)))
+            session)
+          (let [agent (:agent gov-res)
+                workflow-id (:workflow-id (:params event))
+                unavailable-reason (or reason
+                                       (resolver-unavailable-reason (:world session) workflow-id))
+                capacity (get-in (:world session)
+                                 [:resolver-capacities
+                                  (get-in (:world session)
+                                          [:escrow-transfers workflow-id :dispute-resolver])])
+                provenance
+                (sew/build-force-authorization-provenance
+                 (:context session)
+                 {:action action-name :agent governed-by}
+                 (:address agent)
+                 {:reason unavailable-reason
+                  :check :force-authorized
+                  :source :repl-interactive-session
+                  :capacity-context
+                  {:workflow-id workflow-id
+                   :resolver (get-in (:world session) [:escrow-transfers workflow-id :dispute-resolver])
+                   :current-active (get capacity :current-active 0)
+                   :max-concurrent (get capacity :max-concurrent 0)}
+                  :limitation
+                  "Forced authorization is replay-local and scenario-declared; it does not prove registry or on-chain governance authority."})
+                choice {:action (:action event)
+                        :params (:params event)
+                        :actor (:agent event)
+                        :type (if (:agent event) :agent :keeper)
+                        :summary (str "force-authorized: " (:action event))
+                        :governed-by governed-by
+                        :apply-fn
+                        (fn [session' _event]
+                          (let [params (:params event)
+                                wf workflow-id
+                                is-release (get params :is-release true)
+                                resolution-hash (get params :resolution-hash "0xforce-authorized")
+                                result (res/apply-resolution-transition
+                                        (:world session') wf (:address agent)
+                                        is-release resolution-hash nil
+                                        :resolution-source :force-authorized)]
+                            (if (:ok result)
+                              (-> result
+                                  (update :world
+                                          (fn [world']
+                                            (assoc-in world'
+                                                      [:escrow-transfers wf :resolution :authorization/provenance]
+                                                      provenance)))
+                                  (update :extra merge {:authorization/provenance provenance}))
+                              result)))}]
+            (println (str "[FORCE] " governed-by " overrides resolver authorization for workflow " workflow-id
+                          " (" (name unavailable-reason) ")"))
+            (apply-choice session choice)))))))
+
 (defn- apply-choice
   "Apply a choice action, return updated session."
   [session choice]
   (let [event  {:action (:action choice)
                 :params (:params choice)
                 :agent  (when (= :agent (:type choice)) (:actor choice))}
-        result (sew/apply-action (:context session) (:world session) event)]
+        result ((or (:apply-fn choice)
+                    (fn [session' event']
+                      (sew/apply-action (:context session') (:world session') event')))
+                session
+                event)]
     (if (:ok result)
       (let [world' (:world result)
             step   {:seq    (count (:steps session))
@@ -210,10 +325,23 @@
                     :actor  (:actor choice)
                     :time   (:block-time world')
                     :result :applied
-                    :type   (:type choice)}]
+                    :type   (:type choice)}
+            step   (cond-> step
+                     (:governed-by choice)
+                     (assoc :governed-by (:governed-by choice))
+
+                     (get-in result [:extra :authorization/provenance])
+                     (assoc :authorization/provenance
+                            (get-in result [:extra :authorization/provenance]))
+
+                     (get-in result [:extra :execution/provenance])
+                     (assoc :execution/provenance
+                            (get-in result [:extra :execution/provenance])))]
         (println (str "Step " (:seq step) ": " (:action choice)
                       (when (= :agent (:type choice))
                         (str " (" (:actor choice) ")"))
+                      (when (:governed-by choice)
+                        (str " [gov: " (:governed-by choice) "]"))
                       " -> ok"))
         (let [before (format-escrow-state (:world session))
               after  (format-escrow-state world')]
@@ -248,13 +376,17 @@
 (defn apply-event
   "Directly apply an action event without going through available-choices.
    Event: {:action \"...\" :params {...} :agent \"...\"}"
-  [session event]
-  (let [choice {:action (:action event)
-                :params (:params event)
-                :actor  (:agent event)
-                :type   (if (:agent event) :agent :keeper)
-                :summary (str "direct: " (:action event))}]
-    (apply-choice session choice)))
+  ([session event]
+   (let [choice {:action (:action event)
+                 :params (:params event)
+                 :actor  (:agent event)
+                 :type   (if (:agent event) :agent :keeper)
+                 :summary (str "direct: " (:action event))}]
+     (apply-choice session choice)))
+  ([session event opts]
+   (if (:governed-by opts)
+     (force-authorized session event opts)
+     (apply-event session event))))
 
 (defn auto-until-decision
   "Run keeper/timed actions until no automated actions remain.
@@ -367,11 +499,21 @@
                   :protocol-params   (:protocol-params session)
                   :events            (vec (map-indexed
                                            (fn [i step]
-                                             {:seq    i
-                                              :time   (or (:time step) (:block-time (:world session)))
-                                              :agent  (:actor step)
-                                              :action (action-name-for-export (:action step))
-                                              :params (:params step)})
+                                             (cond-> {:seq    i
+                                                      :time   (or (:time step) (:block-time (:world session)))
+                                                      :agent  (:actor step)
+                                                      :action (action-name-for-export (:action step))
+                                                      :params (:params step)}
+                                               (:governed-by step)
+                                               (assoc :forensic/governed-by (:governed-by step))
+
+                                               (:authorization/provenance step)
+                                               (assoc :forensic/authorization
+                                                      (:authorization/provenance step))
+
+                                               (:execution/provenance step)
+                                               (assoc :forensic/execution
+                                                      (:execution/provenance step))))
                                            (:steps session)))}]
     (io/make-parents path)
     (spit path (with-out-str (pp/pprint scenario)))

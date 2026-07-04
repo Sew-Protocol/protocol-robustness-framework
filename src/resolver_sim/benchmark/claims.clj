@@ -360,6 +360,11 @@
     :check (fn [ctx]
              (check-invariants ctx [:shortfall-fidelity]))}
 
+   :claim/cap-adherence
+   {:scope :scenario
+    :check (fn [ctx]
+             (check-invariants ctx [:yield/value-conservation :yield/shortfall-splits]))}
+
    :claim/no-leakage-beyond-shortfall
    {:scope :scenario
     :check (fn [ctx]

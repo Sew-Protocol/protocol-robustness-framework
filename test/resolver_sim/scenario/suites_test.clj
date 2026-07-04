@@ -4,6 +4,7 @@
             [clojure.java.io :as io]
             [clojure.string :as str]
             [clojure.test :refer [deftest is testing]]
+            [resolver-sim.io.resource-path :as rp]
             [resolver-sim.protocols.registry :as preg]
             [resolver-sim.scenario.suites :as suites]
             [resolver-sim.io.scenario-runner :as sr]
@@ -35,22 +36,22 @@
         (is (= :file-path-suite (:kind definition)))
         (is (seq paths))
         (is (= (count paths) (suites/suite-path-count suite-key)))
-        (is (every? #(.exists (io/file %)) paths)
-            (str "missing paths: " (->> paths (remove #(.exists (io/file %))) vec pr-str)))
+        (is (every? #(some? (rp/resolve-path %)) paths)
+            (str "missing paths: " (->> paths (remove #(some? (rp/resolve-path %))) vec pr-str)))
         (is (contains? (clojure.core/set (preg/known-protocol-ids)) (:protocol-id definition)))
         (is (str/ends-with? (:description metadata) ".")
             "descriptions should read like sentences")))))
 
 (deftest yield-provider-suite-is-canonical-top-level
   (let [paths (suites/suite-paths :yield-provider-scenarios)]
-    (is (= ["scenarios/edn/Y01_vault-shared-liquidity.edn"
-            "scenarios/edn/Y02_vault-shortfall-partial-withdraw.edn"
-            "scenarios/edn/Y03_vault-risk-override-schedule-shadowing.edn"
-            "scenarios/edn/Y04_vault-recovery-claim-deferred.edn"
-            "scenarios/edn/Y05_auto-generated-shortfall.edn"]
+    (is (= ["resource:scenarios/edn/Y01_vault-shared-liquidity.edn"
+            "resource:scenarios/edn/Y02_vault-shortfall-partial-withdraw.edn"
+            "resource:scenarios/edn/Y03_vault-risk-override-schedule-shadowing.edn"
+            "resource:scenarios/edn/Y04_vault-recovery-claim-deferred.edn"
+            "resource:scenarios/edn/Y05_auto-generated-shortfall.edn"]
            paths))
-    (is (every? #(str/starts-with? % "scenarios/edn/Y") paths))
-    (is (not-any? #(str/includes? % "scenarios/yield/") paths))
+    (is (every? #(str/starts-with? % "resource:scenarios/edn/Y") paths))
+    (is (not-any? #(str/includes? % "resource:scenarios/yield/") paths))
     (is (= "yield-v1" (suites/suite-protocol-id :yield-provider-scenarios)))))
 
 (deftest machine-readable-suite-summary-can-be-parsed

@@ -21,8 +21,7 @@
                    :max-dispute-duration 2592000
                    :dispute-resolver "0xprimary"
                    :resolver-overflow-policy
-                   {:governance-address "0xgovernance"
-                    :default-duration 3600
+                   {:default-duration 3600
                     :max-duration 86400
                     :default-max-workflows 1
                     :max-workflows 500

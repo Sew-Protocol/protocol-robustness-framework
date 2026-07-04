@@ -78,10 +78,14 @@
   (get (get-config) :framework))
 
 (defn runs-root []
-  (get (get-config) :runs_root))
+  (or (System/getenv "PRF_RUNS_ROOT")
+      (get (get-config) :runs_root)
+      "./prf-runs"))
 
 (defn evidence-bundle-dir []
-  (get (get-config) :evidence_bundle_dir))
+  (or (System/getenv "PRF_BUNDLE_DIR")
+      (get (get-config) :evidence_bundle_dir)
+      "./prf-bundles"))
 
 (defn strict-mode?
   "Return true when strict validation mode is enabled in config.

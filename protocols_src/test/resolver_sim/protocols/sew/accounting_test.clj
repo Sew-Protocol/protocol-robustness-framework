@@ -36,6 +36,175 @@
     (is (= :no-fees-to-withdraw (:error r)))))
 
 ;; ---------------------------------------------------------------------------
+;; Held adjustment ledger
+;; ---------------------------------------------------------------------------
+
+(deftest add-held-records-custody-adjustment
+  (let [auth {:authorization/type :governance
+              :authorization/basis :scenario-declared}
+        world (ac/add-held (t/empty-world)
+                           usdc
+                           100
+                           {:action "appeal-slash"
+                            :reason :appeal-bond-posted
+                            :authorization-provenance auth
+                            :extra {:held/workflow-id 42
+                                    :held/actor alice}})
+        adjustment (last (:held-adjustments world))
+        position-id [:held/position usdc :appeal-bond 42 alice]]
+    (is (= 100 (get-in world [:total-held usdc])))
+    (is (= {:by-token {usdc 100}
+            :by-position {position-id 100}
+            :by-account {:appeal-bond 100}
+            :by-owner {alice 100}
+            :by-workflow {42 100}}
+           (:held-ledger/index world)))
+    (is (= 100 (get-in world [:held/positions position-id])))
+    (is (= "held-adjustment-0" (:held-adjustment/id adjustment)))
+    (is (= :in (:held/direction adjustment)))
+    (is (= usdc (:token adjustment)))
+    (is (= 100 (:amount adjustment)))
+    (is (= 0 (:held/before adjustment)))
+    (is (= 100 (:held/after adjustment)))
+    (is (= :appeal-bond (:held/account adjustment)))
+    (is (= position-id (:held/position-id adjustment)))
+    (is (= alice (:owner/address adjustment)))
+    (is (= :appeal-bond-posted (:held/reason adjustment)))
+    (is (= "appeal-slash" (:held/action adjustment)))
+    (is (= 42 (:held/workflow-id adjustment)))
+    (is (= auth (:authorization/provenance adjustment)))))
+
+(deftest sub-held-records-custody-adjustment
+  (let [position-id [:held/position usdc :escrow-principal 7]
+        world (ac/sub-held {:total-held {usdc 150}
+                            :held/positions {position-id 150}
+                            :held-ledger/index {:by-token {usdc 150}
+                                                :by-position {position-id 150}
+                                                :by-account {:escrow-principal 150}
+                                                :by-owner {}
+                                                :by-workflow {7 150}}}
+                           usdc
+                           40
+                           {:action "release"
+                            :reason :escrow-settlement-released
+                            :extra {:held/workflow-id 7}})
+        adjustment (last (:held-adjustments world))]
+    (is (= 110 (get-in world [:total-held usdc])))
+    (is (= {:by-token {usdc 110}
+            :by-position {position-id 110}
+            :by-account {:escrow-principal 110}
+            :by-owner {}
+            :by-workflow {7 110}}
+           (:held-ledger/index world)))
+    (is (= 110 (get-in world [:held/positions position-id])))
+    (is (= :out (:held/direction adjustment)))
+    (is (= 150 (:held/before adjustment)))
+    (is (= 110 (:held/after adjustment)))
+    (is (= :escrow-principal (:held/account adjustment)))
+    (is (= position-id (:held/position-id adjustment)))
+    (is (= :escrow-settlement-released (:held/reason adjustment)))
+    (is (= "release" (:held/action adjustment)))))
+
+(deftest held-adjustment-replay-reconstructs-total-held
+  (let [world (-> (t/empty-world)
+                  (ac/add-held usdc 100 {:action "create-escrow"
+                                         :reason :escrow-principal-deposited
+                                         :extra {:held/workflow-id 0
+                                                 :held/from alice
+                                                 :held/to bob}})
+                  (ac/add-held usdc 25 {:action "appeal-slash"
+                                        :reason :appeal-bond-posted
+                                        :authorization-provenance {:authorization/type :governance
+                                                                   :authorization/basis :scenario-declared}
+                                        :extra {:held/workflow-id 0
+                                                :held/actor alice}})
+                  (ac/sub-held usdc 40 {:action "release"
+                                        :reason :escrow-settlement-released
+                                        :extra {:held/workflow-id 0}}))
+        replayed-state (ac/replay-held-adjustment-state (:held-adjustments world))]
+    (is (= (:held-ledger/index world) (:held-ledger/index replayed-state)))
+    (is (= (:total-held world) (:total-held replayed-state)))
+    (is (= (:held/positions world) (:held/positions replayed-state)))
+    (is (:holds? (inv/held-adjustments-reconstruct-total-held?
+                  (assoc-in world [:params :held-adjustments/complete?] true))))))
+
+(deftest complete-held-ledger-allows-create-and-release
+  (let [world0 (assoc-in (t/empty-world 1000) [:params :held-adjustments/complete?] true)
+        created (lc/create-escrow world0 alice usdc bob 1000
+                                  (t/make-escrow-settings {}) snap)
+        released (lc/release (:world created) 0 alice (fn [_ _ _] {:allowed? true}))
+        world' (:world released)
+        adjustments (:held-adjustments world')]
+    (is (:ok created))
+    (is (:ok released))
+    (is (= [:escrow-principal-deposited :escrow-settlement-released]
+           (mapv :held/reason adjustments)))
+    (is (= ["create-escrow" "finalize-released"]
+           (mapv :held/action adjustments)))
+    (is (= [[:held/position usdc :escrow-principal 0]
+            [:held/position usdc :escrow-principal 0]]
+           (mapv :held/position-id adjustments)))
+    (is (= (get-in world' [:held-ledger/index :by-token]) (:total-held world')))
+    (is (= (get-in world' [:held-ledger/index :by-position]) (:held/positions world')))
+    (is (= 0 (get-in world' [:total-held usdc] 0)))
+    (is (= 0 (get-in world' [:held/positions [:held/position usdc :escrow-principal 0]] 0)))
+    (is (:holds? (inv/held-adjustments-reconstruct-total-held? world')))))
+
+(deftest add-held-rejects-invalid-inputs
+  (is (thrown-with-msg? clojure.lang.ExceptionInfo
+                        #"requires token"
+                        (ac/add-held (t/empty-world) nil 10)))
+  (is (thrown-with-msg? clojure.lang.ExceptionInfo
+                        #"non-negative amount"
+                        (ac/add-held (t/empty-world) usdc -1)))
+  (is (thrown-with-msg? clojure.lang.ExceptionInfo
+                        #"requires authorization provenance"
+                        (ac/add-held (t/empty-world)
+                                     usdc
+                                     10
+                                     {:action "governance-correction"
+                                      :reason :governance-authorised-correction}))))
+
+(deftest sub-held-rejects-underflow-and-invalid-inputs
+  (is (thrown-with-msg? clojure.lang.ExceptionInfo
+                        #"underflow"
+                        (ac/sub-held {:total-held {usdc 5}} usdc 10)))
+  (is (thrown-with-msg? clojure.lang.ExceptionInfo
+                        #"requires token"
+                        (ac/sub-held {:total-held {usdc 5}} nil 1)))
+  (is (thrown-with-msg? clojure.lang.ExceptionInfo
+                        #"non-negative amount"
+                        (ac/sub-held {:total-held {usdc 5}} usdc -1))))
+
+(deftest legacy-held-arities-are-tracked-during-migration
+  (let [world (-> (t/empty-world)
+                  (ac/add-held usdc 10)
+                  (ac/sub-held usdc 4))]
+    (is (= 6 (get-in world [:total-held usdc])))
+    (is (= 2 (get-in world [:held-adjustments/legacy-uses :count])))
+    (is (= [{:held/direction :in :token usdc :amount 10}
+            {:held/direction :out :token usdc :amount 4}]
+           (get-in world [:held-adjustments/legacy-uses :entries])))))
+
+(deftest legacy-held-arities-are-forbidden-when-ledger-complete
+  (let [world (assoc-in (t/empty-world) [:params :held-adjustments/complete?] true)]
+    (is (thrown-with-msg? clojure.lang.ExceptionInfo
+                          #"legacy held arity is forbidden"
+                          (ac/add-held world usdc 10)))
+    (is (thrown-with-msg? clojure.lang.ExceptionInfo
+                          #"legacy held arity is forbidden"
+                          (ac/sub-held (assoc-in world [:total-held usdc] 10) usdc 1)))))
+
+(deftest held-adjustments-complete-rejects-legacy-uses
+  (let [world (-> (t/empty-world)
+                  (ac/add-held usdc 10)
+                  (assoc-in [:params :held-adjustments/complete?] true))
+        result (inv/held-adjustments-reconstruct-total-held? world)]
+    (is (false? (:holds? result)))
+    (is (= :held-adjustments-legacy-uses-present
+           (-> result :violations first :type)))))
+
+;; ---------------------------------------------------------------------------
 ;; claimable balances
 ;; ---------------------------------------------------------------------------
 
@@ -69,9 +238,14 @@
 (deftest post-appeal-bond-deducts-fee
   (let [w    (t/empty-world)
         snap (snap-fix/escrow-snapshot {:appeal-bond-protocol-fee-bps 200}) ; 2%
-        w'   (ac/post-appeal-bond w 0 alice snap usdc 1000)]
+        w'   (ac/post-appeal-bond w 0 alice snap usdc 1000)
+        adjustment (last (:held-adjustments w'))]
     (is (= 980  (get-in w' [:bond-balances 0 alice] 0)) "net after 2% fee")
-    (is (= 20   (get-in w' [:bond-fees usdc] 0))        "protocol fee recorded")))
+    (is (= 20   (get-in w' [:bond-fees usdc] 0))        "protocol fee recorded")
+    (is (= :appeal-bond-posted (:held/reason adjustment)))
+    (is (= "post-appeal-bond" (:held/action adjustment)))
+    (is (= 0 (:held/workflow-id adjustment)))
+    (is (= alice (:held/actor adjustment)))))
 
 (deftest slash-bond-happy
   (let [w  (-> (t/empty-world)
@@ -86,7 +260,9 @@
     (is (true? (:ok r)))
     (is (= 980 (:slashed r)))
     (is (= 0 (get-in (:world r) [:bond-balances 0 alice] 0)))
-    (is (= 980 (get-in (:world r) [:bond-slashed 0] 0)))))
+    (is (= 980 (get-in (:world r) [:bond-slashed 0] 0)))
+    (is (= :appeal-bond-slashed
+           (:held/reason (last (:held-adjustments (:world r))))))))
 
 (deftest slash-bond-nothing-to-slash
   (let [r (ac/slash-bond (t/empty-world) 0 alice)]
@@ -106,7 +282,9 @@
     (is (true? (:ok r)))
     (is (= 980 (:returned r)))
     (is (= 0 (get-in (:world r) [:bond-balances 0 alice] 0)))
-    (is (= 980 (get-in (:world r) [:claimable 0 alice] 0)))))
+    (is (= 980 (get-in (:world r) [:claimable 0 alice] 0)))
+    (is (= :appeal-bond-returned
+           (:held/reason (last (:held-adjustments (:world r))))))))
 
 ;; ---------------------------------------------------------------------------
 ;; Invariants

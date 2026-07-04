@@ -24,7 +24,6 @@
             [resolver-sim.research.sew.adversarial.evidence-fog         :as evidence-fog]
             [resolver-sim.research.sew.adversarial.legitimacy-loop      :as legitimacy-loop]
             [resolver-sim.research.sew.governance.adversary             :as adversary]
-            [resolver-sim.research.sew.governance.effort-rewards        :as effort-rewards]
             [resolver-sim.research.sew.adversarial.trust-floor          :as trust-floor]
             [resolver-sim.research.sew.governance.bandwidth-floor       :as bandwidth-floor]
             [resolver-sim.research.sew.adversarial.fair-slashing        :as fair-slashing]
@@ -69,7 +68,7 @@
    :phase-aa         :analytic
    :phase-ad         :analytic
    :phase-f          :analytic
-   :phase-ab         :analytic
+
    :phase-ac         :analytic
    :phase-ac-sweep   :analytic
    :phase-ac-cap     :analytic
@@ -480,8 +479,6 @@
                      (fn [p _] (legitimacy-loop/run-phase-z-sweep p))]
    :phase-aa        ["\n🏛️  Running Phase AA: Governance as Adversary"
                      (fn [p _] (adversary/run-phase-aa-sweep p))]
-   :phase-ab        ["\n📊 Running Phase AB: Per-Dispute Effort Rewards"
-                     (fn [p _] (effort-rewards/run-phase-ab-sweep p))]
    :phase-ac        ["\n🔄 Running Phase AC: Trust Floor & Emergency Onboarding"
                      (fn [p _] (trust-floor/run-phase-ac-sweep p))]
    :phase-ad        ["\n🏛️  Running Phase AD: Governance Bandwidth Floor"

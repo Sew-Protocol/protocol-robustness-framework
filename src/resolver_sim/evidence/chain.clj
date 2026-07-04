@@ -97,7 +97,8 @@
 (def ^:dynamic ^:private scenario-evidence-atom
   "Thread-local accumulator for scenario-local evidence snapshots.
    Each entry is {:registry <snapshot> :cursor <snapshot>} from a scenario run.
-   Bound together with evidence-registry-atom under with-fresh-registry.
+   Bound together with evidence-registry-atom and chain-cursor under
+   with-fresh-evidence-context*.  with-fresh-registry alone does NOT bind this.
    Thread-safe via swap! within a single binding; does NOT auto-propagate
    to spawned futures/threads — wrap async boundaries explicitly."
   (atom []))

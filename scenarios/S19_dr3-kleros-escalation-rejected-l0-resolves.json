@@ -8,17 +8,7 @@
     "action" : "execute_resolution",
     "error" : "transfer-not-in-dispute"
   } ],
-  "protocol-params" : {
-    "resolver-fee-bps" : 150,
-    "resolution-module" : "0xkleros-proxy",
-    "escalation-resolvers" : {
-      "0" : "0xl0",
-      "1" : "0xl1",
-      "2" : "0xl2"
-    },
-    "appeal-window-duration" : 0,
-    "max-dispute-duration" : 2592000
-  },
+  "protocol-params-ref" : "protocol/kleros",
   "schema-version" : "1.0",
   "initial-block-time" : 1000,
   "scenario-author" : "@grifma",
