@@ -223,7 +223,7 @@
         r0-bribe (bribe-cost-to-corrupt-resolver 0 appeal-probability config)
 
         ; Only pay R1 bribe if R0 is appealed
-        r1-bribe (* (appeal-probability)
+        r1-bribe (* appeal-probability
                     (bribe-cost-to-corrupt-resolver 1 0 config))
 
         ; Total cost

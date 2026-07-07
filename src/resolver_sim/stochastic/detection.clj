@@ -560,10 +560,16 @@
 (defn reversal-pending-live?
   "Monte Carlo pending-slash model: new evidence after reversal slash (oracle-roll-event).
 
-   Not used by replay.clj; see protocols/sew/resolution for deterministic Track 2."
+   Not used by replay.clj; see protocols/sew/resolution for deterministic Track 2.
+
+   Gated by reversal-slash-bps — when zero, reversal has no economic impact so
+   the pending-evidence oracle roll is NOT consumed (mirrors the guard in
+   reversal-slashed-live? which also checks (pos? reversal-slash-bps) before
+   consuming a roll).  This prevents shared-stream cursor desync when the
+   reversal path produces no slash."
   [params {:keys [reversal-slashed?]}]
   (let [threshold (:new-evidence-probability params 0.0)]
-    (if (and reversal-slashed? (pos? threshold))
+    (if (and reversal-slashed? (pos? threshold) (pos? (:reversal-slash-bps params 0)))
       (let [roll-event (oracle-roll-event params :pending-evidence)
             detected? (roll-detect? (:roll/value roll-event) threshold)]
         (trace-decision! params roll-event threshold detected?)

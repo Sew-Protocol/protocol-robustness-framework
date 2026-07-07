@@ -13,7 +13,8 @@
   (:require [resolver-sim.protocols.sew.types :as t]
             [resolver-sim.protocols.sew.economics :as sew-econ]
             [resolver-sim.util.attribution :as attr]
-            [resolver-sim.evidence.capture :as cap]))
+            [resolver-sim.evidence.capture :as cap]
+            [resolver-sim.hash.canonical :as hash]))
 
 (declare sub-held record-fee record-claimable)
 
@@ -24,7 +25,24 @@
 (def ^:private exceptional-held-reasons
   #{:governance-authorised-correction
     :replay-fixture-setup
-    :replay-migration})
+    :replay-migration
+    :force-authorised-release
+    :force-authorised-refund
+    :partial-fill-principal-loss})
+
+(def ^:private address-scoped-held-reasons
+  "Reasons for which :owner/address MUST be explicitly provided.
+   Fallback-derived ownership (actor, from, resolver, recipient) is not
+   permitted — forensic ownership must be unambiguous."
+  #{:escrow-principal-deposited
+    :escrow-settlement-released
+    :escrow-settlement-refunded
+    :force-authorised-release
+    :force-authorised-refund
+    :partial-fill-principal-loss
+    :yield-distributed
+    :resolver-slash-custody-debited
+    :governance-authorised-correction})
 
 (def ^:private held-position-policy
   {:escrow-principal-deposited {:held/account :escrow-principal
@@ -33,6 +51,10 @@
                                 :scope-keys [:held/workflow-id]}
    :escrow-settlement-refunded {:held/account :escrow-principal
                                 :scope-keys [:held/workflow-id]}
+   :force-authorised-release {:held/account :escrow-principal
+                              :scope-keys [:held/workflow-id]}
+   :force-authorised-refund {:held/account :escrow-principal
+                             :scope-keys [:held/workflow-id]}
    :appeal-bond-posted {:held/account :appeal-bond
                         :scope-keys [:held/slash-id :held/bond-id :held/workflow-id :held/actor]}
    :appeal-bond-returned {:held/account :appeal-bond
@@ -48,7 +70,9 @@
    :resolver-yield-withdrawn {:held/account :resolver-yield
                               :scope-keys [:held/owner-id :held/resolver]}
    :resolver-slash-custody-debited {:held/account :resolver-slash-custody
-                                    :scope-keys [:held/resolver :held/workflow-id]}})
+                                     :scope-keys [:held/resolver :held/workflow-id]}
+   :partial-fill-principal-loss {:held/account :escrow-principal
+                                 :scope-keys [:held/workflow-id]}})
 
 (defn- validate-held-inputs!
   [token amount]
@@ -62,26 +86,63 @@
                      :reason :invalid-amount
                      :amount amount}))))
 
+(defn- force-authorisation-scope-hash
+  [scope-map]
+  (hash/domain-hash "force-authorisation-scope" scope-map))
+
+(defn- force-authorisation-expired?
+  "True when the scope hash in auth-provenance does not match the scope-map
+   derived from the actual held adjustment fields.  Prevents scope drift between
+   authorization and execution."
+  [auth-provenance scope-map]
+  (let [expected (:authorization/scope-hash auth-provenance)
+        actual (force-authorisation-scope-hash scope-map)]
+    (not= expected actual)))
+
+(defn- ensure-force-authorisation-usable!
+  "Guard: check authorization not consumed and scope hash matches.
+   Also rejects cross-direction reuse when direction is stored on the
+   consumed entry.
+   Throws on already-consumed or scope mismatch.
+   Does NOT short-circuit for idempotent replay — that is handled at the
+   outer command layer (dispatch-action / force-authorized entry point)."
+  [world auth-provenance scope-map direction]
+  (let [auth-id (:authorization/id auth-provenance)]
+    (when-let [consumed (get-in world [:force-authorisations/consumed auth-id])]
+      (throw (ex-info "force-authorisation already consumed"
+                      {:type :authorization/already-consumed
+                       :authorization/id auth-id
+                       :consumed consumed
+                       :attempt scope-map})))
+    (when (force-authorisation-expired? auth-provenance scope-map)
+      (throw (ex-info "force-authorisation scope mismatch"
+                      {:type :authorization/scope-mismatch
+                       :authorization/id auth-id
+                       :authorization/scope-hash (:authorization/scope-hash auth-provenance)
+                       :derived-scope-hash (force-authorisation-scope-hash scope-map)
+                       :scope-map scope-map})))))
+
+(defn- mark-force-authorisation-consumed
+  [world auth-provenance adjustment]
+  (let [auth-id (:authorization/id auth-provenance)]
+    (assoc-in world [:force-authorisations/consumed auth-id]
+              (merge {:consumed? true
+                      :authorization/id auth-id
+                      :authorization/type (:authorization/type auth-provenance)
+                      :authorization/scope-hash (:authorization/scope-hash auth-provenance)
+                      :held-adjustment/id (:held-adjustment/id adjustment)
+                      :token (:token adjustment)
+                      :amount (:amount adjustment)
+                      :owner/address (:owner/address adjustment)
+                      :workflow-id (:held/workflow-id adjustment)
+                      :held/reason (:held/reason adjustment)
+                      :consumed/action (:held/action adjustment)}
+                     (when-let [d (:held/direction adjustment)]
+                       {:held/direction d})))))
+
 (defn- next-held-adjustment-id
   [world]
   (str "held-adjustment-" (count (:held-adjustments world []))))
-
-(defn- record-legacy-held-usage
-  [world direction token amount]
-  (-> world
-      (update-in [:held-adjustments/legacy-uses :count] (fnil inc 0))
-      (update-in [:held-adjustments/legacy-uses :entries] (fnil conj [])
-                 {:held/direction direction
-                  :token token
-                  :amount amount})))
-
-(defn- ensure-held-ledger-not-complete!
-  [world direction]
-  (when (get-in world [:params :held-adjustments/complete?])
-    (throw (ex-info "legacy held arity is forbidden when held-adjustments are declared complete"
-                    {:type :invalid-held-adjustment
-                     :reason :legacy-held-arity-forbidden
-                     :held/direction direction}))))
 
 (defn- preferred-held-value
   [m preferred-key fallback-key]
@@ -197,23 +258,44 @@
                     {:type :invalid-held-adjustment
                      :reason :missing-authorization-provenance
                      :held/reason reason})))
-  (let [current (get-in world [:total-held token] 0)]
-    (when (and (= direction :out) (< current amount))
-      (throw (ex-info "sub-held underflow"
-                      {:type   :sub-held-underflow
-                       :token  token
-                       :held   current
-                       :amount amount})))
-    (let [adjustment (build-held-adjustment world
-                                            token
-                                            amount
-                                            direction
-                                            action
-                                            reason
-                                            authorization-provenance
-                                            extra)
-          world' (update-ledger-index world adjustment)]
-      (append-held-adjustment world' adjustment))))
+  (when (and (contains? address-scoped-held-reasons reason)
+             (nil? (:owner/address (held-position-components token reason (or extra {})))))
+    (attr/log-with-attr
+      :warn "address-scoped held reason missing :owner/address — owner may be misattributed"
+      {:held/reason reason
+       :extra extra}))
+  (let [is-force-auth? (= :force-authorisation (:authorization/type authorization-provenance))]
+    (when is-force-auth?
+      (let [components (held-position-components token reason (or extra {}))
+            scope-map (merge {:authorization/id (:authorization/id authorization-provenance)
+                              :authorization/type :force-authorisation
+                              :held/direction direction
+                              :token token
+                              :held/account (:held/account components)
+                              :owner/address (:owner/address components)
+                              :held/reason reason}
+                             (select-keys (or extra {}) [:held/workflow-id]))]
+        (ensure-force-authorisation-usable! world authorization-provenance scope-map direction)))
+    (let [current (get-in world [:total-held token] 0)]
+      (when (and (= direction :out) (< current amount))
+        (throw (ex-info "sub-held underflow"
+                        {:type   :sub-held-underflow
+                         :token  token
+                         :held   current
+                         :amount amount})))
+      (let [adjustment (build-held-adjustment world
+                                              token
+                                              amount
+                                              direction
+                                              action
+                                              reason
+                                              authorization-provenance
+                                              extra)
+            world' (update-ledger-index world adjustment)
+            world'' (append-held-adjustment world' adjustment)]
+        (if is-force-auth?
+          (mark-force-authorisation-consumed world'' authorization-provenance adjustment)
+          world'')))))
 
 (defn replay-held-adjustment-state
   "Replay a held-adjustment ledger into replay-verified materialized custody
@@ -311,13 +393,6 @@
    - :reason                    economic custody reason keyword
    - :authorization-provenance  structured authorization provenance
    - :extra                     extra machine-readable held-adjustment metadata"
-  ([world token amount]
-   (do
-     (validate-held-inputs! token amount)
-     (ensure-held-ledger-not-complete! world :in)
-     (-> world
-         (update-in [:total-held token] (fnil + 0) amount)
-         (record-legacy-held-usage :in token amount))))
   ([world token amount opts]
    (adjust-held world token amount :in (merge {:action "add-held"} opts))))
 
@@ -326,19 +401,6 @@
    Callers must have validated state. Throws a catchable ex-info on underflow
    so process-step's (catch Exception) handler converts it to :dispatch-exception
    rather than propagating an AssertionError past the catch boundary."
-  ([world token amount]
-   (let [current (get-in world [:total-held token] 0)]
-     (validate-held-inputs! token amount)
-     (ensure-held-ledger-not-complete! world :out)
-     (when (< current amount)
-       (throw (ex-info "sub-held underflow"
-                       {:type   :sub-held-underflow
-                        :token  token
-                        :held   current
-                        :amount amount})))
-     (-> world
-         (update-in [:total-held token] - amount)
-         (record-legacy-held-usage :out token amount))))
   ([world token amount opts]
    (adjust-held world token amount :out (merge {:action "sub-held"} opts))))
 

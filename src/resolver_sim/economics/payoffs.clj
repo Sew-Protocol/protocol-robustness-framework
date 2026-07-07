@@ -347,15 +347,15 @@
          :total-unmet (:total-unmet redistributed)
          :remainder (:remainder redistributed)
          :policy (:policy initial)
-          :redistribution {:pass-1-capped-ids (vec capped-ids)
-                           :pass-1-excess excess
-                           :pass-2-allocated (:total-allocated redistributed)
-                           :pass-2-items (count uncapped)
-                           :pass-2-allocations (mapv (fn [a]
-                                                       {:id (:id a)
-                                                        :allocated (:allocated a)
-                                                        :weight (:weight a)})
-                                                     (:allocations redistributed))}}))))
+         :redistribution {:pass-1-capped-ids (vec capped-ids)
+                          :pass-1-excess excess
+                          :pass-2-allocated (:total-allocated redistributed)
+                          :pass-2-items (count uncapped)
+                          :pass-2-allocations (mapv (fn [a]
+                                                      {:id (:id a)
+                                                       :allocated (:allocated a)
+                                                       :weight (:weight a)})
+                                                    (:allocations redistributed))}}))))
 
 (def default-pro-rata-allocation-result-kind :pro-rata-allocation)
 (def default-pro-rata-allocation-result-version 1)

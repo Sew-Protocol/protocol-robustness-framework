@@ -1,0 +1,294 @@
+(ns resolver-sim.benchmark.strategic-claim-validation
+  "Deterministic auditable validation for strategic claims.
+
+   This is intentionally narrow for v1:
+   - one claim only
+   - deterministic replay only
+   - explicit claim-to-scenario matching
+   - level-scoped checks
+   - replayable evidence references
+   - explicit coverage gaps"
+  (:require [clojure.data.json :as json]
+            [clojure.java.io :as io]
+            [clojure.string :as str]
+            [resolver-sim.benchmark.runner :as runner]
+            [resolver-sim.io.scenarios :as io-sc]
+            [resolver-sim.scenario.suites :as suites]))
+
+(def strategic-claim-catalog
+  {:claim/pro-rata-shortfall-conservation
+   {:claim/id :claim/pro-rata-shortfall-conservation
+    :claim/title "Pro-rata shortfall conservation"
+    :claim/description
+    "Shortfall scenarios should expose a replay-verifiable evidence root and
+     preserve shortfall allocation correctness at the matched mechanism level."
+    :benchmark/manifest-path "benchmarks/packs/prf-core/shortfall-allocation-v0.edn"
+    :mechanism-levels [:allocation/partial-fill
+                       :allocation/shortfall]
+    :required-threat-tags #{"shortfall"}
+    :match-dimensions #{:allocation/partial-fill
+                        :allocation/shortfall}}})
+
+(def ^:private artifact-kind :game-theoretic-validation)
+
+(def ^:private artifact-version "game-theoretic-validation.artifact.v1")
+
+(def ^:private allowed-level-verdicts #{:pass :fail :uncovered})
+
+(defn- sha-256-hex?
+  [s]
+  (boolean (and (string? s) (re-matches #"[0-9a-f]{64}" s))))
+
+(defn- normalize-scenario-id
+  [scenario-id]
+  (some-> scenario-id str str/lower-case (str/replace "_" "-")))
+
+(defn- scenario-index-for-suite
+  [suite-key]
+  (into {}
+        (map (fn [path]
+               (let [scenario (io-sc/load-scenario-file path)]
+                 [path {:scenario/id (:scenario-id scenario)
+                        :scenario/public-id (io-sc/scenario-file->id path)
+                        :scenario/id-normalized (normalize-scenario-id (:scenario-id scenario))
+                        :scenario/public-id-normalized (normalize-scenario-id (io-sc/scenario-file->id path))
+                        :scenario/path path
+                        :scenario/title (or (:title scenario)
+                                            (:scenario-title scenario))
+                        :scenario/purpose (:purpose scenario)
+                        :scenario/tags (vec (or (:tags scenario) []))
+                        :scenario/threat-tags (vec (or (:threat-tags scenario) []))
+                        :scenario/events (mapv :action (:events scenario))}])))
+        (suites/suite-paths suite-key)))
+
+(defn- benchmark-scenario-declarations
+  [manifest]
+  (reduce (fn [idx entry]
+            (assoc idx
+                   (normalize-scenario-id (:scenario/id entry))
+                   entry))
+          {}
+          (:benchmark/scenarios manifest)))
+
+(defn- result-by-path
+  [results]
+  (into {}
+        (map (fn [result]
+               [(:simulator/scenario-path result) result]))
+        results))
+
+(defn- declaration-for-scenario
+  [declaration-by-id scenario-meta]
+  (or (get declaration-by-id (:scenario/public-id-normalized scenario-meta))
+      (get declaration-by-id (:scenario/id-normalized scenario-meta))))
+
+(defn- scenario-match-reasons
+  [claim-spec declaration scenario-meta result]
+  (let [dimension (:dimension declaration)
+        threat-tags (set (:scenario/threat-tags scenario-meta))
+        evidence-root (:scenario/evidence-root result)
+        shortfall-tags (sort (filter (:required-threat-tags claim-spec) threat-tags))]
+    (cond-> []
+      (contains? (:match-dimensions claim-spec) dimension)
+      (conj {:reason/id :benchmark/dimension
+             :reason/value dimension})
+
+      (seq shortfall-tags)
+      (conj {:reason/id :scenario/threat-tags
+             :reason/value shortfall-tags})
+
+      (sha-256-hex? evidence-root)
+      (conj {:reason/id :scenario/evidence-root
+             :reason/value evidence-root}))))
+
+(defn- matched-scenario?
+  [claim-spec declaration scenario-meta result]
+  (let [reason-ids (set (map :reason/id
+                             (scenario-match-reasons claim-spec declaration scenario-meta result)))]
+    (and (contains? reason-ids :benchmark/dimension)
+         (contains? reason-ids :scenario/threat-tags)
+         (contains? reason-ids :scenario/evidence-root))))
+
+(defn- match-entry
+  [claim-spec declaration scenario-meta result]
+  {:scenario/id (:scenario/public-id scenario-meta)
+   :benchmark/declaration {:scenario/id (:scenario/id declaration)
+                           :dimension (:dimension declaration)
+                           :claim (:claim declaration)}
+   :mechanism-level (:dimension declaration)
+   :scenario/source-path (:scenario/path scenario-meta)
+   :scenario/title (:scenario/title scenario-meta)
+   :scenario/purpose (:scenario/purpose scenario-meta)
+   :match-reasons (scenario-match-reasons claim-spec declaration scenario-meta result)
+   :evidence-references [{:reference/type :scenario-evidence-root
+                          :reference/value (:scenario/evidence-root result)}
+                         {:reference/type :simulator-scenario-path
+                          :reference/value (:file result)}]})
+
+(defn- invariant-failures
+  [result]
+  (->> (:invariant-results result)
+       (filter #(not= :pass (:result %)))
+       (mapv :id)))
+
+(defn- scenario-check-results
+  [result]
+  [{:check/id :scenario-passed
+    :status (if (= :pass (:outcome result)) :pass :fail)
+    :details {:outcome (:outcome result)
+              :halt-reason (:halt-reason result)}}
+   {:check/id :evidence-root-valid
+    :status (if (sha-256-hex? (:scenario/evidence-root result)) :pass :fail)
+    :details {:scenario/evidence-root (:scenario/evidence-root result)}}
+   {:check/id :no-invariant-errors
+    :status (if (empty? (invariant-failures result)) :pass :fail)
+    :details {:failed-invariants (invariant-failures result)}}])
+
+(defn- level-verdict
+  [level matched-scenarios results]
+  (if (empty? matched-scenarios)
+    {:mechanism-level level
+     :verdict :uncovered
+     :scenario-ids []
+     :check-results []
+     :evidence-references []}
+    (let [scenario-ids (mapv :scenario/id matched-scenarios)
+          level-checks (mapcat (fn [match]
+                                 (let [result (get results (:scenario/source-path match))]
+                                   (map (fn [check]
+                                          (assoc check :scenario/id (:scenario/id match)))
+                                        (scenario-check-results result))))
+                               matched-scenarios)
+          verdict (if (every? #(= :pass (:status %)) level-checks) :pass :fail)]
+      {:mechanism-level level
+       :verdict verdict
+       :scenario-ids scenario-ids
+       :check-results (vec level-checks)
+       :evidence-references (vec (mapcat :evidence-references matched-scenarios))})))
+
+(defn- strategic-claim-artifact
+  [claim-spec manifest evidence]
+  (let [suite-key (:benchmark/scenario-suite manifest)
+        scenario-meta-by-path (scenario-index-for-suite suite-key)
+        declaration-by-id (benchmark-scenario-declarations manifest)
+        results-by-path (result-by-path (:results evidence))
+        scenario-entries (->> scenario-meta-by-path
+                              vals
+                              (keep (fn [scenario-meta]
+                                      (let [declaration (declaration-for-scenario declaration-by-id scenario-meta)
+                                            result (get results-by-path (:scenario/path scenario-meta))]
+                                        (when (and declaration result)
+                                          {:declaration declaration
+                                           :scenario-meta scenario-meta
+                                           :result result}))))
+                              (sort-by (fn [{:keys [declaration scenario-meta]}]
+                                         [(:dimension declaration) (:scenario/id scenario-meta)])))
+        matched-scenarios (->> scenario-entries
+                               (filter (fn [{:keys [declaration scenario-meta result]}]
+                                         (matched-scenario? claim-spec declaration scenario-meta result)))
+                               (mapv (fn [{:keys [declaration scenario-meta result]}]
+                                       (match-entry claim-spec declaration scenario-meta result))))
+        matched-by-level (group-by :mechanism-level matched-scenarios)
+        declared-by-level (group-by (fn [{:keys [declaration]}]
+                                      (:dimension declaration))
+                                    scenario-entries)
+        level-verdicts (mapv (fn [level]
+                               (level-verdict level
+                                              (get matched-by-level level [])
+                                              results-by-path))
+                             (:mechanism-levels claim-spec))
+        coverage-gaps (->> level-verdicts
+                           (filter #(= :uncovered (:verdict %)))
+                           (mapv (fn [entry]
+                                   (let [level (:mechanism-level entry)]
+                                     {:mechanism-level level
+                                      :reason (if (seq (get declared-by-level level))
+                                                :declared-scenarios-failed-match-basis
+                                                :no-declared-scenarios-for-level)}))))
+        passed-level-count (count (filter #(= :pass (:verdict %)) level-verdicts))
+        failed-level-count (count (filter #(= :fail (:verdict %)) level-verdicts))
+        uncovered-level-count (count coverage-gaps)]
+    {:artifact/kind artifact-kind
+     :artifact/version artifact-version
+     :claim/id (:claim/id claim-spec)
+     :claim/title (:claim/title claim-spec)
+     :claim/description (:claim/description claim-spec)
+     :benchmark/id (:benchmark/id manifest)
+     :benchmark/scenario-suite suite-key
+     :benchmark/manifest-path (:benchmark/manifest-path claim-spec)
+     :matched-scenarios matched-scenarios
+     :level-verdicts level-verdicts
+     :coverage-gaps coverage-gaps
+     :summary {:matched-scenario-count (count matched-scenarios)
+               :passed-level-count passed-level-count
+               :failed-level-count failed-level-count
+               :uncovered-level-count uncovered-level-count
+               :valid? (and (zero? failed-level-count)
+                            (zero? uncovered-level-count))}}))
+
+(defn- valid-coverage-gap?
+  [gap]
+  (and (keyword? (:mechanism-level gap))
+       (contains? #{:no-declared-scenarios-for-level
+                    :declared-scenarios-failed-match-basis}
+                  (:reason gap))))
+
+(defn- validate-artifact!
+  [artifact]
+  (when-not (= artifact-kind (:artifact/kind artifact))
+    (throw (ex-info "Invalid strategic claim artifact kind"
+                    {:expected artifact-kind
+                     :actual (:artifact/kind artifact)})))
+  (when-not (= artifact-version (:artifact/version artifact))
+    (throw (ex-info "Invalid strategic claim artifact version"
+                    {:expected artifact-version
+                     :actual (:artifact/version artifact)})))
+  (doseq [k [:claim/id :benchmark/id :benchmark/scenario-suite
+             :matched-scenarios :level-verdicts :coverage-gaps :summary]]
+    (when-not (contains? artifact k)
+      (throw (ex-info "Strategic claim artifact missing required key"
+                      {:missing-key k}))))
+  (doseq [entry (:level-verdicts artifact)]
+    (when-not (contains? allowed-level-verdicts (:verdict entry))
+      (throw (ex-info "Invalid level verdict in strategic claim artifact"
+                      {:entry entry}))))
+  (doseq [gap (:coverage-gaps artifact)]
+    (when-not (valid-coverage-gap? gap)
+      (throw (ex-info "Invalid coverage gap in strategic claim artifact"
+                      {:gap gap}))))
+  artifact)
+
+(defn- sort-maps
+  [x]
+  (cond
+    (map? x) (into (sorted-map-by (fn [a b]
+                                    (compare (str a) (str b))))
+                   (map (fn [[k v]] [k (sort-maps v)]) x))
+    (vector? x) (mapv sort-maps x)
+    (seq? x) (doall (map sort-maps x))
+    :else x))
+
+(defn run-strategic-claim-validation
+  [& {:keys [claim-id out-dir]
+      :or {claim-id :claim/pro-rata-shortfall-conservation
+           out-dir "./prf-out/game-theory"}}]
+  (let [claim-spec (or (get strategic-claim-catalog claim-id)
+                       (throw (ex-info "Unknown strategic claim"
+                                       {:claim-id claim-id
+                                        :known-claims (sort (keys strategic-claim-catalog))})))
+        manifest (runner/load-manifest (:benchmark/manifest-path claim-spec))
+        evidence (runner/run-benchmark (:benchmark/manifest-path claim-spec))
+        artifact (strategic-claim-artifact claim-spec manifest evidence)
+        claim-name (name claim-id)
+        base-path (str out-dir "/" claim-name)
+        edn-path (str base-path "/game-theoretic-validation-artifact.edn")
+        json-path (str base-path "/game-theoretic-validation-artifact.json")
+        stable-artifact (-> artifact
+                            validate-artifact!
+                            sort-maps)]
+    (io/make-parents edn-path)
+    (spit edn-path (pr-str stable-artifact))
+    (spit json-path (json/write-str stable-artifact {:key-fn name}))
+    {:exit-code (if (get-in stable-artifact [:summary :valid?]) 0 1)
+     :artifact stable-artifact
+     :output-files [edn-path json-path]}))

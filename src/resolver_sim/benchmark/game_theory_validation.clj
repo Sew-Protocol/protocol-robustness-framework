@@ -11,7 +11,7 @@
 
   (:require [clojure.java.io :as io]
             [clojure.data.json :as json]
-            [resolver-sim.io.resource-path :as rp]
+            [resolver-sim.benchmark.strategic-claim-validation :as strategic]
             [resolver-sim.sim.fixtures :as fixtures]))
 
 ;; ── Available suite definitions ─────────────────────────────────────────────
@@ -103,6 +103,8 @@
     :source :generic
     :title "Cancellation dominance"
     :summary "Mutual cancel strictly dominates unilateral default for honest participants."}])
+
+(def run-strategic-claim-validation strategic/run-strategic-claim-validation)
 
 ;; ── Orchestration ───────────────────────────────────────────────────────────
 

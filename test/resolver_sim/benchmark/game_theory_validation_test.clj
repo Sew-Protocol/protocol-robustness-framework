@@ -1,0 +1,172 @@
+(ns resolver-sim.benchmark.game-theory-validation-test
+  (:require [clojure.edn :as edn]
+            [clojure.data.json :as json]
+            [clojure.java.io :as io]
+            [clojure.test :refer [deftest is testing]]
+            [resolver-sim.benchmark.runner]
+            [resolver-sim.io.scenarios]
+            [resolver-sim.scenario.suites]
+            [resolver-sim.benchmark.game-theory-validation :as sut]))
+
+(deftest strategic-claim-validation-emits-auditable-artifact
+  (let [out-dir (str (System/getProperty "java.io.tmpdir")
+                     "/prf-game-theory-validation-test")
+        manifest {:benchmark/id :benchmark/prf-shortfall-allocation-v0
+                  :benchmark/scenario-suite :suite/sew-shortfall-allocation-v0
+                  :benchmark/scenarios [{:scenario/id "S-DR-043-payout-shortfall-deferred"
+                                         :dimension :allocation/partial-fill
+                                         :claim :allocation-complete}
+                                        {:scenario/id "S103_negative-yield-shortfall-cascade"
+                                         :dimension :allocation/shortfall
+                                         :claim :conservation}
+                                        {:scenario/id "S104_resolver-stake-shortfall"
+                                         :dimension :allocation/stake-liquidity-blocking
+                                         :claim :no-invariant-errors}]}
+        scenario-043 {:scenario-id "s-dr-043-payout-shortfall-deferred"
+                      :scenario-title "Payout shortfall deferred"
+                      :scenario-purpose "Partial fill should defer the remainder."
+                      :threat-tags ["dispute-resolution" "shortfall" "yield"]}
+        scenario-103 {:scenario-id "s103-negative-yield-shortfall-cascade"
+                      :title "Negative Yield and Liquidity Shortfall Cascade"
+                      :purpose "yield-stress"
+                      :threat-tags ["negative-yield" "shortfall" "deferred-recovery"]}
+        scenario-104 {:scenario-id "s104-resolver-stake-shortfall"
+                      :title "Resolver stake shortfall"
+                      :purpose "liquidity-stress"
+                      :threat-tags ["stake" "liquidity" "blocking"]}
+        evidence {:results [{:file "resource:scenarios/edn/S-DR-043-payout-shortfall-deferred.edn"
+                             :simulator/scenario-path "resource:scenarios/edn/S-DR-043-payout-shortfall-deferred.edn"
+                             :outcome :pass
+                             :halt-reason nil
+                             :scenario/evidence-root (apply str (repeat 64 "a"))
+                             :invariant-results [{:id :inv/a :result :pass}]}
+                            {:file "resource:scenarios/edn/S103_negative-yield-shortfall-cascade.edn"
+                             :simulator/scenario-path "resource:scenarios/edn/S103_negative-yield-shortfall-cascade.edn"
+                             :outcome :pass
+                             :halt-reason nil
+                             :scenario/evidence-root (apply str (repeat 64 "b"))
+                             :invariant-results [{:id :inv/b :result :pass}]}
+                            {:file "resource:scenarios/edn/S104_resolver-stake-shortfall.edn"
+                             :simulator/scenario-path "resource:scenarios/edn/S104_resolver-stake-shortfall.edn"
+                             :outcome :fail
+                             :halt-reason :invariant-violation
+                             :scenario/evidence-root (apply str (repeat 64 "c"))
+                             :invariant-results [{:id :inv/c :result :fail}]}]}
+        {:keys [exit-code artifact output-files]}
+        (with-redefs [resolver-sim.benchmark.runner/load-manifest (fn [_] manifest)
+                      resolver-sim.benchmark.runner/run-benchmark (fn [_] evidence)
+                      resolver-sim.scenario.suites/suite-paths
+                      (fn [_]
+                        ["resource:scenarios/edn/S-DR-043-payout-shortfall-deferred.edn"
+                         "resource:scenarios/edn/S103_negative-yield-shortfall-cascade.edn"
+                         "resource:scenarios/edn/S104_resolver-stake-shortfall.edn"])
+                      resolver-sim.io.scenarios/load-scenario-file
+                      (fn [path]
+                        (case path
+                          "resource:scenarios/edn/S-DR-043-payout-shortfall-deferred.edn" scenario-043
+                          "resource:scenarios/edn/S103_negative-yield-shortfall-cascade.edn" scenario-103
+                          "resource:scenarios/edn/S104_resolver-stake-shortfall.edn" scenario-104
+                          (throw (ex-info "unexpected scenario path" {:path path}))))]
+          (sut/run-strategic-claim-validation :out-dir out-dir))
+        level-verdicts (into {}
+                             (map (juxt :mechanism-level identity))
+                             (:level-verdicts artifact))
+        evidence-roots (->> (:matched-scenarios artifact)
+                            (mapcat :evidence-references)
+                            (filter #(= :scenario-evidence-root (:reference/type %)))
+                            (map :reference/value))
+        matched-scenario-ids (set (map :scenario/id (:matched-scenarios artifact)))]
+    (testing "artifact summary and claim identity"
+      (is (= (if (get-in artifact [:summary :valid?]) 0 1) exit-code))
+      (is (= :game-theoretic-validation (:artifact/kind artifact)))
+      (is (= "game-theoretic-validation.artifact.v1" (:artifact/version artifact)))
+      (is (= :claim/pro-rata-shortfall-conservation (:claim/id artifact)))
+      (is (= 2 (get-in artifact [:summary :matched-scenario-count])))
+      (is (true? (get-in artifact [:summary :valid?]))))
+
+    (testing "matched scenarios carry auditable reasons and evidence references"
+      (is (= #{"S-DR-043-payout-shortfall-deferred"
+               "S103_negative-yield-shortfall-cascade"}
+             matched-scenario-ids))
+      (is (= #{{:scenario/id "S-DR-043-payout-shortfall-deferred"
+                :dimension :allocation/partial-fill
+                :claim :allocation-complete}
+               {:scenario/id "S103_negative-yield-shortfall-cascade"
+                :dimension :allocation/shortfall
+                :claim :conservation}}
+             (set (map :benchmark/declaration (:matched-scenarios artifact)))))
+      (is (every? #(= #{:benchmark/dimension
+                        :scenario/threat-tags
+                        :scenario/evidence-root}
+                      (set (map :reason/id (:match-reasons %))))
+                  (:matched-scenarios artifact)))
+      (is (= 2 (count evidence-roots)))
+      (is (every? #(re-matches #"[0-9a-f]{64}" %) evidence-roots)))
+
+    (testing "mechanism levels are partitioned and checked deterministically"
+      (is (= [:allocation/partial-fill :allocation/shortfall]
+             (mapv :mechanism-level (:level-verdicts artifact))))
+      (is (= :pass (get-in level-verdicts [:allocation/partial-fill :verdict])))
+      (is (= :pass (get-in level-verdicts [:allocation/shortfall :verdict])))
+      (is (= [] (:coverage-gaps artifact))))
+
+    (testing "artifact files are emitted and readable"
+      (is (= 2 (count output-files)))
+      (doseq [path output-files]
+        (is (.exists (io/file path)))
+        (is (seq (slurp path))))
+      (is (= :claim/pro-rata-shortfall-conservation
+             (:claim/id (edn/read-string (slurp (first output-files))))))
+      (let [json-artifact (json/read-str (slurp (second output-files)))]
+        (is (= "game-theoretic-validation"
+               (get json-artifact "kind")))
+        (is (= "game-theoretic-validation.artifact.v1"
+               (get json-artifact "version")))
+        (is (= "Pro-rata shortfall conservation"
+               (get json-artifact "title")))))))
+
+(deftest strategic-claim-validation-runs-against-real-shortfall-pack
+  (let [out-dir (str (System/getProperty "java.io.tmpdir")
+                     "/prf-game-theory-validation-real")
+        {:keys [exit-code artifact output-files]}
+        (sut/run-strategic-claim-validation :out-dir out-dir)
+        level-verdicts (into {}
+                             (map (juxt :mechanism-level identity))
+                             (:level-verdicts artifact))
+        evidence-roots (->> (:matched-scenarios artifact)
+                            (mapcat :evidence-references)
+                            (filter #(= :scenario-evidence-root (:reference/type %)))
+                            (map :reference/value))
+        matched-scenario-ids (set (map :scenario/id (:matched-scenarios artifact)))]
+    (testing "real benchmark artifact reflects the current shortfall pack"
+      (is (= 1 exit-code))
+      (is (= :game-theoretic-validation (:artifact/kind artifact)))
+      (is (= :claim/pro-rata-shortfall-conservation (:claim/id artifact)))
+      (is (= :benchmark/prf-shortfall-allocation-v0 (:benchmark/id artifact)))
+      (is (= :suite/sew-shortfall-allocation-v0 (:benchmark/scenario-suite artifact)))
+      (is (= 2 (get-in artifact [:summary :matched-scenario-count])))
+      (is (= 1 (get-in artifact [:summary :passed-level-count])))
+      (is (= 1 (get-in artifact [:summary :failed-level-count])))
+      (is (= 0 (get-in artifact [:summary :uncovered-level-count])))
+      (is (false? (get-in artifact [:summary :valid?]))))
+
+    (testing "real matching and level verdicts remain auditable"
+      (is (= #{"S-DR-043-payout-shortfall-deferred"
+               "S103_negative-yield-shortfall-cascade"}
+             matched-scenario-ids))
+      (is (= :pass (get-in level-verdicts [:allocation/partial-fill :verdict])))
+      (is (= :fail (get-in level-verdicts [:allocation/shortfall :verdict])))
+      (is (= [] (:coverage-gaps artifact)))
+      (is (= 2 (count evidence-roots)))
+      (is (every? #(re-matches #"[0-9a-f]{64}" %) evidence-roots)))
+
+    (testing "real benchmark artifact files are emitted"
+      (is (= 2 (count output-files)))
+      (doseq [path output-files]
+        (is (.exists (io/file path)))
+        (is (seq (slurp path))))
+      (let [json-artifact (json/read-str (slurp (second output-files)))]
+        (is (= "game-theoretic-validation"
+               (get json-artifact "kind")))
+        (is (= "game-theoretic-validation.artifact.v1"
+               (get json-artifact "version")))))))

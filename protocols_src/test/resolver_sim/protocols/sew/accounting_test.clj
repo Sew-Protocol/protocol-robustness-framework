@@ -5,7 +5,8 @@
             [resolver-sim.protocols.sew.types      :as t]
             [resolver-sim.protocols.sew.lifecycle  :as lc]
             [resolver-sim.protocols.sew.accounting :as ac]
-            [resolver-sim.protocols.sew.invariants :as inv]))
+            [resolver-sim.protocols.sew.invariants :as inv]
+            [resolver-sim.hash.canonical          :as hash]))
 
 (def usdc :0xUSDC)
 (def alice "0xAlice")
@@ -153,10 +154,10 @@
 (deftest add-held-rejects-invalid-inputs
   (is (thrown-with-msg? clojure.lang.ExceptionInfo
                         #"requires token"
-                        (ac/add-held (t/empty-world) nil 10)))
+                        (ac/add-held (t/empty-world) nil 10 {:action "test"})))
   (is (thrown-with-msg? clojure.lang.ExceptionInfo
                         #"non-negative amount"
-                        (ac/add-held (t/empty-world) usdc -1)))
+                        (ac/add-held (t/empty-world) usdc -1 {:action "test"})))
   (is (thrown-with-msg? clojure.lang.ExceptionInfo
                         #"requires authorization provenance"
                         (ac/add-held (t/empty-world)
@@ -168,41 +169,187 @@
 (deftest sub-held-rejects-underflow-and-invalid-inputs
   (is (thrown-with-msg? clojure.lang.ExceptionInfo
                         #"underflow"
-                        (ac/sub-held {:total-held {usdc 5}} usdc 10)))
+                        (ac/sub-held {:total-held {usdc 5}} usdc 10
+                                     {:action "test" :reason :escrow-settlement-released})))
   (is (thrown-with-msg? clojure.lang.ExceptionInfo
                         #"requires token"
-                        (ac/sub-held {:total-held {usdc 5}} nil 1)))
+                        (ac/sub-held {:total-held {usdc 5}} nil 1 {:action "test"})))
   (is (thrown-with-msg? clojure.lang.ExceptionInfo
                         #"non-negative amount"
-                        (ac/sub-held {:total-held {usdc 5}} usdc -1))))
+                        (ac/sub-held {:total-held {usdc 5}} usdc -1 {:action "test"}))))
 
-(deftest legacy-held-arities-are-tracked-during-migration
-  (let [world (-> (t/empty-world)
-                  (ac/add-held usdc 10)
-                  (ac/sub-held usdc 4))]
-    (is (= 6 (get-in world [:total-held usdc])))
-    (is (= 2 (get-in world [:held-adjustments/legacy-uses :count])))
-    (is (= [{:held/direction :in :token usdc :amount 10}
-            {:held/direction :out :token usdc :amount 4}]
-           (get-in world [:held-adjustments/legacy-uses :entries])))))
+;; ---------------------------------------------------------------------------
+;; Force-authorisation consumption
+;; ---------------------------------------------------------------------------
 
-(deftest legacy-held-arities-are-forbidden-when-ledger-complete
-  (let [world (assoc-in (t/empty-world) [:params :held-adjustments/complete?] true)]
+(deftest force-authorised-sub-held-succeeds
+  (let [auth-id "fa-test-release-a1b2c3d4"
+        held 100
+        sub-amt 40
+        scope-map {:authorization/id auth-id
+                   :authorization/type :force-authorisation
+                   :held/direction :out
+                   :token usdc
+                   :held/account :escrow-principal
+                   :owner/address nil
+                   :held/reason :force-authorised-release
+                   :held/workflow-id 42}
+        scope-hash (hash/domain-hash "force-authorisation-scope" scope-map)
+        auth-prov {:authorization/type :force-authorisation
+                   :authorization/id auth-id
+                   :authorization/scope-hash scope-hash}
+        world (ac/sub-held {:total-held {usdc held}}
+                           usdc sub-amt
+                           {:action "finalize-released"
+                            :reason :force-authorised-release
+                            :authorization-provenance auth-prov
+                            :extra {:held/workflow-id 42}})
+        consumed (get-in world [:force-authorisations/consumed auth-id])]
+    (is (= (- held sub-amt) (get-in world [:total-held usdc])))
+    (is (true? (:consumed? consumed)))
+    (is (= auth-id (:authorization/id consumed)))
+    (is (= :force-authorisation (:authorization/type consumed)))
+    (is (= scope-hash (:authorization/scope-hash consumed)))
+    (is (= sub-amt (:amount consumed)))
+    (is (= 42 (:workflow-id consumed)))
+    (is (= :force-authorised-release (:held/reason consumed)))
+    (is (= "finalize-released" (:consumed/action consumed)))))
+
+(deftest force-authorised-sub-held-rejects-reuse
+  (let [auth-id "fa-test-reuse-a1b2c3d4"
+        scope-map {:authorization/id auth-id
+                   :authorization/type :force-authorisation
+                   :held/direction :out
+                   :token usdc
+                   :held/account :escrow-principal
+                   :owner/address nil
+                   :held/reason :force-authorised-release
+                   :held/workflow-id 42}
+        scope-hash (hash/domain-hash "force-authorisation-scope" scope-map)
+        auth-prov {:authorization/type :force-authorisation
+                   :authorization/id auth-id
+                   :authorization/scope-hash scope-hash}
+        world (ac/sub-held {:total-held {usdc 100}}
+                           usdc 40
+                           {:action "finalize-released"
+                            :reason :force-authorised-release
+                            :authorization-provenance auth-prov
+                            :extra {:held/workflow-id 42}})]
     (is (thrown-with-msg? clojure.lang.ExceptionInfo
-                          #"legacy held arity is forbidden"
-                          (ac/add-held world usdc 10)))
-    (is (thrown-with-msg? clojure.lang.ExceptionInfo
-                          #"legacy held arity is forbidden"
-                          (ac/sub-held (assoc-in world [:total-held usdc] 10) usdc 1)))))
+                          #"already consumed"
+                          (ac/sub-held world usdc 40
+                                       {:action "finalize-released"
+                                        :reason :force-authorised-release
+                                        :authorization-provenance auth-prov
+                                        :extra {:held/workflow-id 42}})))))
 
-(deftest held-adjustments-complete-rejects-legacy-uses
-  (let [world (-> (t/empty-world)
-                  (ac/add-held usdc 10)
-                  (assoc-in [:params :held-adjustments/complete?] true))
-        result (inv/held-adjustments-reconstruct-total-held? world)]
+(deftest force-authorised-sub-held-rejects-scope-mismatch
+  (let [auth-id "fa-test-mismatch-a1b2c3d4"
+        ;; Scope hash computed with :force-authorised-refund
+        scope-map {:authorization/id auth-id
+                   :authorization/type :force-authorisation
+                   :held/direction :out
+                   :token usdc
+                   :held/account :escrow-principal
+                   :owner/address nil
+                   :held/reason :force-authorised-refund
+                   :held/workflow-id 42}
+        scope-hash (hash/domain-hash "force-authorisation-scope" scope-map)
+        auth-prov {:authorization/type :force-authorisation
+                   :authorization/id auth-id
+                   :authorization/scope-hash scope-hash}]
+    (is (thrown-with-msg? clojure.lang.ExceptionInfo
+                          #"scope mismatch"
+                          (ac/sub-held {:total-held {usdc 100}} usdc 40
+                                       {:action "finalize-released"
+                                        :reason :force-authorised-release
+                                        :authorization-provenance auth-prov
+                                        :extra {:held/workflow-id 42}})))))
+
+(deftest exceptional-held-reason-requires-auth
+  (is (thrown-with-msg? clojure.lang.ExceptionInfo
+                        #"requires authorization provenance"
+                        (ac/sub-held {:total-held {usdc 100}} usdc 40
+                                     {:action "finalize-released"
+                                      :reason :force-authorised-release
+                                      :extra {:held/workflow-id 42}}))))
+
+(deftest normal-held-reason-no-auth-ok
+  (let [world (ac/sub-held {:total-held {usdc 100} :held-ledger/index {:by-token {usdc 100}}}
+                           usdc 40
+                           {:action "finalize-released"
+                            :reason :escrow-settlement-released
+                            :extra {:held/workflow-id 42}})]
+    (is (= 60 (get-in world [:total-held usdc])))))
+
+;; ---------------------------------------------------------------------------
+;; Transition-level held-adjustment delta invariant
+;; ---------------------------------------------------------------------------
+
+(deftest held-adjustments-cover-total-held-delta-passes
+  (let [world-before {:total-held {usdc 100} :held-adjustments []}
+        world-after  (ac/sub-held world-before usdc 40
+                                  {:action "release"
+                                   :reason :escrow-settlement-released
+                                   :extra {:held/workflow-id 7}})
+        result (inv/held-adjustments-cover-total-held-delta?
+                world-before world-after)]
+    (is (:holds? result))))
+
+(deftest held-adjustments-cover-total-held-delta-detects-mismatch
+  (let [world-before {:total-held {usdc 100} :held-adjustments []}
+        world-after  (assoc-in world-before [:total-held usdc] 50)
+        result (inv/held-adjustments-cover-total-held-delta?
+                world-before world-after)]
     (is (false? (:holds? result)))
-    (is (= :held-adjustments-legacy-uses-present
-           (-> result :violations first :type)))))
+    (is (= -50 (-> result :violations first :delta-held)))
+    (is (= 0 (-> result :violations first :held-adjustment-delta)))))
+
+(deftest held-adjustments-cover-total-held-delta-supports-allowlist
+  (let [world-before {:total-held {usdc 100}
+                      :held-adjustments []
+                      :params {:held-adjustments/allow-transition-mismatch true}}
+        world-after  (assoc-in world-before [:total-held usdc] 50)
+        result (inv/held-adjustments-cover-total-held-delta?
+                world-before world-after)]
+    (is (:holds? result))))
+
+;; ---------------------------------------------------------------------------
+;; Partial-fill principal loss reason
+;; ---------------------------------------------------------------------------
+
+(deftest partial-fill-principal-loss-requires-auth
+  (is (thrown-with-msg? clojure.lang.ExceptionInfo
+                        #"requires authorization provenance"
+                        (ac/sub-held {:total-held {usdc 100}} usdc 40
+                                     {:action "impair"
+                                      :reason :partial-fill-principal-loss
+                                      :extra {:held/workflow-id 42}}))))
+
+(deftest partial-fill-principal-loss-with-auth-succeeds
+  (let [auth-id "fa-pl-test"
+        scope-map {:authorization/id auth-id
+                   :authorization/type :force-authorisation
+                   :held/direction :out
+                   :token usdc
+                   :held/account :escrow-principal
+                   :owner/address nil
+                   :held/reason :partial-fill-principal-loss
+                   :held/workflow-id 42}
+        scope-hash (hash/domain-hash "force-authorisation-scope" scope-map)
+        auth-prov {:authorization/type :force-authorisation
+                   :authorization/id auth-id
+                   :authorization/scope-hash scope-hash}
+        world (ac/sub-held {:total-held {usdc 100}}
+                           usdc 40
+                           {:action "impair"
+                            :reason :partial-fill-principal-loss
+                            :authorization-provenance auth-prov
+                            :extra {:held/workflow-id 42}})]
+    (is (= 60 (get-in world [:total-held usdc])))
+    (is (true? (get-in world [:force-authorisations/consumed auth-id :consumed?])))
+    (is (= :partial-fill-principal-loss
+           (get-in world [:force-authorisations/consumed auth-id :held/reason])))))
 
 ;; ---------------------------------------------------------------------------
 ;; claimable balances

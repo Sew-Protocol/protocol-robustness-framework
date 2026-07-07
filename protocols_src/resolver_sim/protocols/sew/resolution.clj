@@ -26,7 +26,7 @@
             [resolver-sim.protocols.sew.evidence.slashing :as slashing-ev]
             [resolver-sim.logging                     :as log]))
 
-(declare finalize handle-reversal-slashing handle-fraud-slashing update-unavailability cleanup-orphaned-slashes)
+(declare finalize handle-reversal-slashing handle-fraud-slashing update-unavailability)
 
 ;; ── Decision Evidence (Evidence Layer 4) ──────────────────────────────────
 
@@ -252,8 +252,14 @@
                      (not= (:is-release prev-decision) current-is-release))
           world
           (let [slash-id (str workflow-id "-reversal-" (dec level))]
-            ;; Idempotency: if a reversal entry already exists for this level, skip
-            (if (get-in world [:pending-fraud-slashes slash-id])
+            ;; Idempotency: if a reversal entry already exists for this level, skip.
+            ;; Also skip if a manual fraud slash is pending for the same workflow
+            ;; (cross-type collision guard — prevents double-penalty from the same dispute).
+            (if (or (get-in world [:pending-fraud-slashes slash-id])
+                    (some (fn [[_id entry]]
+                            (and (= (:workflow-id entry) workflow-id)
+                                 (#{:pending :appealed} (:status entry))))
+                          (get world :pending-fraud-slashes {})))
               world
               (let [prev-resolver   (:resolver prev-decision)
                     snap            (t/get-snapshot world workflow-id)
@@ -411,9 +417,23 @@
         (seq (vals (get-in world [:previous-decisions wf-id] {}))))))
 
 (defn- active-manual-fraud-slash?
+  "True when there is any pending or appealed slash for the given slash-id or workflow.
+
+   Checks both the exact key path AND scans all pending-fraud-slash entries for any
+   that reference the same workflow-id.  This catches cross-type collisions where
+   a reversal slash (stored at string key like \"0-reversal-0\") would be missed by
+   an exact integer-key lookup."
   [world slash-id]
-  (let [existing (get-in world [:pending-fraud-slashes slash-id])]
-    (and existing (#{:pending :appealed} (:status existing)))))
+  (let [wf-id           (when (integer? slash-id) slash-id)
+        exact-existing  (get-in world [:pending-fraud-slashes slash-id])
+        ;; Scan all entries for any pending/appealed entry referencing the same workflow
+        cross-existing  (when wf-id
+                          (some (fn [[_id entry]]
+                                  (and (= (:workflow-id entry) wf-id)
+                                       (#{:pending :appealed} (:status entry))))
+                                (get world :pending-fraud-slashes {})))]
+    (or (and exact-existing (#{:pending :appealed} (:status exact-existing)))
+        cross-existing)))
 
 (defn- handle-fraud-slashing
   "Create a PENDING fraud slash for a resolver.
@@ -577,8 +597,8 @@
   "Core resolution state transition once authorization is confirmed.
    Skips the authorized-resolver? check — caller must gate it separately.
    resolution-source is a keyword like :resolver-overflow for provenance."
-  [world workflow-id caller is-release resolution-hash resolution-module-fn
-   & {:keys [resolution-source]}]
+   [world workflow-id caller is-release resolution-hash resolution-module-fn
+    & {:keys [resolution-source authorization-provenance]}]
   (let [ctx (attr/make-context {:workflow-id workflow-id})]
     (attr/log-annotated! :debug "Submitting resolution" ctx {:caller caller})
     (cond
@@ -623,11 +643,15 @@
                                                decision-info
                                                (:evidence-hash decision-evidence)))
                                        (:evidence-hash decision-evidence)
-                                       (assoc :decision-evidence-hash (:evidence-hash decision-evidence))))]
+                                       (assoc :decision-evidence-hash (:evidence-hash decision-evidence))
+                                       authorization-provenance
+                                       (assoc :authorization/provenance authorization-provenance)))]
         (if (or final-round? (not (pos? window-dur)))
           (t/ok (if is-release
-                  (finalize world''' workflow-id :released)
-                  (finalize world''' workflow-id :refunded)))
+                  (finalize world''' workflow-id :released
+                            :authorization-provenance authorization-provenance)
+                  (finalize world''' workflow-id :refunded
+                            :authorization-provenance authorization-provenance)))
           (let [pending (t/make-pending-settlement
                          {:exists          true
                           :is-release      is-release
@@ -697,10 +721,16 @@
                     :workflow-id workflow-id)
 
         :else
-        (let [world' (if (:is-release pending)
-                       (finalize world workflow-id :released)
-                       (finalize world workflow-id :refunded))
-              world'' (cleanup-orphaned-slashes world' workflow-id)]
+        (let [;; Read any force-authorisation provenance stored on the resolution
+              ;; record so it flows through to the escrow settlement held adjustment.
+              auth-prov (get-in world [:escrow-transfers workflow-id :resolution
+                                       :authorization/provenance])
+              world' (if (:is-release pending)
+                       (finalize world workflow-id :released
+                                 :authorization-provenance auth-prov)
+                       (finalize world workflow-id :refunded
+                                 :authorization-provenance auth-prov))
+              world'' (lc/cleanup-orphaned-slashes world' workflow-id)]
           (t/ok world''))))))
 
 ;; ---------------------------------------------------------------------------
@@ -883,7 +913,7 @@
         (sm/auto-cancel-due-on-disputed? world workflow-id)
         (let [r (lc/auto-cancel-disputed-on-auto-time world workflow-id)]
           (if (:ok r)
-            (let [w (cleanup-orphaned-slashes (:world r) workflow-id)]
+            (let [w (lc/cleanup-orphaned-slashes (:world r) workflow-id)]
               (assoc (t/ok w) :action :auto-cancel-on-disputed))
             r))
 
@@ -895,7 +925,7 @@
         (sm/dispute-timeout-exceeded? world workflow-id)
         (let [r (lc/auto-cancel-disputed-escrow world workflow-id)]
           (if (:ok r)
-            (let [w (cleanup-orphaned-slashes (:world r) workflow-id)]
+            (let [w (lc/cleanup-orphaned-slashes (:world r) workflow-id)]
               (assoc (t/ok w) :action :auto-cancel-disputed))
             r))
 
@@ -1120,7 +1150,7 @@
                                       (assoc-in [:resolver-frozen-until resolver] freeze-until)
                                       (assoc-in [:resolver-epoch-slashed resolver :amount] epoch-after)
                                      (update-unavailability resolver true)
-                                     (cleanup-orphaned-slashes workflow-id))
+                                      (lc/cleanup-orphaned-slashes workflow-id))
                  allocation-input {:slash-obligation amount
                                    :ended-at freeze-until
                                    :slash-policy {:type :fraud-slash
@@ -1416,22 +1446,6 @@
                 :workflow-id wf-id})
               (emit-appeal-resolution! world' :rejected-no-bond))))))))
 
-(defn- cleanup-orphaned-slashes
-  "Cleanup orphaned pending reversal slashes for a truly terminal escrow (released/refunded).
-   Only removes slashes whose appeal window has expired — prevents silent deletion of
-   Track 2 slashes that are still eligible for appeal."
-  [world workflow-id]
-  (let [now-ts (time-ctx/block-ts world)]
-    (if (#{:released :refunded} (t/escrow-state world workflow-id))
-      (update world :pending-fraud-slashes
-              (fn [slashes]
-                (into {} (remove (fn [[slash-id slash]]
-                                   (and (= :pending (:status slash))
-                                        (.startsWith (str slash-id) (str workflow-id "-reversal-"))
-                                        (<= (:appeal-deadline slash 0) now-ts)))
-                                 slashes))))
-      world)))
-
 (defn- resolve-reversal-slash-id
   "Fallback for reversal slash-ids: if slash-id is an integer workflow-id
    and no pending entry exists, try the Level 1 reversal key format.
@@ -1599,15 +1613,20 @@
   "Internal: transition escrow to terminal state, release accounting.
    direction — :released (to recipient) or :refunded (to sender).
 
-   NOTE: cleanup-orphaned-slashes is deliberately NOT called here.
+   Optional opts:
+   - authorization-provenance — forwarded to finalize-escrow-accounting for
+     force-authorised escrow settlement.
+
+   NOTE: cleanup-orphaned-slashes (now in lifecycle.clj) is deliberately NOT called here.
    It runs in execute-pending-settlement (which calls finalize then cleanup).
    Calling it in finalize would remove pending Track 2 reversal slashes
    that were just created by handle-reversal-slashing in the same
    execute-resolution call (final-round path)."
-  [world workflow-id direction]
+  [world workflow-id direction & {:keys [authorization-provenance]}]
   (let [resolver (:dispute-resolver (t/get-transfer world workflow-id))]
     (-> world
-        (lc/finalize-escrow-accounting workflow-id direction)
+        (lc/finalize-escrow-accounting workflow-id direction
+          :authorization-provenance authorization-provenance)
         (t/decrement-resolver-capacity resolver))))
 
 ;; ── Monadic Transitions ──────────────────────────────────────────────────────

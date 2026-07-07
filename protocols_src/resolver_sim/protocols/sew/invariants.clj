@@ -13,7 +13,11 @@
      2. fee-monotonicity (single)    — total-fees[t] never goes negative
      3. state-irreversibility (cross)— terminal states are absorbing (checked via check-transition)
      4. bond-boundedness (single)    — slash amount <= posted bond per workflow (vacuous until bonds added)
-     5. no-double-finalize           — each workflow-id finalizes at most once (structural guarantee)"
+      5. no-double-finalize           — each workflow-id finalizes at most once (structural guarantee)
+     33. slash-amount-valid           — every slash amount is a positive number
+     34. slash-max-per-offense-bounded — every slash amount respects per-offense cap (fraud) or
+                                         basis-amount × slash-bps (reversal)
+     35. reversal-slash-executions-accounted — every executed reversal slash is in resolver-slash-total"
   (:require [clojure.set :as set]
             [resolver-sim.protocols.sew.accounting    :as acct]
             [resolver-sim.protocols.sew.authority     :as auth]
@@ -85,8 +89,12 @@
     :yield-exposure
     :shortfall-fidelity
     :migration-parity
+    :held-adjustments-reconstruct-total-held
     :single-resolution-payout-consistent
     :fraud-slash-executions-accounted
+    :slash-amount-valid
+    :slash-max-per-offense-bounded
+    :reversal-slash-executions-accounted
     ;; Dispute lifecycle invariants
     :evidence-on-state-change
     :no-duplicate-dispute
@@ -114,7 +122,8 @@
     :token-tax-reconciliation
     :withdrawn-monotonic
     :released-monotonic
-    :held-delta-accounted})
+    :held-delta-accounted
+    :held-adjustments-cover-total-held-delta})
 
 (def canonical-ids
   "Union of world + transition invariant IDs. Used for mapping, docs, and parity tests.
@@ -401,24 +410,24 @@
                        (nil? yield-mid) net-afa
                        :else net-afa)  ;; minimum — for yield-no-shortfall we check >=
 
-                      ;; Validation predicate
-                      ok?
-                      (cond
-                         ;; No yield module: strict principal accounting.
-                         ;; Resolver slashes affect :resolver-stakes, not :total-held,
-                         ;; so delta-held = -afa with no slash-dist adjustment.
-                         (nil? yield-mid)
-                         (and (= delta-held (- afa))
-                             (= delta-claimable net-afa))
+                       ;; Validation predicate
+                       ok?
+                       (cond
+                          ;; No yield module: strict principal accounting.
+                          ;; Resolver slashes affect :resolver-stakes, not :total-held,
+                          ;; so delta-held = -afa with no slash-dist adjustment.
+                          (nil? yield-mid)
+                          (and (= delta-held (- afa))
+                              (= delta-claimable net-afa))
 
-                       ;; Yield with shortfall: only fulfilled-amount goes to claimable immediately
-                       shortfall
-                       (= delta-claimable expected-claimable)
+                        ;; Yield with shortfall: only fulfilled-amount goes to claimable immediately
+                        shortfall
+                        (= delta-claimable expected-claimable)
 
-                       ;; Yield without shortfall: at least principal in claimable (yield adds more)
-                       :else
-                       (>= delta-claimable net-afa))]
-              :when (not ok?)]
+                        ;; Yield without shortfall: at least principal in claimable (yield adds more)
+                        :else
+                        (>= delta-claimable net-afa))]
+               :when (not ok?)]
           {:workflow-id     wf
            :token           token
            :afa             afa
@@ -475,9 +484,11 @@
   "Invariant 14: every slash event has a status consistent with its timestamps.
 
    Rules:
-     :pending  — proposed-at > 0, appeal-deadline > proposed-at
-     :executed — proposed-at > 0
-     :reversed — proposed-at > 0 (was once pending)"
+     :pending             — proposed-at > 0, appeal-deadline > proposed-at
+     :appealed            — proposed-at > 0, appeal-deadline > proposed-at
+     :executed            — proposed-at > 0
+     :reversed            — proposed-at > 0
+     :reversed-with-credit — proposed-at > 0"
   [world]
   (let [slashes   (:pending-fraud-slashes world {})
         violations
@@ -487,14 +498,16 @@
                     status         (:status ev)
                     pending-ok?    (and (pos? proposed-at)
                                         (>= appeal-dl proposed-at))
-                    executed-ok?   (pos? proposed-at)
-                    reversed-ok?   (pos? proposed-at)
+                    terminal-ok?   (pos? proposed-at)
                     valid?
                     (case status
-                      :pending  pending-ok?
-                      :executed executed-ok?
-                      :reversed reversed-ok?
-                      true)]
+                      :pending             pending-ok?
+                      :appealed            pending-ok?
+                      :executed            terminal-ok?
+                      :reversed            terminal-ok?
+                      :reversed-with-credit terminal-ok?
+                      ;; Unknown status: flag as violation
+                      false)]
               :when (not valid?)]
           {:slash-id slash-id :status status :proposed-at proposed-at :appeal-deadline appeal-dl})]
     {:holds?     (empty? violations)
@@ -554,43 +567,34 @@
    custody views."
   [world]
   (if (get-in world [:params :held-adjustments/complete?])
-    (let [adjustments (:held-adjustments world [])
-          legacy-uses (get-in world [:held-adjustments/legacy-uses :count] 0)]
-      (cond
-        (pos? legacy-uses)
-        {:holds? false
-         :violations [{:type :held-adjustments-legacy-uses-present
-                       :count legacy-uses
-                       :entries (get-in world [:held-adjustments/legacy-uses :entries] [])}]}
-
-        :else
-        (try
-          (let [{replayed-total-held :total-held
-                 replayed-positions :held/positions
-                 replayed-index :held-ledger/index}
-                (acct/replay-held-adjustment-state adjustments)
-                actual-index (get world :held-ledger/index {})
-                actual-total-held (:total-held world {})
-                actual-positions (:held/positions world {})]
-            (if (and (= replayed-index actual-index)
-                     (= replayed-total-held actual-total-held)
-                     (= replayed-positions actual-positions)
-                     (= (get actual-index :by-token {}) actual-total-held)
-                     (= (get actual-index :by-position {}) actual-positions))
-              {:holds? true :violations nil}
-              {:holds? false
-               :violations [{:type :held-adjustments-replay-mismatch
-                             :replayed {:held-ledger/index replayed-index
-                                        :total-held replayed-total-held
-                                        :held/positions replayed-positions}
-                             :actual {:held-ledger/index actual-index
-                                      :total-held actual-total-held
-                                      :held/positions actual-positions}}]}))
-          (catch Exception e
+    (let [adjustments (:held-adjustments world [])]
+      (try
+        (let [{replayed-total-held :total-held
+               replayed-positions :held/positions
+               replayed-index :held-ledger/index}
+              (acct/replay-held-adjustment-state adjustments)
+              actual-index (get world :held-ledger/index {})
+              actual-total-held (:total-held world {})
+              actual-positions (:held/positions world {})]
+          (if (and (= replayed-index actual-index)
+                   (= replayed-total-held actual-total-held)
+                   (= replayed-positions actual-positions)
+                   (= (get actual-index :by-token {}) actual-total-held)
+                   (= (get actual-index :by-position {}) actual-positions))
+            {:holds? true :violations nil}
             {:holds? false
-             :violations [{:type :held-adjustments-invalid
-                           :message (.getMessage e)
-                           :data (ex-data e)}]}))))
+             :violations [{:type :held-adjustments-replay-mismatch
+                           :replayed {:held-ledger/index replayed-index
+                                      :total-held replayed-total-held
+                                      :held/positions replayed-positions}
+                           :actual {:held-ledger/index actual-index
+                                    :total-held actual-total-held
+                                    :held/positions actual-positions}}]}))
+        (catch Exception e
+          {:holds? false
+           :violations [{:type :held-adjustments-invalid
+                         :message (.getMessage e)
+                         :data (ex-data e)}]})))
     {:holds? true :violations nil}))
 
 ;; ---------------------------------------------------------------------------
@@ -1070,6 +1074,40 @@
           {:token token :delta-held delta-held :expected expected-delta})]
     {:holds? (empty? violations) :violations (vec violations)}))
 
+(defn held-adjustments-cover-total-held-delta?
+  "Transition invariant: every change in :total-held must be exactly explained
+   by held-adjustments emitted during the transition.
+   Catches direct update-in/assoc-in [:total-held ...] bypasses.
+   Allowlisted paths (adversarial modules, legacy migration) can declare
+   :params :held-adjustments/allow-transition-mismatch to suppress."
+  [world-before world-after]
+  (if (get-in world-after [:params :held-adjustments/allow-transition-mismatch])
+    {:holds? true :violations nil}
+    (let [adjustments-before (:held-adjustments world-before [])
+          adjustments-after  (:held-adjustments world-after [])
+          new-adjustments    (drop (count adjustments-before) adjustments-after)
+          all-tokens (into #{} (concat (keys (:total-held world-before))
+                                       (keys (:total-held world-after))))
+          violations
+          (for [token all-tokens
+                :let [held-before (get (:total-held world-before) token 0)
+                      held-after  (get (:total-held world-after) token 0)
+                      delta-held  (- held-after held-before)
+                      adj-delta   (reduce + 0
+                                         (for [adj new-adjustments
+                                               :when (= (:token adj) token)]
+                                           (case (:held/direction adj)
+                                             :in  (:amount adj)
+                                             :out (- (:amount adj))
+                                             0)))]
+                :when (not= delta-held adj-delta)]
+            {:token token
+             :delta-held delta-held
+             :held-adjustment-delta adj-delta
+             :delta-mismatch (- delta-held adj-delta)
+             :new-held-adjustments (count new-adjustments)})]
+      {:holds? (empty? violations) :violations (vec violations)})))
+
 ;; ---------------------------------------------------------------------------
 ;; Invariant 22: Token Tax Reconciliation
 ;;
@@ -1451,6 +1489,100 @@
      :violations (vec violations)}))
 
 ;; ---------------------------------------------------------------------------
+;; Invariant 33: Slash amount is a positive number
+;;
+;; Every entry in :pending-fraud-slashes must have a positive numeric :amount.
+;; Mirrors the runtime guard :invalid-slash-amount in propose-fraud-slash
+;; (resolution.clj:1234).  Catches data corruption, manual world construction,
+;; or replay deserialization bugs that introduce zero or non-numeric amounts.
+;; ---------------------------------------------------------------------------
+
+(defn slash-amount-valid?
+  "True when every pending-fraud-slash entry has a positive numeric :amount.
+   Backs the :invalid-slash-amount runtime guard in propose-fraud-slash."
+  [world]
+  (let [violations
+        (for [[slash-id ev] (:pending-fraud-slashes world {})
+              :let [amount (:amount ev)]
+              :when (or (nil? amount) (not (number? amount)) (not (pos? amount)))]
+          {:slash-id slash-id :amount amount :status (:status ev)})]
+    {:holds?     (empty? violations)
+     :violations (vec violations)}))
+
+;; ---------------------------------------------------------------------------
+;; Invariant 34: Slash amount within per-offense cap
+;;
+;; Every fraud slash amount must not exceed the max-slash-per-offense BPS
+;; fraction of the resolver's current stake (best-effort against current stake,
+;; which may differ from stake at proposal).
+;;
+;; Every reversal slash amount must equal calculate-slash-amount-from-basis
+;; applied to its stored basis-amount and slash-bps (precise internal consistency).
+;; ---------------------------------------------------------------------------
+
+(defn slash-max-per-offense-bounded?
+  "True when every fraud slash respects max-slash-per-offense-bps against the
+   resolver's current stake, and every reversal slash amount is internally
+   consistent with its stored basis-amount and slash-bps.
+   Mirrors the runtime guard in propose-fraud-slash (resolution.clj:1261)."
+  [world]
+  (let [max-bps (get-in world [:params :max-slash-per-offense-bps] 5000)
+        fraud-violations
+        (for [[slash-id ev] (:pending-fraud-slashes world {})
+              :let [amount (or (:amount ev) 0)
+                    resolver (:resolver ev)]
+              :when (and (= :fraud (:reason ev)) (pos? amount))
+              :let [stake (get-in world [:resolver-stakes resolver] 0)
+                    cap (quot (* stake max-bps) 10000)]
+              :when (> amount cap)]
+          {:slash-id slash-id :reason :fraud :amount amount :resolver resolver
+           :stake stake :max-slash-per-offense-bps max-bps :offense-cap cap})
+        reversal-violations
+        (for [[slash-id ev] (:pending-fraud-slashes world {})
+              :let [amount (or (:amount ev) 0)
+                    basis (or (:basis-amount ev) 0)
+                    slash-bps (or (:slash-bps ev) 0)
+                    expected (sew-econ/calculate-slash-amount-from-basis basis slash-bps)]
+              :when (and (= :reversal (:reason ev)) (pos? amount) (not= amount expected))]
+          {:slash-id slash-id :reason :reversal :amount amount
+           :basis-amount basis :slash-bps slash-bps :expected-amount expected})
+        violations (concat fraud-violations reversal-violations)]
+    {:holds?     (empty? violations)
+     :violations (vec violations)}))
+
+;; ---------------------------------------------------------------------------
+;; Invariant 34: Reversal slash executions accounted in resolver-slash-total
+;;
+;; Every executed reversal slash must be reflected in the resolver's cumulative
+;; :resolver-slash-total.  Complements fraud-slash-executions-accounted? which
+;; covers fraud slashes only.
+;; ---------------------------------------------------------------------------
+
+(defn reversal-slash-executions-accounted?
+  "True when every executed reversal slash is accounted for in
+   :resolver-slash-total.
+   Reversal counterpart of fraud-slash-executions-accounted?."
+  [world]
+  (let [executed-by-resolver
+        (reduce (fn [acc [_ ev]]
+                  (if (and (= :executed (:status ev))
+                           (= :reversal (:reason ev))
+                           (some? (:resolver ev)))
+                    (update acc (:resolver ev) (fnil + 0) (or (:amount ev) 0))
+                    acc))
+                {}
+                (:pending-fraud-slashes world {}))
+        violations
+        (for [[resolver executed-total] executed-by-resolver
+              :let [accounted (get-in world [:resolver-slash-total resolver] 0)]
+              :when (< accounted executed-total)]
+          {:resolver resolver
+           :executed-reversal-total executed-total
+           :resolver-slash-total accounted})]
+    {:holds?     (empty? violations)
+     :violations (vec violations)}))
+
+;; ---------------------------------------------------------------------------
 ;; Invariant: Challenge bond proportional to escrow value
 ;;
 ;; For every escrow with a pending settlement (challengeable), the default
@@ -1577,6 +1709,9 @@
                  :resolver-capacity              (resolver-capacity-invariant? world)
                  :single-resolution-payout-consistent (single-resolution-payout-consistent? world)
                  :fraud-slash-executions-accounted    (fraud-slash-executions-accounted? world)
+                 :slash-amount-valid                 (slash-amount-valid? world)
+                 :slash-max-per-offense-bounded      (slash-max-per-offense-bounded? world)
+                 :reversal-slash-executions-accounted (reversal-slash-executions-accounted? world)
                  :evidence-on-state-change            (dispute/evidence-on-state-change? world)
                  :no-duplicate-dispute                (dispute/no-duplicate-dispute? world)
                  :appeal-requires-prior-resolution    (dispute/appeal-requires-prior-resolution? world)
@@ -1652,10 +1787,12 @@
                   (withdrawn-monotonic? world-before world-after)
                   :released-monotonic
                   (released-monotonic? world-before world-after)
-                  :held-delta-accounted
-                  (held-delta-accounted? world-before world-after)}
-         processed (into {}
-                         (for [[id result-map] results]
+                   :held-delta-accounted
+                   (held-delta-accounted? world-before world-after)
+                   :held-adjustments-cover-total-held-delta
+                   (held-adjustments-cover-total-held-delta? world-before world-after)}
+          processed (into {}
+                          (for [[id result-map] results]
                            (let [holds? (:holds? result-map)
                                  expected-fail? (contains? expected-failures id)]
                              [id (assoc result-map

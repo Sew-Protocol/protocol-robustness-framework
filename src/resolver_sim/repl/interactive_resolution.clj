@@ -8,6 +8,7 @@
             [resolver-sim.protocols.sew.types :as t]
             [resolver-sim.protocols.sew.resolution :as res]
             [resolver-sim.protocols.sew.state-machine :as sm]
+            [resolver-sim.hash.canonical :as hash]
             [resolver-sim.time.context :as time-ctx]
             [resolver-sim.time.deadlines :as dl]))
 
@@ -289,18 +290,42 @@
                                 wf workflow-id
                                 is-release (get params :is-release true)
                                 resolution-hash (get params :resolution-hash "0xforce-authorized")
+                                 ;; Read workflow data to compute force-authorisation scope
+                                et       (t/get-transfer (:world session') wf)
+                                token    (:token et)
+                                recipient (if is-release (:to et) (:from et))
+                                direction :out
+                                fa-reason (if is-release :force-authorised-release
+                                              :force-authorised-refund)
+                                 ;; Build scope-map matching adjust-held in accounting.clj
+                                scope-map {:authorization/id nil
+                                           :authorization/type :force-authorisation
+                                           :held/direction direction
+                                           :token token
+                                           :held/account :escrow-principal
+                                           :owner/address recipient
+                                           :held/reason fa-reason
+                                           :held/workflow-id wf}
+                                scope-hash (hash/domain-hash "force-authorisation-scope" scope-map)
+                                auth-id   (str "fa-" wf "-"
+                                               (name (if is-release :release :refund)) "-"
+                                               (subs scope-hash 0 8))
+                                force-auth-provenance
+                                (merge provenance
+                                       {:authorization/type :force-authorisation
+                                        :authorization/id auth-id
+                                        :authorization/scope-hash scope-hash
+                                        :authorization/governance-provenance provenance})
                                 result (res/apply-resolution-transition
                                         (:world session') wf (:address agent)
                                         is-release resolution-hash nil
-                                        :resolution-source :force-authorized)]
+                                        :resolution-source :force-authorized
+                                        :authorization-provenance force-auth-provenance)]
                             (if (:ok result)
-                              (-> result
-                                  (update :world
-                                          (fn [world']
-                                            (assoc-in world'
-                                                      [:escrow-transfers wf :resolution :authorization/provenance]
-                                                      provenance)))
-                                  (update :extra merge {:authorization/provenance provenance}))
+                              (update result :extra merge
+                                      {:authorization/id auth-id
+                                       :authorization/scope-hash scope-hash
+                                       :authorization/provenance force-auth-provenance})
                               result)))}]
             (println (str "[FORCE] " governed-by " overrides resolver authorization for workflow " workflow-id
                           " (" (name unavailable-reason) ")"))

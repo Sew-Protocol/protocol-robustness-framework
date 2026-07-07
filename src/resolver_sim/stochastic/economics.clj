@@ -116,19 +116,80 @@
   (max 0.0 (- 1.0 detection-prob)))
 
 (def default-escalation-assumptions
-  "Named parameter bands for escalation model sensitivity analysis.
+  "Named parameter bands for escalation-model sensitivity analysis.
 
-   :base        — realistic mid-range estimates
-   :optimistic  — strong deterrence (escalation reliably corrects fraud)
-   :pessimistic — weak deterrence (escalation often fails to correct fraud)
-   :two-layer   — no Kleros backstop (has-kleros? false); represents 2-layer only protocol
+   These assumptions are used to model how likely an incorrect lower-layer
+   dispute outcome is to be appealed, corrected, escalated, and ultimately
+   reversed.
 
-   Use :pessimistic for conservative (worst-case) economic security analysis.
-   Use :two-layer to compare outcomes without Kleros fallback."
+   Bands:
+
+   :base
+   Realistic mid-range estimates.
+
+   :optimistic
+   Strong deterrence and strong correction assumptions. Appeals are more
+   likely, L1 reversal is more reliable, and Kleros escalation is highly
+   effective.
+
+   :pessimistic
+   Weak deterrence and weak correction assumptions. Appeals are less likely,
+   L1 reversal is less reliable, and escalation is less likely to fully
+   correct fraud. Use this band for conservative or worst-case economic
+   security analysis.
+
+   :two-layer
+   Disables the Kleros backstop. This represents the same L0/L1 protocol
+   without L2 escalation. The L2 probability keys remain present so downstream
+   stochastic code can consume the same shape across all bands.
+
+   Probability semantics:
+
+   :p-appeal-wrong
+   Probability that an incorrect lower-layer outcome is appealed.
+
+   :p-l1-reversal
+   Probability that L1 reverses an incorrect lower-layer outcome,
+   conditional on an appeal occurring.
+
+   :p-l2-escalation
+   Probability that an unresolved or still-contested L1 outcome escalates
+   to L2, conditional on the Kleros backstop being enabled.
+
+   :p-l2-reversal
+   Probability that L2 reverses an incorrect lower-layer outcome,
+   conditional on escalation occurring.
+
+   :has-kleros?
+   Whether the L2 Kleros fallback is available for this parameter band."
   {:base        {:p-appeal-wrong 0.40  :p-l1-reversal 0.85  :has-kleros? true  :p-l2-escalation 0.70  :p-l2-reversal 0.95}
    :optimistic  {:p-appeal-wrong 0.60  :p-l1-reversal 0.95  :has-kleros? true  :p-l2-escalation 0.90  :p-l2-reversal 0.99}
    :pessimistic {:p-appeal-wrong 0.20  :p-l1-reversal 0.60  :has-kleros? true  :p-l2-escalation 0.40  :p-l2-reversal 0.80}
    :two-layer   {:p-appeal-wrong 0.40  :p-l1-reversal 0.85  :has-kleros? false :p-l2-escalation 0.0   :p-l2-reversal 0.0}})
+
+;;currently unused, gives a clean way to compare bands:
+;;(into {}
+;;      (map (fn [[band assumptions]]
+;;             [band (effective-correction-probability assumptions)]))
+;;      default-escalation-assumptions)
+(defn effective-correction-probability
+  "Returns the probability that an incorrect lower-layer outcome is corrected
+   through appeal and, if enabled, L2 escalation.
+
+   Formula:
+   appeal * (L1 reversal + L1 failure * L2 escalation * L2 reversal)"
+  [{:keys [p-appeal-wrong
+           p-l1-reversal
+           has-kleros?
+           p-l2-escalation
+           p-l2-reversal]}]
+  (let [l2-correction (if has-kleros?
+                        (* (- 1.0 p-l1-reversal)
+                           p-l2-escalation
+                           p-l2-reversal)
+                        0.0)]
+    (* p-appeal-wrong
+       (+ p-l1-reversal l2-correction))))
 
 (defn fraud-survival-probability
   "Probability that a malicious L0 verdict survives all active escalation tiers.

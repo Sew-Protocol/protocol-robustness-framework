@@ -195,10 +195,14 @@
           0)
 
         ;; Phase G / Track 2: delayed slashing (detection delay or new-evidence pending)
+        ;; NOTE: slashing-pending? conflates two semantically different states:
+        ;;   - reversal-pending? (probabilistic Track 2, oracle-driven)
+        ;;   - slashing-detection-delay-weeks > 0 (deterministic Phase G delay)
+        ;; Use :reversal-pending? directly for Track 2, :slashing-pending? for the combined flag.
         slashing-pending? (and slashed-detected?
                                (or reversal-pending?
                                    (> slashing-detection-delay-weeks 0)))
-        delay-weeks       (if slashing-pending? slashing-detection-delay-weeks 0)
+        delay-weeks       (if (> slashing-detection-delay-weeks 0) slashing-detection-delay-weeks 0)
 
         ;; Phase H: Realistic bond mechanics
         frozen? (and slashed-detected? freeze-on-detection?)
@@ -264,17 +268,18 @@
         (when slashed-detected?
           (distribute-bond-loss bond-loss))]
 
-    {:dispute-correct?      verdict-correct?
-     :appeal-triggered?     appealed?
-     :detected?             detected?
-     :l2-detected?          l2-slashed?
-     :escalated?            escalated?
-     :escalation-level      escalation-level
-     :slashed?              slashed-detected?
-     :frozen?               frozen?
-     :escaped?              escaped?
-     :slashing-pending?     slashing-pending?
-     :slashing-delay-weeks  delay-weeks
+     {:dispute-correct?      verdict-correct?
+      :appeal-triggered?     appealed?
+      :detected?             detected?
+      :l2-detected?          l2-slashed?
+      :escalated?            escalated?
+      :escalation-level      escalation-level
+      :slashed?              slashed-detected?
+      :frozen?               frozen?
+      :escaped?              escaped?
+      :reversal-pending?     reversal-pending?
+      :slashing-pending?     slashing-pending?
+      :slashing-delay-weeks  delay-weeks
      :slashing-reason       slash-reason
      :bond-loss             (long (max 0 bond-loss))
      :profit-honest         profit-honest

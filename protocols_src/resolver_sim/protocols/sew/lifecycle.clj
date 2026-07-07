@@ -119,11 +119,12 @@
   "Internal: transition escrow to terminal state, release accounting.
    direction — :released (to recipient) or :refunded (to sender).
 
-   Yield shortfall handling: when the yield module can only fulfil a fraction of
-   the gross (principal + unrealized yield), only that fulfilled amount is moved
-   from :total-held to :claimable.  The deferred remainder stays in :total-held
-   as an outstanding obligation until claim-deferred-yield closes it out."
-  [world workflow-id direction]
+   Optional opts:
+   - authorization-provenance — when present, the escrow settlement uses
+     :force-authorised-release or :force-authorised-refund as the held reason
+     and carries the authorization provenance."
+
+  [world workflow-id direction & {:keys [authorization-provenance]}]
   (let [et        (t/get-transfer world workflow-id)
         token     (:token et)
         amt       (:amount-after-fee et)
@@ -134,6 +135,13 @@
         owner-id  (t/escrow-yield-owner-id workflow-id)
         recipient (if (= direction :released) (:to et) (:from et))
         record-fn (if (= direction :released) acct/record-released acct/record-refunded)
+        held-reason (if authorization-provenance
+                      (if (= direction :released)
+                        :force-authorised-release
+                        :force-authorised-refund)
+                      (if (= direction :released)
+                        :escrow-settlement-released
+                        :escrow-settlement-refunded))
         ;; Run accrue + withdraw first so we can inspect the shortfall result
         world-after-yield
         (-> world
@@ -178,9 +186,8 @@
                    (acct/sub-held token
                                   sub-held-amt
                                   {:action (str "finalize-" (name direction))
-                                   :reason (if (= direction :released)
-                                             :escrow-settlement-released
-                                             :escrow-settlement-refunded)
+                                   :reason held-reason
+                                   :authorization-provenance authorization-provenance
                                    :extra {:held/action (str "finalize-" (name direction))
                                            :held/workflow-id workflow-id
                                            :held/recipient recipient
@@ -225,9 +232,13 @@
     result))
 
 (defn finalize-escrow-accounting
-  "Shared finalize accounting for release/refund and resolution paths."
-  [world workflow-id direction]
-  (finalize world workflow-id direction))
+  "Shared finalize accounting for release/refund and resolution paths.
+   Optional opts:
+   - authorization-provenance — forwarded to finalize for force-authorised
+     escrow settlement."
+  [world workflow-id direction & {:keys [authorization-provenance]}]
+  (finalize world workflow-id direction
+            :authorization-provenance authorization-provenance))
 
 ;;
 ;; Mirrors: BaseEscrow.createEscrow
@@ -595,6 +606,26 @@
           r)))))
 
 ;; ---------------------------------------------------------------------------
+;; Cleanup orphaned reversal slashes for terminal escrows
+;; ---------------------------------------------------------------------------
+
+(defn cleanup-orphaned-slashes
+  "Cleanup orphaned pending reversal slashes for a truly terminal escrow (released/refunded).
+   Only removes slashes whose appeal window has expired — prevents silent deletion of
+   Track 2 slashes that are still eligible for appeal."
+  [world workflow-id]
+  (let [now-ts (time-ctx/block-ts world)]
+    (if (#{:released :refunded} (t/escrow-state world workflow-id))
+      (update world :pending-fraud-slashes
+              (fn [slashes]
+                (into {} (remove (fn [[slash-id slash]]
+                                   (and (= :pending (:status slash))
+                                        (.startsWith (str slash-id) (str workflow-id "-reversal-"))
+                                        (<= (:appeal-deadline slash 0) now-ts)))
+                                 slashes))))
+      world)))
+
+;; ---------------------------------------------------------------------------
 ;; auto-cancel-disputed-escrow
 ;;
 ;; Mirrors: BaseEscrow.autoCancelDisputedEscrow
@@ -644,9 +675,8 @@
                           world-finalized)
         world-result    (-> world-slashed
                             (t/decrement-resolver-capacity resolver)
-                            (update :dispute-timestamps dissoc workflow-id)
-                    ;; Return all posted bonds for this workflow (prevents bond leak)
-                    (acct/return-all-bonds-for-workflow workflow-id))]
+                            (acct/return-all-bonds-for-workflow workflow-id)
+                            (cleanup-orphaned-slashes workflow-id))]
     (t/ok world-result)))
 
 (defn auto-cancel-disputed-escrow

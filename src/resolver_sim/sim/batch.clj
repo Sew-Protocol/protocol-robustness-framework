@@ -48,6 +48,7 @@
         l2-detected-count (count (filter :l2-detected? results))
 
         pending-slashed (count (filter :slashing-pending? results))
+        reversal-pending-slashed (count (filter :reversal-pending? results))
         pending-delay-weeks (if (empty? results) 0
                                 (double (mean (map :slashing-delay-weeks (filter :slashing-pending? results)))))
 
@@ -107,11 +108,14 @@
      :fraud-slash-rate (double (/ fraud-slashed n-trials))
 
      :fraud-slashed-count fraud-slashed
-     :reversal-slashed-count reversal-slashed
-     :timeout-slashed-count timeout-slashed
+      :reversal-slashed-count reversal-slashed
+      :timeout-slashed-count timeout-slashed
 
-     :frozen-rate (double (/ frozen-count n-trials))
-     :escaped-rate (double (/ escaped-count n-trials))
+      :pending-slashed-count pending-slashed
+      :reversal-pending-count reversal-pending-slashed
+
+      :frozen-rate (double (/ frozen-count n-trials))
+      :escaped-rate (double (/ escaped-count n-trials))
 
      :adjusted-strategy (:adjusted-strategy params (or (:force-strategy params) (:strategy params :honest)))
      :bribery-enabled (boolean (and (:bribe-cost-ratio params)

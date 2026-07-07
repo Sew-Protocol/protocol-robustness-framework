@@ -181,7 +181,7 @@
       (is (seq (:oracle-roll-trace result)))
       (is (some #(= :reversal-detection (:roll/kind %)) (:oracle-roll-trace result)))
       (when (= :reversal (:slashing-reason result))
-        (is (true? (:slashed? result))))))
+        (is (true? (:slashed? result)))))))
 
   (deftest types-validate-scenario-runs-oracle-check
     (testing "validate-scenario invokes oracle validation"
@@ -234,6 +234,150 @@
                   (:oracle-roll-trace result))
             ":l2-detection roll consumed when appeal fires and threshold > 0"))))
 
+;; ── Pending-evidence / effective-bond-loss integration tests ────────────
+
+  (deftest pending-evidence-defers-loss-when-not-frozen
+    (testing "when slashing-pending? and not frozen, profit-malice reflects deferred loss"
+      (let [result (dispute/resolve-dispute
+                    (rng/make-rng 42) 10000 150 700 2.5 :malicious 1.0 1.0 0.1
+                    :fraud-detection-probability 0
+                    :reversal-detection-probability 1.0
+                    :new-evidence-probability 1.0
+                    :reversal-slash-bps 2500
+                    :p-l1-reversal 1.0
+                    :freeze-on-detection? false
+                    :has-kleros? true
+                    :fixed-or {:rolls {:reversal-detection [0.01]
+                                       :pending-evidence [0.01]}
+                               :scope #{:detection}
+                               :on-unknown-roll-kind :stochastic})
+            fee 150  ; = 10000 * 150 / 10000
+            expected-profit fee]
+        (is (:appeal-triggered? result) "appeal must trigger for reversal path")
+        (is (:slashing-pending? result)
+            "slashing-pending? must be true: new-evidence-probability=1.0 and reversal-slashed?")
+        (is (not (:frozen? result)) "frozen? must be false: freeze-on-detection?=false")
+        (is (= expected-profit (:profit-malice result))
+            (str "profit-malice should equal fee (" fee ") when loss is deferred by pending-evidence"))
+        (is (pos? (:bond-loss result))
+            "raw bond-loss is positive (the reporting key, not effective)"))))
+
+(deftest pending-evidence-applies-loss-when-frozen
+    (testing "when slashing-pending? and frozen (not escaped), profit-malice reflects full bond loss"
+      (let [result (dispute/resolve-dispute
+                    (rng/make-rng 42) 10000 150 700 2.5 :malicious 1.0 1.0 0.1
+                    :fraud-detection-probability 0
+                    :reversal-detection-probability 1.0
+                    :new-evidence-probability 1.0
+                    :reversal-slash-bps 2500
+                    :p-l1-reversal 1.0
+                    :freeze-on-detection? true
+                    :unstaking-delay-days 5   ; < freeze(3) + appeal(7), so can-escape?=false → escaped?=false
+                    :has-kleros? true
+                    :fixed-or {:rolls {:reversal-detection [0.01]
+                                       :pending-evidence [0.01]}
+                               :scope #{:detection}
+                               :on-unknown-roll-kind :stochastic})
+            fee 150]
+        (is (:slashing-pending? result) "slashing-pending? must be true")
+        (is (:frozen? result) "frozen? must be true: freeze-on-detection?=true")
+        (is (pos? (:bond-loss result))
+            "bond-loss must be positive when frozen despite slashing-pending?")
+        (is (< (:profit-malice result) fee)
+            "profit-malice must be less than fee when bond loss is applied"))))
+
+(deftest pending-evidence-zero-slash-bps-skips-pending
+  (testing "slashing-pending? is false when reversal-slash-bps=0 despite new-evidence-probability>0"
+    (let [result (dispute/resolve-dispute
+                  (rng/make-rng 42) 10000 150 700 2.5 :malicious 1.0 1.0 0.1
+                  :fraud-detection-probability 0
+                  :reversal-detection-probability 1.0
+                  :new-evidence-probability 0.5
+                  :reversal-slash-bps 0                     ; zero → reversal-slashed-live? returns false
+                  :p-l1-reversal 1.0
+                  :has-kleros? true
+                  :fixed-or {:rolls {:reversal-detection [0.01]
+                                     :pending-evidence [0.99]}
+                             :scope #{:detection}
+                             :on-unknown-roll-kind :stochastic})]
+      ;; When reversal-slash-bps=0, reversal-slashed-live? returns false (gated by pos? check),
+      ;; so slashed-detected? depends on other detection.  L1 may or may not fire.
+      ;; The point is that slashing-pending? is always false because reversal-pending-live?
+      ;; is also gated by reversal-slash-bps, meaning the pending-evidence oracle roll
+      ;; is NOT consumed regardless of new-evidence-probability.
+      (is (not (:slashing-pending? result))
+          "slashing-pending? must be false: reversal-slash-bps=0 gates both reversal and pending-evidence paths")
+      (is (nil? (:slashing-reason result))
+          "slashing-reason should be nil: reversal-slash-bps=0 prevents reversal, l1 detection depends on rng"))))
+
+;; ── reversal-pending? output key tests (Gap 3) ─────────────────────────
+
+  (deftest reversal-pending-key-true-when-track-2
+    (testing ":reversal-pending? is true when Track 2 (new evidence) triggers pending"
+      (let [result (dispute/resolve-dispute
+                    (rng/make-rng 42) 10000 150 700 2.5 :malicious 1.0 1.0 0.1
+                    :fraud-detection-probability 0
+                    :reversal-detection-probability 1.0
+                    :new-evidence-probability 1.0
+                    :reversal-slash-bps 2500
+                    :p-l1-reversal 1.0
+                    :has-kleros? true
+                    :fixed-or {:rolls {:reversal-detection [0.01]
+                                       :pending-evidence [0.01]}
+                               :scope #{:detection}
+                               :on-unknown-roll-kind :stochastic})]
+        (is (:slashing-pending? result) "slashing-pending? must be true")
+        (is (:reversal-pending? result)
+            "reversal-pending? must be true when pending-evidence fires")
+        (is (zero? (:slashing-delay-weeks result))
+            "delay-weeks must be 0: only reversal-pending triggered, not slashing-detection-delay"))))
+
+  (deftest reversal-pending-key-false-when-delay-only
+    (testing ":reversal-pending? is false when pending comes from delay-weeks, not Track 2"
+      (let [result (dispute/resolve-dispute
+                    (rng/make-rng 42) 10000 150 700 2.5 :malicious 1.0 1.0 0.1
+                    :fraud-detection-probability 0
+                    :reversal-detection-probability 1.0
+                    :new-evidence-probability 0.0           ; no Track 2
+                    :reversal-slash-bps 2500
+                    :p-l1-reversal 1.0
+                    :slashing-detection-delay-weeks 3        ; Phase G delay
+                    :has-kleros? true
+                    :fixed-or {:rolls {:reversal-detection [0.01]}
+                               :scope #{:detection}
+                               :on-unknown-roll-kind :stochastic})]
+        (is (:slashing-pending? result) "slashing-pending? must be true (delay weeks)")
+        (is (not (:reversal-pending? result))
+            "reversal-pending? must be false: new-evidence-probability=0")
+        (is (= 3 (:slashing-delay-weeks result))
+            "delay-weeks must be 3: slashing-detection-delay-weeks=3"))))
+
+  (deftest pending-evidence-gated-shared-stream-cursor
+    (testing "shared-vector cursor aligns when reversal-pending-live? gates out (no reversal-slashed)"
+      ;; Setup: malicious resolver, but p-l1-reversal=0 so verdict never reversed.
+      ;; reversal-pending-live? is called but returns false because reversal-slashed? is false.
+      ;; The :pending-evidence roll should NOT be consumed from the shared stream,
+      ;; leaving subsequent rolls (for other detection) at the correct position.
+      (let [cursor (atom 0)
+            result (dispute/resolve-dispute
+                    (rng/make-rng 42) 10000 150 700 2.5 :malicious 1.0 1.0 0.1
+                    :p-l1-reversal 0.0                     ; never reverses → no reversal-slashed
+                    :fraud-detection-probability 0
+                    :reversal-detection-probability 1.0
+                    :new-evidence-probability 0.5
+                    :reversal-slash-bps 2500
+                    :has-kleros? false
+                    :oracle-fixture {:mode :fixed-roll-sequence
+                                     :rolls [0.99 0.01]}
+                    :oracle-roll-cursor cursor)]
+        ;; No reversal slash because p-l1-reversal=0 (verdict not reversed)
+        (is (nil? (:slashing-reason result))
+            "no slashing: reversal never triggered")
+        (is (not (:slashing-pending? result))
+            "slashing-pending? must be false: no reversal")
+        (is (not (:reversal-pending? result))
+            "reversal-pending? must be false: no reversal to pend"))))
+
 ;; ── All-9 roll kinds integration test ───────────────────────────────────
 
   (deftest fixed-or-all-roll-kinds-consumed
@@ -273,7 +417,7 @@
         (is (contains? kinds :l2-detection) ":l2-detection consumed")
         (is (contains? kinds :l1-reversal) ":l1-reversal consumed")
         (is (contains? kinds :l2-escalation) ":l2-escalation consumed")
-        (is (contains? kinds :l2-reversal) ":l2-reversal consumed")))))
+        (is (contains? kinds :l2-reversal) ":l2-reversal consumed")))
 
 ;; ── Cursor semantics tests ───────────────────────────────────────────────
 
@@ -399,4 +543,4 @@
           no-fix   (det/normalize-oracle-fixture {})]
       (is (= :shared-stream (:fixture-mode shared)))
       (is (= :per-kind (:fixture-mode per-kind)))
-      (is (= :none (:fixture-mode no-fix))))))
+      (is (= :none (:fixture-mode no-fix)))))))

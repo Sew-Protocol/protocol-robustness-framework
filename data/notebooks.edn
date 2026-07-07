@@ -367,4 +367,16 @@
     :status         :experimental
     :risk           :medium
     :protocol-areas [:dispute-resolution :game-theory]
-    :tags           ["SPE" "subgame" "counterfactual" "tree" "workbench" "experimental"]}]}
+    :tags           ["SPE" "subgame" "counterfactual" "tree" "workbench" "experimental"]}
+
+   {:id             :appeal-analysis
+    :path           "notebooks/appeal_analysis.clj"
+    :title          "Appeal Subsystem Analysis"
+    :summary        "Explains, exercises, and visualizes the protocol's appeal subsystem: lifecycle, bond custody, economics, scenarios, invariants, boundary testing, escalation, governance, and grant-facing summary."
+    :categories     [:security-validation :economic-analysis]
+    :audience       [:grant-reviewer :researcher :auditor]
+    :status         :experimental
+    :risk           :medium
+    :protocol-areas [:dispute-resolution :bonding :accounting]
+    :threats        [:escalation-abuse :economic-extraction]
+    :tags           ["appeal" "analysis" "bonds" "escalation" "grant" "invariants"]}]}

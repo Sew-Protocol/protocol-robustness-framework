@@ -214,23 +214,42 @@
 
 (defn- dispatch-game-theory
   [args options]
-  (let [{:keys [suite format out]} options
-        result (gt/run-equilibrium-validation
-                :suite (when suite (keyword suite))
-                :format (or (keyword format) :both)
-                :out-dir (or out "./prf-out/game-theory"))]
-    (println "\nGame-theoretic validation"
-             (if (zero? (:exit-code result)) "PASSED" "FAILED"))
-    (let [s (:summary result)]
-      (println "  Suites:" (:suites-executed s) "passed:" (:suites-passed s))
-      (println "  Scenarios:" (:scenario-count s))
-      (println "  Equilibrium checks:"
-               "passed:" (get-in s [:equilibrium-check-summary :passed])
-               "failed:" (get-in s [:equilibrium-check-summary :failed])
-               "inconclusive:" (get-in s [:equilibrium-check-summary :inconclusive]))
-      (doseq [f (:output-files result)]
-        (println "  Output:" f)))
-    (System/exit (:exit-code result))))
+  (let [{:keys [suite format out claim-id strategic?]} options]
+    (if strategic?
+      (let [claim-kw (or (some-> claim-id keyword)
+                         :claim/pro-rata-shortfall-conservation)
+            result (gt/run-strategic-claim-validation
+                    :claim-id claim-kw
+                    :out-dir (or out "./prf-out/game-theory"))
+            artifact (:artifact result)
+            summary (:summary artifact)]
+        (println "\nGame-theoretic validation"
+                 (if (zero? (:exit-code result)) "PASSED" "FAILED"))
+        (println "  Claim:" (:claim/id artifact))
+        (println "  Matched scenarios:" (:matched-scenario-count summary))
+        (println "  Levels:"
+                 "passed:" (:passed-level-count summary)
+                 "failed:" (:failed-level-count summary)
+                 "uncovered:" (:uncovered-level-count summary))
+        (doseq [f (:output-files result)]
+          (println "  Output:" f))
+        (System/exit (:exit-code result)))
+      (let [result (gt/run-equilibrium-validation
+                    :suite (when suite (keyword suite))
+                    :format (or (keyword format) :both)
+                    :out-dir (or out "./prf-out/game-theory"))]
+        (println "\nGame-theoretic validation"
+                 (if (zero? (:exit-code result)) "PASSED" "FAILED"))
+        (let [s (:summary result)]
+          (println "  Suites:" (:suites-executed s) "passed:" (:suites-passed s))
+          (println "  Scenarios:" (:scenario-count s))
+          (println "  Equilibrium checks:"
+                   "passed:" (get-in s [:equilibrium-check-summary :passed])
+                   "failed:" (get-in s [:equilibrium-check-summary :failed])
+                   "inconclusive:" (get-in s [:equilibrium-check-summary :inconclusive]))
+          (doseq [f (:output-files result)]
+            (println "  Output:" f)))
+        (System/exit (:exit-code result))))))
 
 (defn- dispatch-list
   [args options]
@@ -307,7 +326,9 @@
    "validate-game-theory"
    [["-s" "--suite SUITE" "Equilibrium suite keyword (e.g. :equilibrium-validation)"]
     ["-o" "--out DIR" "Output directory" :default "./prf-out/game-theory"]
-    ["-f" "--format FORMAT" "Output format: edn, json, or both" :default "both"]]
+    ["-f" "--format FORMAT" "Output format: edn, json, or both" :default "both"]
+    [nil "--strategic" "Run strategic claim validation artifact generation"]
+    [nil "--claim-id CLAIM" "Strategic claim id keyword name" :default "claim/pro-rata-shortfall-conservation"]]
    "doctor"
    [[nil "--out DIR" "Output directory" :default "./prf-out/doctor"]]
    "verify-portability"
@@ -367,7 +388,7 @@
         (println "Subcommands:")
         (println "  run-and-report <benchmark-id>    Run a benchmark (default)")
         (println "  validate [resources]             Run static validation checks")
-        (println "  validate-game-theory [options]   Run equilibrium fixture suites")
+        (println "  validate-game-theory [options]   Run equilibrium or strategic validation")
         (println "  game-theoretic-validation        Alias for validate-game-theory")
         (println "  list game-theory-checks          List available game-theory checks")
         (println "  explain game-theory              Explain equilibrium validation")
