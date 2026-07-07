@@ -17,6 +17,7 @@
             [resolver-sim.yield.accounting :as acct]
             [resolver-sim.yield.market-state :as market-state]
             [resolver-sim.util.attribution :as attr]
+            [resolver-sim.util.evidence :as util-evidence]
             [resolver-sim.yield.evidence :as ye]
             [resolver-sim.time.context :as time-ctx]
             [resolver-sim.evidence.capture :as evidence]))
@@ -79,27 +80,44 @@
   "Accrue all positions for this module+token using an index-schedule value.
    Bypasses the APY-based decision engine — index comes directly from the
    schedule at `now`. Updates per-position unrealized-yield and world-level
-   total-yield-generated / total-held."
+   total-yield-generated / total-held.
+
+   Parallel pattern:
+   1. snapshot world
+   2. parallel pure compute (update-position-yield per position)
+   3. collect deterministic ordered results
+   4. serial apply to world
+   5. serial evidence capture"
   [world module token mid now sched-index]
   (attr/with-attribution {:accrue/module-id mid
                           :accrue/token token
                           :accrue/index sched-index
                           :accrue/mode :index-schedule}
-    (let [world' (assoc-in world [:yield/indices mid token] sched-index)
-          world'' (reduce (fn [w [oid pos]]
-                            (if (and (= (:module/id pos) mid)
-                                     (token= (:token pos) token)
-                                     (= (:status pos) :active))
-                              (let [updated   (acct/update-position-yield w pos sched-index)
-                                    old-yield (:unrealized-yield pos 0)
-                                    yield-delta (- (:unrealized-yield updated 0) old-yield)]
-                                (-> w
-                                    (assoc-in [:yield/positions oid] updated)
-                                    (update-in [:total-yield-generated token] (fnil + 0) (max 0 yield-delta))
-                                    (update-in [:total-held token] (fnil + 0) yield-delta)))
-                              w))
-                          world'
-                          (:yield/positions world {}))]
+    (let [;; 1: snapshot world
+          snapshot-positions (:yield/positions world {})
+          snapshot-world (assoc-in world [:yield/indices mid token] sched-index)
+          ;; 2: parallel pure compute — each position's yield update is independent
+          updates (->> snapshot-positions
+                       (filter (fn [[oid pos]]
+                                 (and (= (:module/id pos) mid)
+                                      (token= (:token pos) token)
+                                      (= (:status pos) :active))))
+                       vec
+                       (util-evidence/contextual-pmap
+                        (fn [[oid pos]]
+                          (let [updated   (acct/update-position-yield snapshot-world pos sched-index)
+                                old-yield (:unrealized-yield pos 0)
+                                yield-delta (- (:unrealized-yield updated 0) old-yield)]
+                            [oid updated yield-delta]))))
+          ;; 3-4: collect deterministic ordered results, serial apply to world
+          world'' (reduce (fn [w [oid updated yield-delta]]
+                            (-> w
+                                (assoc-in [:yield/positions oid] updated)
+                                (update-in [:total-yield-generated token] (fnil + 0) (max 0 yield-delta))
+                                (update-in [:total-held token] (fnil + 0) yield-delta)))
+                          snapshot-world
+                          updates)]
+      ;; 5: serial evidence capture
       (evidence/capture-event-evidence!
        :yield-accrue
        {:accrue/before-indices (:yield/indices world)
@@ -118,7 +136,14 @@
    handles short circuits, dust accumulation, and exact ratio arithmetic.
 
    When the index-schedule provides a value at the current time, it is used
-   directly instead of computing the index from APY + dt."
+   directly instead of computing the index from APY + dt.
+
+   Parallel pattern:
+   1. snapshot world
+   2. parallel pure compute (accrual-decision per position)
+   3. collect deterministic ordered results
+   4. serial apply to world (apply-accrual-decision-with-attribution per decision)
+   5. serial evidence capture (inside apply-accrual-decision-with-attribution)"
   [world module op]
   (let [token (normalize-token (:token op))
         dt    (:dt op)
@@ -128,20 +153,29 @@
         sched-index (:index ms)]
     (if (and sched-index (not (zero? sched-index)))
       (accrue-from-index-schedule world module token mid now sched-index)
-      (reduce (fn [w [oid pos]]
-                (if (and (= (:module/id pos) mid)
-                         (token= (:token pos) token)
-                         (= (:status pos) :active))
-                  (let [decision (accrual/accrual-decision
-                                  w {:module-id mid
-                                     :token token
-                                     :position-id oid
-                                     :now now
-                                     :dt dt})]
-                    (accrual/apply-accrual-decision-with-attribution w decision))
-                  w))
-              world
-              (:yield/positions world {})))))
+      (let [;; 1: snapshot world
+            snapshot-positions (:yield/positions world {})
+            ;; 2: parallel pure compute — each position's accrual decision is independent
+            decisions (->> snapshot-positions
+                           (filter (fn [[oid pos]]
+                                     (and (= (:module/id pos) mid)
+                                          (token= (:token pos) token)
+                                          (= (:status pos) :active))))
+                           vec
+                           (util-evidence/contextual-pmap
+                            (fn [[oid pos]]
+                              [oid (accrual/accrual-decision
+                                    world {:module-id mid
+                                           :token token
+                                           :position-id oid
+                                           :now now
+                                           :dt dt})])))
+            ;; 3-4: collect deterministic ordered, serial apply to world
+            world' (reduce (fn [w [_ decision]]
+                             (accrual/apply-accrual-decision-with-attribution w decision))
+                           world
+                           decisions)]
+        world'))))
 
 ;; ---------------------------------------------------------------------------
 ;; withdraw
@@ -189,6 +223,11 @@
             ;; Step 3: Calculate fulfillment via the partial-fill engine
                 settlement (partial-fill/calculate-fulfillment
                             (max 0 (long recoverable)) pos-after-accrue)
+                decision-artifact (when (partial-fill/partial-fill? settlement)
+                                    (partial-fill/decision-artifact
+                                     pos-after-accrue
+                                     settlement
+                                     {:decision-source :yield-withdraw}))
                 filled (get settlement :filled {})
                 deferred-map (get settlement :deferred {})
                 haircut-map (get settlement :haircut {})
@@ -234,7 +273,9 @@
                                 (assoc :unrealized-yield 0)
                                 (assoc :shortfall shortfall))
 
-                world-final (assoc-in world-after-accrue pos-key updated-pos)]
+                world-final (cond-> (assoc-in world-after-accrue pos-key updated-pos)
+                              decision-artifact
+                              (partial-fill/attach-decision-artifact decision-artifact))]
 
             (let [final-world (cond-> world-final
                                 shortfall
@@ -252,11 +293,145 @@
                {:withdraw/params {:owner/id oid
                                   :module/id mid
                                   :token token
-                                  :shortfall shortfall}}
+                                  :shortfall shortfall}
+                :withdraw/partial-fill-decision decision-artifact}
                nil
                {:world-before world
                 :world-after final-world})
               final-world)))))))
+
+;; ---------------------------------------------------------------------------
+;; withdraw-many (batch parallel)
+;; ---------------------------------------------------------------------------
+(defn- compute-withdrawal-result
+  "Pure computation for a single withdrawal against a world snapshot.
+   Returns nil if the position is ineligible. Returns a result map with all
+   computed data for serial application."
+  [snapshot-positions world mid now op]
+  (let [oid (:owner/id op)
+        pos (get snapshot-positions oid)]
+    (when (and pos
+               (= (:status pos) :active)
+               (= (:module/id pos) mid))
+      (let [token (normalize-token (:token pos))
+
+            a-decision (accrual/accrual-decision
+                        world {:module-id mid
+                               :token token
+                               :position-id oid
+                               :now now
+                               :dt 0})
+
+            base-recoverable (or (get-in world [:total-held token])
+                                 (get-in world [:yield/held-balances (name token)])
+                                 0)
+            ms (market-state/get-market-state world mid token now)
+            available-ratio (:available-ratio ms 1.0)
+            shortfall-model (:shortfall-model ms)
+            recoverable (long (* base-recoverable available-ratio))
+            gross-amount (+ (:principal pos 0)
+                            (:unrealized-yield pos 0))
+            settlement (partial-fill/calculate-fulfillment
+                        (max 0 (long recoverable)) pos)
+            decision-artifact (when (partial-fill/partial-fill? settlement)
+                                (partial-fill/decision-artifact
+                                 pos settlement
+                                 {:decision-source :yield-withdraw}))
+            filled (get settlement :filled {})
+            deferred-map (get settlement :deferred {})
+            haircut-map (get settlement :haircut {})
+            fulfilled-total (reduce + 0 (vals filled))
+            deferred-total (reduce + 0 (vals deferred-map))
+            haircut-total (reduce + 0 (vals haircut-map))
+            basis-total (reduce + 0 (vals (:requested settlement {})))
+            shortfall (when (pos? (- basis-total fulfilled-total))
+                        (let [sf-reason (or (:type shortfall-model) :liquidity-shortfall)
+                              recoverable? (:recoverable shortfall-model true)]
+                          {:reason sf-reason
+                           :basis-amount basis-total
+                           :available-ratio (if (pos? gross-amount)
+                                              (/ (rationalize fulfilled-total)
+                                                 (rationalize gross-amount))
+                                              1)
+                           :fulfilled-amount fulfilled-total
+                           :deferred-amount (if recoverable? deferred-total 0)
+                           :haircut-amount (if recoverable? haircut-total
+                                               (+ deferred-total haircut-total))
+                           :as-of-index (:current-index pos)}))
+            realized-yield (if shortfall
+                             (max 0
+                                  (min (:unrealized-yield pos 0)
+                                       (- fulfilled-total (:principal pos 0))))
+                             (:unrealized-yield pos 0))
+            updated-pos (-> pos
+                            (assoc :partial-fill-affected? (boolean shortfall))
+                            (assoc :status (if shortfall :unwinding :withdrawn))
+                            (assoc :realized-yield realized-yield)
+                            (assoc :unrealized-yield 0)
+                            (assoc :shortfall shortfall))]
+        {:oid oid
+         :token token
+         :accrual-decision a-decision
+         :updated-pos updated-pos
+         :decision-artifact decision-artifact
+         :shortfall shortfall
+         :fulfilled-total fulfilled-total
+         :deferred-total deferred-total
+         :haircut-total haircut-total
+         :basis-total basis-total}))))
+
+(defn withdraw-many
+  "Batch withdraw from multiple yield positions in parallel.
+   Each position's accrual decision, fulfillment calculation, and shortfall
+   computation run in parallel against a single world snapshot.
+   Results are applied serially to produce the final world state.
+
+   Parallel pattern:
+   1. snapshot world
+   2. parallel pure compute (accrual-decision + fulfillment per position)
+   3. collect deterministic ordered results
+   4. serial apply to world
+   5. serial evidence capture"
+  [world module ops]
+  (let [mid (:module/id module)
+        snapshot-positions (:yield/positions world {})
+        now (resolve-now world)
+        ;; 1-2: snapshot, parallel pure compute per position
+        results (util-evidence/contextual-pmap
+                 (partial compute-withdrawal-result snapshot-positions world mid now)
+                 ops)
+        ;; 3-4: collect deterministic ordered, serial apply to world
+        world' (reduce (fn [w result]
+                         (if (nil? result)
+                           w
+                           (let [oid (:oid result)
+                                 a-dec (:accrual-decision result)
+                                 u-pos (:updated-pos result)
+                                 d-art (:decision-artifact result)
+                                 sf (:shortfall result)
+                                 d-tot (:deferred-total result)
+                                 h-tot (:haircut-total result)
+                                 f-tot (:fulfilled-total result)
+                                 b-tot (:basis-total result)
+                                 w-after (accrual/apply-accrual-decision-with-attribution
+                                          w a-dec)
+                                 w-pos (assoc-in w-after [:yield/positions oid] u-pos)
+                                 w-art (if d-art
+                                         (partial-fill/attach-decision-artifact w-pos d-art)
+                                         w-pos)]
+                             (if sf
+                               (ye/emit-shortfall-event
+                                w-art :yield.shortfall/deferred-created oid
+                                {:deferred-amount d-tot
+                                 :haircut-amount h-tot
+                                 :fulfilled-amount f-tot
+                                 :basis-amount b-tot
+                                 :available-ratio (:available-ratio sf 1.0)
+                                 :shortfall-kind (name (or (:reason sf) :unknown))})
+                               w-art))))
+                       world
+                       results)]
+    world'))
 
 ;; ---------------------------------------------------------------------------
 ;; emergency-unwind

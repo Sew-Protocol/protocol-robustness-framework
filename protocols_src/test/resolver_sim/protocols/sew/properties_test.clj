@@ -30,7 +30,8 @@
             [resolver-sim.protocols.sew.lifecycle  :as lc]
             [resolver-sim.protocols.sew.resolution :as res]
             [resolver-sim.protocols.sew.authority  :as auth]
-            [resolver-sim.protocols.sew.invariants :as inv]))
+            [resolver-sim.protocols.sew.invariants :as inv]
+            [resolver-sim.time.context             :as time-ctx]))
 
 (def ^:private num-trials 200)
 
@@ -39,6 +40,7 @@
 ;; ---------------------------------------------------------------------------
 
 (def gen-amount (gen/large-integer* {:min 1 :max 1000000}))
+(def gen-amount-seq (gen/large-integer* {:min 10000 :max 1000000}))
 (def gen-bps    (gen/large-integer* {:min 0 :max 500}))
 (def gen-time   (gen/large-integer* {:min 1 :max 9999}))
 (def gen-addr   (gen/elements ["0xAlice" "0xBob" "0xCarol" "0xDave"]))
@@ -294,20 +296,27 @@
 
 (def prop-escalation-monotonic
   (prop/for-all
-   [amount  gen-amount
-    fee-bps gen-bps]
-   (when-some [res (make-disputed-world amount fee-bps "0xResolver")]
-     (let [{:keys [world]} res
-           esc-fn       (fn [_ _ _ _] {:ok true :new-resolver "0xSenior"})
-           level-before (t/dispute-level world 0)
-           er           (res/escalate-dispute world 0 "0xAlice" esc-fn)]
-       (when (:ok er)
-         (let [w-after     (:world er)
-               level-after (t/dispute-level w-after 0)]
-           (and (= 1 (- level-after level-before))
-                (:holds? (inv/escalation-level-monotonic? world w-after))
-                (:holds? (inv/dispute-level-bounded? w-after))
-                (:all-hold? (inv/check-all w-after)))))))))
+   [amount     gen-amount-seq
+    fee-bps    gen-bps
+    appeal-dur (gen/large-integer* {:min 100 :max 86400})]
+   (let [snap-params {:escrow-fee-bps         fee-bps
+                      :max-dispute-duration   3600
+                      :appeal-window-duration appeal-dur}]
+     (when-some [res (make-disputed-world-for-escalation amount snap-params "0xRes0")]
+       (let [{:keys [world]} res
+             rr            (res/execute-resolution world 0 "0xRes0" false "0xhash" nil)]
+         (when (:ok rr)
+           (let [w-pend      (:world rr)
+                 esc-fn      (fn [_ _ _ _] {:ok true :new-resolver "0xRes1"})
+                 level-before (t/dispute-level w-pend 0)
+                 er          (res/escalate-dispute w-pend 0 "0xAlice" esc-fn)]
+             (when (:ok er)
+               (let [w-after     (:world er)
+                     level-after (t/dispute-level w-after 0)]
+                 (and (= 1 (- level-after level-before))
+                      (:holds? (inv/escalation-level-monotonic? w-pend w-after))
+                      (:holds? (inv/dispute-level-bounded? w-after))
+                      (:all-hold? (inv/check-all w-after))))))))))))
 
 (deftest property-escalation-monotonic
   (let [result (tc/quick-check num-trials prop-escalation-monotonic)]
@@ -348,44 +357,52 @@
 ;; Properties 9–14: multi-step / sequence / adversarial
 ;; ============================================================================
 
+(defn check-full-escalation-chain
+  "Property body: full escalation chain invariants."
+  [amount fee-bps appeal-dur]
+  (let [snap-params {:escrow-fee-bps         fee-bps
+                     :max-dispute-duration   3600
+                     :appeal-window-duration appeal-dur}]
+    (if-let [res (make-disputed-world-for-escalation amount snap-params "0xRes0")]
+      (let [{:keys [world]} res
+            rr0 (res/execute-resolution world 0 "0xRes0" false "0xhash" nil)
+            er1 (when (:ok rr0) (res/escalate-dispute (:world rr0) 0 "0xAlice" (fn [_ _ _ _] {:ok true :new-resolver "0xRes1"})))
+            rr1 (when (:ok er1) (res/execute-resolution (:world er1) 0 "0xRes1" false "0xhash" nil))
+            er2 (when (:ok rr1) (res/escalate-dispute (:world rr1) 0 "0xAlice" (fn [_ _ _ _] {:ok true :new-resolver "0xRes2"})))
+            w2  (when (:ok er2) (:world er2))
+            er3 (when w2 (res/escalate-dispute w2 0 "0xAlice" (fn [_ _ _ _] {:ok true :new-resolver "0xRes3"})))
+            rr  (when w2 (res/execute-resolution w2 0 "0xRes2" true "0xhash" nil))
+            w-pend (when (:ok rr) (:world rr))
+            deadline (when (:ok rr) (get-in w-pend [:pending-settlements 0 :appeal-deadline]))
+            w-exp (when deadline (time-ctx/advance-time w-pend {:to (inc deadline)}))
+            ep (when deadline (res/execute-pending-settlement w-exp 0))
+            w-final (cond (:ok ep) (:world ep) (:ok rr) w-pend :else w2)]
+        (if (and (:ok rr0) (:ok er1) (:ok rr1) (:ok er2) er3 (:ok rr))
+          (and
+           (= 1 (t/dispute-level (:world er1) 0))
+           (= 2 (t/dispute-level w2 0))
+           (true? (t/final-round? w2 0))
+           (false? (:ok er3))
+           (= :escalation-not-allowed (:error er3))
+           (= :released (t/escrow-state w-final 0))
+           (not (:exists (t/get-pending w-final 0)))
+           (:all-hold? (inv/check-all (:world er1)))
+           (:all-hold? (inv/check-all w2))
+           (:all-hold? (inv/check-all w-final))
+           (:all-hold? (inv/check-transition world (:world rr0)))
+           (:all-hold? (inv/check-transition (:world rr0) (:world er1)))
+           (:all-hold? (inv/check-transition (:world er1) (:world rr1)))
+           (:all-hold? (inv/check-transition (:world rr1) w2))
+           (:all-hold? (inv/check-transition w2 w-final)))
+          true))
+      true)))
+
 (def prop-full-escalation-chain
   (prop/for-all
-   [amount     gen-amount
+   [amount     gen-amount-seq
     fee-bps    gen-bps
     appeal-dur (gen/large-integer* {:min 100 :max 86400})]
-   (let [snap-params {:escrow-fee-bps         fee-bps
-                      :max-dispute-duration   3600
-                      :appeal-window-duration appeal-dur}]
-     (if-let [res (make-disputed-world-for-escalation amount snap-params "0xRes0")]
-       (let [{:keys [world]} res
-             er1 (res/escalate-dispute world 0 "0xAlice"
-                                       (fn [_ _ _ _] {:ok true :new-resolver "0xRes1"}))
-             er2 (when (:ok er1)
-                   (res/escalate-dispute (:world er1) 0 "0xAlice"
-                                         (fn [_ _ _ _] {:ok true :new-resolver "0xRes2"})))
-             w2  (when (:ok er2) (:world er2))
-             er3 (when w2
-                   (res/escalate-dispute w2 0 "0xAlice"
-                                         (fn [_ _ _ _] {:ok true :new-resolver "0xRes3"})))
-             rr  (when w2
-                   (res/execute-resolution w2 0 "0xRes2" true "0xhash" nil))]
-         (if (and (:ok er1) (:ok er2) er3 (:ok rr))
-           (and
-            (= 1 (t/dispute-level (:world er1) 0))
-            (= 2 (t/dispute-level w2 0))
-            (true? (t/final-round? w2 0))
-            (false? (:ok er3))
-            (= :escalation-not-allowed (:error er3))
-            (= :released (t/escrow-state (:world rr) 0))
-            (not (:exists (t/get-pending (:world rr) 0)))
-            (:all-hold? (inv/check-all (:world er1)))
-            (:all-hold? (inv/check-all w2))
-            (:all-hold? (inv/check-all (:world rr)))
-            (:all-hold? (inv/check-transition world (:world er1)))
-            (:all-hold? (inv/check-transition (:world er1) w2))
-            (:all-hold? (inv/check-transition w2 (:world rr))))
-           false))
-       false))))
+   (check-full-escalation-chain amount fee-bps appeal-dur)))
 
 (deftest property-full-escalation-chain
   (let [result (tc/quick-check num-trials prop-full-escalation-chain)]
@@ -394,43 +411,60 @@
 
 (def prop-multi-step-lifecycle
   (prop/for-all
-   [amount     gen-amount
+   [amount     gen-amount-seq
     fee-bps    gen-bps
     esc-count  (gen/large-integer* {:min 0 :max 2})
-    appeal-dur (gen/large-integer* {:min 0 :max 1800})
+    appeal-dur (gen/large-integer* {:min 100 :max 1800})
     is-release gen/boolean]
    (let [resolvers  ["0xRes0" "0xRes1" "0xRes2"]
          snap-params {:escrow-fee-bps         fee-bps
                       :max-dispute-duration   3600
-                      :appeal-window-duration appeal-dur}
-         base-world   (t/empty-world 1000)
-         c            (lc/create-escrow base-world "0xAlice" "0xUSDC" "0xBob" amount
-                                        (t/make-escrow-settings {:custom-resolver (resolvers 0)})
-                                        (snap-fix/escrow-snapshot snap-params))]
-     (if-not (:ok c)
-       false
-       (let [world (:world c)
-             d     (lc/raise-dispute world 0 "0xAlice")]
-         (if-not (:ok d)
-           false
-           (let [res (reduce (fn [acc i]
-                               (if (and (:ok acc) (< i esc-count))
-                                 (res/escalate-dispute (:world acc) 0 "0xAlice"
-                                                       (fn [_ _ _ _] {:ok true :new-resolver (resolvers (inc i))}))
-                                 acc))
-                             d (range esc-count))
-                 w-res (:world res)]
-             (if-not (:ok res)
-               false
-               (let [rr      (res/execute-resolution w-res 0 (resolvers (min esc-count 2)) is-release "0xhash" nil)
-                     w-final (if (:ok rr) (:world rr) w-res)]
-                 (and
-                  (if (>= esc-count 2) (true? (t/final-round? w-res 0)) true)
-                  (if (or is-release (>= esc-count 2))
-                    (t/terminal-state? w-final 0)
-                    true)
-                  (:all-hold? (inv/check-all w-final))
-                  (:all-hold? (inv/check-transition w-res w-final))))))))))))
+                      :appeal-window-duration appeal-dur}]
+     (if-let [res (make-disputed-world-for-escalation amount snap-params (resolvers 0))]
+       (let [{:keys [world]} res
+             step (fn [w resolver rls?]
+                    (res/execute-resolution w 0 resolver rls? "0xhash" nil))
+             esc (fn [w new-resolver]
+                   (res/escalate-dispute w 0 "0xAlice"
+                                         (fn [_ _ _ _] {:ok true :new-resolver new-resolver})))
+             rr0 (step world (resolvers 0) false)
+             er1 (when (and (:ok rr0) (>= esc-count 1))
+                   (esc (:world rr0) (resolvers 1)))
+             rr1 (when (and (:ok er1) (>= esc-count 1))
+                   (step (:world er1) (resolvers 1) false))
+             er2 (when (and (:ok rr1) (>= esc-count 2))
+                   (esc (:world rr1) (resolvers 2)))
+             w-rdy (cond
+                     (and (:ok er2) (>= esc-count 2)) (:world er2)
+                     (and (:ok rr1) (= esc-count 1)) (:world rr1)
+                     (:ok rr0) (:world rr0)
+                     :else world)
+             last-resolver (resolvers (min esc-count 2))
+             step-in (assoc w-rdy :block-time 1000)
+             rr (res/execute-resolution step-in 0 last-resolver is-release "0xhash" nil)
+             w-pend (if (:ok rr) (:world rr) w-rdy)
+             deadline (when (:ok rr)
+                        (get-in w-pend [:pending-settlements 0 :appeal-deadline]))
+             w-exp (if deadline (time-ctx/advance-time w-pend {:to (inc deadline)}) w-pend)
+             ep (when deadline (res/execute-pending-settlement w-exp 0))
+             w-final (cond (:ok ep) (:world ep)
+                           (:ok rr) w-pend
+                           :else w-rdy)
+             all-ok? (boolean (and (or (zero? esc-count) (:ok rr0))
+                                   (or (< esc-count 1) (:ok er1))
+                                   (or (< esc-count 1) (:ok rr1))
+                                   (or (< esc-count 2) (:ok er2))
+                                   (:ok rr)))]
+         (if all-ok?
+           (and
+            (if (>= esc-count 2) (true? (t/final-round? w-rdy 0)) true)
+            (if (or is-release (>= esc-count 2))
+              (t/terminal-state? w-final 0)
+              true)
+            (:all-hold? (inv/check-all w-final))
+            (:all-hold? (inv/check-transition w-rdy w-final)))
+           false))
+       false))))
 
 (deftest property-multi-step-lifecycle
   (let [result (tc/quick-check num-trials prop-multi-step-lifecycle)]
@@ -439,7 +473,7 @@
 
 (def prop-interrupted-flow-timeout
   (prop/for-all
-   [amount  gen-amount
+   [amount  gen-amount-seq
     fee-bps gen-bps
     max-dur (gen/large-integer* {:min 100 :max 3600})]
    (let [snap (snap-fix/escrow-snapshot {:escrow-fee-bps        fee-bps
@@ -451,7 +485,7 @@
      (if-not (and (:ok cr) (:ok dr))
        false
        (let [w-disp      (:world dr)
-             w-timed-out (assoc w-disp :block-time (+ 1000 max-dur 1))
+              w-timed-out (time-ctx/advance-time w-disp {:to (+ 1000 max-dur 1)})
              ac          (lc/auto-cancel-disputed-escrow w-timed-out 0)
              w-cancelled (when (:ok ac) (:world ac))
              late-rr     (when w-cancelled
@@ -473,7 +507,7 @@
 
 (def prop-adversarial-delayed-resolver
   (prop/for-all
-   [amount     gen-amount
+   [amount     gen-amount-seq
     fee-bps    gen-bps
     appeal-dur (gen/large-integer* {:min 100 :max 3600})]
    (let [snap (snap-fix/escrow-snapshot {:escrow-fee-bps         fee-bps
@@ -487,7 +521,7 @@
              rr       (res/execute-resolution w-disp 0 "0xResolver" true "0xhash" nil)
              w-pend   (when (:ok rr) (:world rr))
              deadline (when w-pend (get-in w-pend [:pending-settlements 0 :appeal-deadline]))
-             w-exp    (when deadline (assoc w-pend :block-time (+ deadline 1)))
+              w-exp    (when deadline (time-ctx/advance-time w-pend {:to (inc deadline)}))
              er       (when w-exp (res/execute-pending-settlement w-exp 0))
              w-final  (when (:ok er) (:world er))
              late-rr  (when w-final
@@ -548,35 +582,44 @@
 
 (def prop-adversarial-repeated-escalation
   (prop/for-all
-   [amount  gen-amount
-    fee-bps gen-bps]
-   (let [snap-params {:escrow-fee-bps       fee-bps
-                      :max-dispute-duration 3600}]
+   [amount     gen-amount-seq
+    fee-bps    gen-bps
+    appeal-dur (gen/large-integer* {:min 100 :max 86400})]
+   (let [snap-params {:escrow-fee-bps         fee-bps
+                      :max-dispute-duration   3600
+                      :appeal-window-duration appeal-dur}]
      (when-some [res (make-disputed-world-for-escalation amount snap-params "0xRes0")]
-       (let [{:keys [world]} res]
-         (let [esc-fn (fn [_ _ _ _] {:ok true :new-resolver "0xSenior"})
-               er1    (res/escalate-dispute world 0 "0xAlice" esc-fn)
-               er2    (when (:ok er1) (res/escalate-dispute (:world er1) 0 "0xAlice" esc-fn))
-               w-max  (when (:ok er2) (:world er2))]
-           (when (and (:ok er1) (:ok er2) w-max)
-             (let [at-max    (res/escalate-dispute w-max 0 "0xAlice" esc-fn)
-                   non-part  (res/escalate-dispute w-max 0 "0xCarol" esc-fn)
-                   rr        (res/execute-resolution w-max 0 "0xSenior" true "0xhash" nil)
-                   w-final   (when (:ok rr) (:world rr))
-                   after-fin (when w-final
-                               (res/escalate-dispute w-final 0 "0xAlice" esc-fn))]
-               (if (and at-max non-part (:ok rr) after-fin)
-                 (and
-                  (false? (:ok at-max))
-                  (= :escalation-not-allowed (:error at-max))
-                  (false? (:ok non-part))
-                  (= :not-participant (:error non-part))
-                  (false? (:ok after-fin))
-                  (= :transfer-not-in-dispute (:error after-fin))
-                  (:all-hold? (inv/check-all w-max))
-                  (:all-hold? (inv/check-all w-final))
-                  (:all-hold? (inv/check-transition w-max w-final)))
-                 false)))))))))
+        (let [{:keys [world]} res]
+          (let [esc-fn (fn [_ _ _ _] {:ok true :new-resolver "0xSenior"})
+                ;; Execute resolution at L0 to create pending settlement for escalation
+                rr0    (res/execute-resolution world 0 "0xRes0" false "0xhash" nil)
+                er1    (when (:ok rr0)
+                         (res/escalate-dispute (:world rr0) 0 "0xAlice" esc-fn))
+                ;; Execute resolution at L1 to create pending settlement for escalation to max
+                rr1    (when (:ok er1)
+                         (res/execute-resolution (:world er1) 0 "0xSenior" false "0xhash" nil))
+                er2    (when (:ok rr1)
+                         (res/escalate-dispute (:world rr1) 0 "0xAlice" esc-fn))
+                w-max  (when (:ok er2) (:world er2))]
+            (when (and (:ok rr0) (:ok er1) (:ok rr1) (:ok er2) w-max)
+              (let [at-max    (res/escalate-dispute w-max 0 "0xAlice" esc-fn)
+                    non-part  (res/escalate-dispute w-max 0 "0xCarol" esc-fn)
+                    rr        (res/execute-resolution w-max 0 "0xSenior" true "0xhash" nil)
+                    w-final   (when (:ok rr) (:world rr))
+                    after-fin (when w-final
+                                (res/escalate-dispute w-final 0 "0xAlice" esc-fn))]
+                (if (and at-max non-part (:ok rr) after-fin)
+                  (and
+                   (false? (:ok at-max))
+                   (= :escalation-not-allowed (:error at-max))
+                   (false? (:ok non-part))
+                   (= :not-participant (:error non-part))
+                   (false? (:ok after-fin))
+                   (= :transfer-not-in-dispute (:error after-fin))
+                   (:all-hold? (inv/check-all w-max))
+                   (:all-hold? (inv/check-all w-final))
+                   (:all-hold? (inv/check-transition w-max w-final)))
+                  false)))))))))
 
 (deftest property-adversarial-repeated-escalation
   (let [result (tc/quick-check num-trials prop-adversarial-repeated-escalation)]

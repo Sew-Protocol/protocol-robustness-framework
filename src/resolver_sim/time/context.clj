@@ -6,9 +6,14 @@
 
 (def default-temporal-schema-version "temporal-context.v2")
 
+(def ^:const seconds-per-day
+  "Canonical value: 86400. All namespaces computing day-based durations
+   should reference this instead of hardcoding 86400."
+  86400)
+
 (def ^:const seconds-per-year
-  "Canonical value: 365 * 86400. All namespaces should reference this."
-  31536000)
+  "Canonical value: 365 * seconds-per-day. All namespaces should reference this."
+  (* 365 seconds-per-day))
 
 (defn ensure-temporal-context
   "Ensure the world has a valid temporal context. Initializes from legacy :block-time if missing."
@@ -24,7 +29,7 @@
               :instant (java.time.Instant/ofEpochSecond bt)
               :clock/source :legacy
               :clock/mode :discrete-step
-              :tick-seconds 86400}))))
+              :tick-seconds seconds-per-day}))))
 
 (defn temporal-context
   "Return the canonical temporal context from the world.
@@ -39,7 +44,7 @@
          :instant (java.time.Instant/ofEpochSecond bt)
          :clock/source :legacy
          :clock/mode :discrete-step
-         :tick-seconds 86400})))
+         :tick-seconds seconds-per-day})))
 
 (defn block-ts
   "Canonical accessor for block timestamp (Unix seconds)."
@@ -50,6 +55,13 @@
   "Canonical accessor for scenario step."
   [world]
   (:step (temporal-context world)))
+
+(defn tick-seconds
+  "Canonical accessor for the time-context tick rate (seconds per tick).
+   All namespaces referencing time durations should use this accessor
+   instead of hardcoding seconds-per-day."
+  [world]
+  (:tick-seconds (temporal-context world) seconds-per-day))
 
 (defn now
   "Canonical accessor for java.time.Instant.

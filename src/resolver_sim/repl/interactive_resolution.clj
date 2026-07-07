@@ -7,6 +7,7 @@
             [resolver-sim.protocols.sew :as sew]
             [resolver-sim.protocols.sew.types :as t]
             [resolver-sim.protocols.sew.resolution :as res]
+            [resolver-sim.protocols.sew.accounting :as ac]
             [resolver-sim.protocols.sew.state-machine :as sm]
             [resolver-sim.hash.canonical :as hash]
             [resolver-sim.time.context :as time-ctx]
@@ -306,7 +307,7 @@
                                            :owner/address recipient
                                            :held/reason fa-reason
                                            :held/workflow-id wf}
-                                scope-hash (hash/domain-hash "force-authorisation-scope" scope-map)
+                                scope-hash (hash/domain-hash ac/force-authorisation-scope-domain scope-map)
                                 auth-id   (str "fa-" wf "-"
                                                (name (if is-release :release :refund)) "-"
                                                (subs scope-hash 0 8))

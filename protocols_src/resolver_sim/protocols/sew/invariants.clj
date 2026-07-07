@@ -90,6 +90,7 @@
     :shortfall-fidelity
     :migration-parity
     :held-adjustments-reconstruct-total-held
+    :held-artifacts-derived-from-adjustments
     :single-resolution-payout-consistent
     :fraud-slash-executions-accounted
     :slash-amount-valid
@@ -596,6 +597,20 @@
                          :message (.getMessage e)
                          :data (ex-data e)}]})))
     {:holds? true :violations nil}))
+
+(defn held-artifacts-derived-from-adjustments?
+  "The held-adjustment ledger is canonical. Any materialized held artifact map
+   must be exactly derivable from it and must not drift independently."
+  [world]
+  (let [adjustments (:held-adjustments world [])
+        actual-artifacts (:held-artifacts world {})
+        expected-artifacts (acct/rebuild-held-custody-artifacts adjustments)]
+    (if (= expected-artifacts actual-artifacts)
+      {:holds? true :violations nil}
+      {:holds? false
+       :violations [{:type :held-artifacts-derivation-mismatch
+                     :expected expected-artifacts
+                     :actual actual-artifacts}]})))
 
 ;; ---------------------------------------------------------------------------
 ;; Invariant 16: Fraud slashes must not be auto-executed
@@ -1685,6 +1700,7 @@
                  :appeal-bond-conserved         (appeal-bond-conserved? world)
                  :appeal-bond-custody-consistent (appeal-bond-custody-consistent? world)
                  :held-adjustments-reconstruct-total-held (held-adjustments-reconstruct-total-held? world)
+                 :held-artifacts-derived-from-adjustments (held-artifacts-derived-from-adjustments? world)
                  :no-auto-fraud-execute         (no-auto-fraud-execute? world)
                  :bond-liquidity                (bond-liquidity-holds? world)
                  :bond-slash-bounded            (bond-slash-bounded? world)

@@ -147,13 +147,14 @@
 ;; ---------------------------------------------------------------------------
 
 (defn- make-reversal-slash-entry
-  [slash-id prev-resolver prev-stake slash-bps slash-amt workflow-id status now appeal-deadline reversal-prob
+  [slash-id prev-resolver prev-stake slash-bps slash-amt token workflow-id status now appeal-deadline reversal-prob
    & {:keys [authorization-provenance]}]
   (let [entry {:resolver                       prev-resolver
                :basis-amount                   prev-stake
                :basis-kind                     :stake
                :slash-bps                      slash-bps
                :amount                         slash-amt
+               :token                          token
                :workflow-id                    workflow-id
                :reason                         :reversal
                :status                         status
@@ -255,6 +256,8 @@
             ;; Idempotency: if a reversal entry already exists for this level, skip.
             ;; Also skip if a manual fraud slash is pending for the same workflow
             ;; (cross-type collision guard — prevents double-penalty from the same dispute).
+            ;; Scan uses :workflow-id from each entry, not the slash-id key, to catch
+            ;; cross-type collisions where keys differ (integer workflow-id vs string).
             (if (or (get-in world [:pending-fraud-slashes slash-id])
                     (some (fn [[_id entry]]
                             (and (= (:workflow-id entry) workflow-id)
@@ -263,6 +266,8 @@
               world
               (let [prev-resolver   (:resolver prev-decision)
                     snap            (t/get-snapshot world workflow-id)
+                    et              (t/get-transfer world workflow-id)
+                    token           (:token et "USDC")
                     new-evidence?   (get-in world [:evidence-updated? workflow-id] false)
                     slash-bps       (:reversal-slash-bps snap 0)
                     prev-stake      (reg/get-stake world prev-resolver)
@@ -277,13 +282,13 @@
               (if new-evidence?
                 (assoc-in world [:pending-fraud-slashes slash-id]
                           (make-reversal-slash-entry slash-id prev-resolver prev-stake slash-bps
-                                                     slash-amt workflow-id :pending now
+                                                     slash-amt token workflow-id :pending now
                                                      (+ now appeal-window) reversal-prob))
                 (-> (reg/slash-resolver-stake world prev-resolver slash-amt challenger bounty-bps workflow-id)
                     :world
                     (assoc-in [:pending-fraud-slashes slash-id]
                               (make-reversal-slash-entry slash-id prev-resolver prev-stake
-                                                         slash-bps slash-amt workflow-id :executed
+                                                         slash-bps slash-amt token workflow-id :executed
                                                          now 0 reversal-prob)))))))))))))
 
 (defn force-reversal-slash
@@ -313,6 +318,8 @@
                             (get-in world [:previous-decisions workflow-id (dec level)]))
             prev-resolver (or (:resolver prev-decision) (get-in world [:escrow-transfers workflow-id :sender]))
             snap          (t/get-snapshot world workflow-id)
+            et            (t/get-transfer world workflow-id)
+            token         (:token et "USDC")
             bps           (long (or slash-bps (:reversal-slash-bps snap 0)))
             prev-stake    (reg/get-stake world prev-resolver)
             slash-amt     (sew-econ/calculate-slash-amount-from-basis (or prev-stake 0) bps)
@@ -326,12 +333,12 @@
                 :world
                 (assoc-in [:pending-fraud-slashes slash-id]
                           (make-reversal-slash-entry slash-id prev-resolver prev-stake bps
-                                                     slash-amt workflow-id :executed
+                                                     slash-amt token workflow-id :executed
                                                      now 0 reversal-prob
                                                      :authorization-provenance authorization-provenance)))
             (assoc-in world [:pending-fraud-slashes slash-id]
                       (make-reversal-slash-entry slash-id prev-resolver prev-stake bps
-                                                 slash-amt workflow-id :pending now
+                                                 slash-amt token workflow-id :pending now
                                                  (+ now appeal-window) reversal-prob
                                                  :authorization-provenance authorization-provenance))))))))
 
@@ -448,7 +455,9 @@
    pending entry for causal linking by execute-fraud-slash."
   [world slash-id workflow-id resolver slash-amt appeal-window reversal-prob
    & {:keys [authorization-provenance]}]
-  (let [now (time-ctx/block-ts world)
+  (let [et  (t/get-transfer world workflow-id)
+        token (:token et "USDC")
+        now (time-ctx/block-ts world)
         evidence-map (attr/with-attribution
                        {:subject/type :slash
                         :subject/id slash-id
@@ -470,12 +479,13 @@
     (attr/log-with-attr :debug "handle-fraud-slashing" {:now now :appeal-window appeal-window})
     (assoc-in world [:pending-fraud-slashes slash-id]
               (append-authorization-provenance
-               {:resolver                       resolver
-                :amount                         slash-amt
-                :workflow-id                    workflow-id
-                :reason                         :fraud
-                :status                         :pending
-                :proposed-at                    now
+                {:resolver                       resolver
+                 :amount                         slash-amt
+                 :token                          token
+                 :workflow-id                    workflow-id
+                 :reason                         :fraud
+                 :status                         :pending
+                 :proposed-at                    now
                 :appeal-deadline                (+ now appeal-window)
                 :appeal-bond-held               0
                 :contest-deadline               0
@@ -1131,7 +1141,7 @@
            (t/fail :slash-epoch-cap-exceeded)
 
            :else
-           (let [freeze-duration (* (get-in world [:params :freeze-duration-days] 3) 86400)
+           (let [freeze-duration (* (get-in world [:params :freeze-duration-days] 3) (time-ctx/tick-seconds world))
                   block-time      (time-ctx/block-ts world)
                  freeze-until    (+ block-time freeze-duration)
                  wf-for-token    (or (:workflow-id pending) workflow-id)
@@ -1284,7 +1294,7 @@
               :else
               (let [snap              (t/get-snapshot world wf-id)
                     appeal-days       (get-in world [:params :appeal-window-days] 7)
-                    gov-delay         (or (:appeal-window-duration snap) (* appeal-days 86400))
+                     gov-delay         (or (:appeal-window-duration snap) (* appeal-days (time-ctx/tick-seconds world)))
                     reversal-prob     (or (:reversal-detection-probability snap) 0.0)]
                 (t/ok (handle-fraud-slashing world wf-id wf-id resolver-addr amount gov-delay reversal-prob
                                              :authorization-provenance authorization-provenance))))))))))
@@ -1325,8 +1335,13 @@
         (let [bond-held   (get-in world [:pending-fraud-slashes slash-id :appeal-bond-held] 0)
               custody     (get-in world [:appeal-bond-custody slash-id])
               resolver    (or (:resolver custody) (:resolver pending))
-              wf-id       (or (:workflow-id custody) (:workflow-id pending))
-              bond-token  (or (:token custody) (:token pending) "USDC")
+              wf-id       (or (:workflow-id custody) (:workflow-id pending) _workflow-id)
+               bond-token  (or (:token custody) (:token pending) "USDC")
+                              (throw (ex-info "resolve-appeal: cannot determine bond token"
+                                              {:type :missing-bond-token
+                                               :slash-id slash-id
+                                               :pending pending
+                                               :custody custody})))
               world-base  (-> world
                               (assoc-in [:pending-fraud-slashes slash-id :appeal-bond-held] 0)
                               (update :appeal-bond-custody dissoc slash-id))

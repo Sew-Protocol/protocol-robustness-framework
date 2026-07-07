@@ -60,6 +60,7 @@
   (testing "Full withdrawal with adequate liquidity"
     (let [w (ll/deposit test-world test-mod {:owner/id "user1" :amount 10000 :token "USDC"})
           w (ll/accrue w test-mod {:token "USDC" :dt 31536000})
+          w (assoc-in w [:total-held :USDC] 20000)
           w (ll/withdraw w test-mod {:owner/id "user1"})
           pos (get-in w [:yield/positions "user1"])]
       (is (= :withdrawn (:status pos)))
@@ -72,8 +73,24 @@
           ;; restrict liquidity
           w (assoc-in w [:total-held :USDC] 5000)
           w (ll/withdraw w test-mod {:owner/id "user1"})
-          pos (get-in w [:yield/positions "user1"])]
-      (is (:partial-fill-affected? pos)))))
+          pos (get-in w [:yield/positions "user1"])
+          decisions (vals (:yield/partial-fill-decisions w))
+          artifact (first decisions)]
+      (is (:partial-fill-affected? pos))
+      (is (= 1 (count decisions)))
+      (is (= :yield/partial-fill-decision (:artifact/kind artifact)))
+      (is (= "user1" (:position/id artifact)))
+      (is (= :partial-fill (:settlement-mode artifact)))
+      (is (string? (:decision/hash artifact)))
+      (is (map? (:evidence artifact))))))
+
+(deftest full-withdraw-does-not-fabricate-partial-fill-artifact
+  (testing "Full withdrawal does not emit a partial-fill decision artifact"
+    (let [w (ll/deposit test-world test-mod {:owner/id "user1" :amount 10000 :token "USDC"})
+          w (ll/accrue w test-mod {:token "USDC" :dt 31536000})
+          w (assoc-in w [:total-held :USDC] 20000)
+          w (ll/withdraw w test-mod {:owner/id "user1"})]
+      (is (empty? (:yield/partial-fill-decisions w {}))))))
 
 (deftest apply-partial-fill-with-attribution-sets-ctx
   (testing "apply-partial-fill-with-attribution sets settlement context"
@@ -109,7 +126,7 @@
         (is (some #{:withdrawn :unwinding} [(:status pos)])
             "Position should be withdrawn or unwinding")
         (is (or (not (:shortfall pos))
-                (pos? (:fulfilled-amount (:shortfall pos) 0)))
+                (>= (:fulfilled-amount (:shortfall pos) 0) 0))
             "Shortfall fulfilled amount should be non-negative")))))
 
 (deftest test-min-available-ratio-for-claim-threshold

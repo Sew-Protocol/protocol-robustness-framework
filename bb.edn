@@ -884,15 +884,15 @@ cli-args (cond-> ["-M:run:with-sew" "--invariants" "--scenario" scenario]
 
    backstop
    {:doc "Run the default registered review gate (delegates to CLI)."
-    :task (clojure "-M:cli" "backstop")}
+    :task (clojure "-M:cli/sew" "backstop")}
 
    backstop:fast
    {:doc "Run the fast registered edit-loop review gate (delegates to CLI)."
-    :task (clojure "-M:cli" "backstop" "--fast")}
+    :task (clojure "-M:cli/sew" "backstop" "--fast")}
 
    commands:validate
    {:doc "Validate the registered review-gate command surface (delegates to CLI)."
-    :task (clojure "-M:cli" "commands" "validate")}
+    :task (clojure "-M:cli/sew" "commands" "validate")}
 
    benchmark:report
    {:doc "Open the protocol robustness benchmark report in Clerk (requires running server)."

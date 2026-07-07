@@ -29,11 +29,16 @@
             [resolver-sim.protocols.sew.economics :as sew-econ]
             [resolver-sim.protocols.sew.research-models.escalation-economics :as ee]
             [resolver-sim.stochastic.detection :as detect]
-            [resolver-sim.stochastic.decision-quality :as dq]))
+            [resolver-sim.stochastic.decision-quality :as dq]
+            [resolver-sim.io.params :as io-params]))
 
 ;; ===========================================================================
-;; Notebook-local constants
+;; Notebook configuration (loaded from shared EDN)
 ;; ===========================================================================
+
+^{::clerk/visibility {:code :hide :result :hide}}
+(def cfg
+  (delay (io-params/load-edn "notebooks/appeal_config.edn")))
 
 ^{::clerk/visibility {:code :hide :result :hide}}
 (defn- styled-table
@@ -257,9 +262,10 @@
 (defn- bond-amount-table
   "Generate rows showing required bond and fee for escrow amounts and bond-bps bands."
   []
-  (let [escrow-amounts [10000 50000 100000 500000]
-        bond-bps-values [300 500 700 1000]
-        fee-bps 150
+  (let [eco (:economic-analysis @cfg)
+        escrow-amounts (:escrow-amounts eco)
+        bond-bps-values (:bond-bps-values eco)
+        fee-bps (:fee-bps @cfg)
         rows (for [escrow escrow-amounts
                    bps bond-bps-values]
                (let [bond-amount (sew-econ/calculate-appeal-bond-amount
@@ -304,7 +310,7 @@
   "Generate cost rows using the escalation economics model."
   []
   (let [config ee/DEFAULT_ESCALATION_CONFIG
-        rounds [1 2]]
+        rounds (:rounds (:economic-analysis @cfg))]
     (for [r rounds]
       {:round r
        :marginal-bond (ee/appeal-bond-at-round (dec r) config)
@@ -657,14 +663,14 @@
   "Run a small number of stochastic appeal simulations to illustrate
    escalation outcomes under different conditions."
   []
-  (let [rng (java.util.Random. 42)
-        ;; Config bands: base assumptions
+  (let [rng (java.util.Random. (:seed @cfg))
+        sa (:stochastic-assumptions @cfg)
         param-sets [{:label "Base"
-                     :params {:p-l1-reversal 0.3 :p-l2-escalation 0.5 :p-l2-reversal 0.4}}
+                     :params (get sa :base)}
                     {:label "Optimistic (high reversal)"
-                     :params {:p-l1-reversal 0.6 :p-l2-escalation 0.7 :p-l2-reversal 0.6}}
+                     :params (get sa :optimistic)}
                     {:label "Pessimistic (low reversal)"
-                     :params {:p-l1-reversal 0.1 :p-l2-escalation 0.3 :p-l2-reversal 0.2}}]
+                     :params (get sa :pessimistic)}]
         contexts [{:label "Correct verdict"
                    :context {:verdict-correct? true :appealed? true}}
                   {:label "Wrong verdict"
@@ -699,15 +705,14 @@
 (defn- run-full-appeal-sims
   "Run the simulate-full-appeal function under different conditions."
   []
-  (let [difficulties [:easy :medium :hard]
-        evidence-levels [0.3 0.7 0.9]
-        rng (java.util.Random. 42)]
-    (for [diff difficulties
-          ev evidence-levels]
+  (let [fas (:full-appeal-simulation @cfg)
+        rng (java.util.Random. (:seed @cfg))]
+    (for [diff (:difficulties fas)
+          ev (:evidence-levels fas)]
       (let [res (dq/simulate-full-appeal
-                 rng true  ;; ground-truth = correct decision
-                 [true false false]  ;; honest resolver, r1 not corrupt, r2 not corrupt
-                 [0.3 0.4 0.2]  ;; time pressures
+                 rng (:ground-truth fas)
+                 [(:r0-honest? fas) (:r1-corrupt? fas) (:r2-corrupt? fas)]
+                 (:time-pressures fas)
                  diff ev)]
         {:difficulty diff
          :evidence-quality ev
@@ -742,7 +747,7 @@
   "Compare cost to attack at different rounds."
   []
   (let [config ee/DEFAULT_ESCALATION_CONFIG
-        dispute-values [10000 50000 100000]]
+        dispute-values (:dispute-values (:economic-analysis @cfg))]
     (for [dv dispute-values]
       (let [comparison (ee/compare-attack-costs dv config)]
         (assoc comparison :dispute-value dv)))))

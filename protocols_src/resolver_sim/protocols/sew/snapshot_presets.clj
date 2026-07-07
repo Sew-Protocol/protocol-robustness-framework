@@ -6,7 +6,8 @@
 
    Yield stress belongs in `yield/presets`, `yield-config`, or runtime risk updates —
    not in Sew snapshot presets."
-  (:require [resolver-sim.protocols.sew.snapshot :as snap]))
+  (:require [resolver-sim.protocols.sew.snapshot :as snap]
+            [resolver-sim.time.context :as time-ctx]))
 
 (def protocol-param-presets
   "Maps preset id → protocol-params fragment (passed to `snapshot-from-protocol-params`)."
@@ -27,7 +28,7 @@
    :sew.preset/dispute-heavy
    {:resolver-fee-bps 50
     :max-dispute-duration 2592000
-    :appeal-window-duration 86400
+     :appeal-window-duration time-ctx/seconds-per-day
     :appeal-bond-bps 500
     :resolver-bond-bps 2000
     :appeal-bond-protocol-fee-bps 100}

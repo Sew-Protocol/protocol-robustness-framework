@@ -1,11 +1,11 @@
 (ns resolver-sim.sim.batch
   "Batch runner: aggregate N trials into summary statistics."
-  (:require [resolver-sim.stochastic.detection :as detection])
-  (:require [resolver-sim.stochastic.dispute :as dispute])
-  (:require [resolver-sim.protocols.sew.research-models.resolver-ring :as ring])
-  (:require [resolver-sim.sim.batch-integration :as integration])
-  (:require [resolver-sim.sim.common-kwargs :refer [common-kwargs]])
-  (:require [resolver-sim.governance.rules :as rules]))
+  (:require [resolver-sim.stochastic.rng :as rng]
+            [resolver-sim.stochastic.detection :as detection]
+            [resolver-sim.stochastic.dispute :as dispute]
+            [resolver-sim.protocols.sew.research-models.resolver-ring :as ring]
+            [resolver-sim.sim.batch-integration :as integration]
+            [resolver-sim.sim.common-kwargs :refer [common-kwargs]]))
 
 (defn mean [vals]
   (if (empty? vals) 0 (double (/ (reduce + vals) (count vals)))))
@@ -44,11 +44,9 @@
         sorted-honest (sort profits-honest)
         sorted-malice (sort profits-malice)
 
-        detected-count    (count (filter :detected? results))
         l2-detected-count (count (filter :l2-detected? results))
 
         pending-slashed (count (filter :slashing-pending? results))
-        reversal-pending-slashed (count (filter :reversal-pending? results))
         pending-delay-weeks (if (empty? results) 0
                                 (double (mean (map :slashing-delay-weeks (filter :slashing-pending? results)))))
 
@@ -90,16 +88,13 @@
      :malice-p50 (quantile sorted-malice 0.50)
      :malice-p75 (quantile sorted-malice 0.75)
 
-     :mean-profit-difference (double (mean (map - profits-honest profits-malice)))
-     :dominance-ratio (cond
-                        (or (Double/isNaN mean-malice) (Double/isNaN mean-honest)) Double/NaN
-                        (zero? mean-malice) Double/POSITIVE_INFINITY
-                        :else (double (/ mean-honest mean-malice)))
+     :honest-wins (count (filter #(> % 0) (map - profits-honest profits-malice)))
+     :dominance-ratio (if (zero? mean-malice) Double/POSITIVE_INFINITY
+                          (double (/ mean-honest mean-malice)))
 
      :appeal-rate (double (/ appeal-count n-trials))
      :escalation-rate (double (/ escalation-count n-trials))
 
-     :detection-rate    (double (/ detected-count n-trials))
      :l2-detection-rate (double (/ l2-detected-count n-trials))
 
      :slash-rate (double (/ total-slashed n-trials))
@@ -108,14 +103,11 @@
      :fraud-slash-rate (double (/ fraud-slashed n-trials))
 
      :fraud-slashed-count fraud-slashed
-      :reversal-slashed-count reversal-slashed
-      :timeout-slashed-count timeout-slashed
+     :reversal-slashed-count reversal-slashed
+     :timeout-slashed-count timeout-slashed
 
-      :pending-slashed-count pending-slashed
-      :reversal-pending-count reversal-pending-slashed
-
-      :frozen-rate (double (/ frozen-count n-trials))
-      :escaped-rate (double (/ escaped-count n-trials))
+     :frozen-rate (double (/ frozen-count n-trials))
+     :escaped-rate (double (/ escaped-count n-trials))
 
      :adjusted-strategy (:adjusted-strategy params (or (:force-strategy params) (:strategy params :honest)))
      :bribery-enabled (boolean (and (:bribe-cost-ratio params)
@@ -124,63 +116,10 @@
      :bribery-cost (when (:bribe-cost-ratio params)
                      (integration/calculate-bribery-cost params))}))
 
-(defn build-aggregate-with-interceptors
-  "Wrapper around `build-aggregate` that applies an interceptor chain to
-   enrich aggregate stats with diagnostic, research, and artifact metadata.
-   Preserves compatibility with existing statistical outputs."
-  [results n-trials params]
-  (let [base-aggregate (build-aggregate results n-trials params)
-        interceptors   [:aggregate/validate-trial-count
-                        :aggregate/validate-statistical-completeness
-                        :aggregate/extract-comparison-keys
-                        :aggregate/summarize-artifacts
-                        :aggregate/classify-research-verdict]
-
-        ;; Initialize interceptor context
-        initial-ctx {:results results :n-trials n-trials :params params}
-
-        ;; Run interceptors
-        final-ctx (reduce (fn [ctx interceptor-id]
-                            (let [res (case interceptor-id
-                                        :aggregate/validate-trial-count (if (= n-trials (count results)) :passed :failed)
-                                        :aggregate/validate-statistical-completeness (if (>= n-trials 100) :passed :warning)
-                                        :aggregate/extract-comparison-keys :passed
-                                        :aggregate/summarize-artifacts :passed
-                                        :aggregate/classify-research-verdict :passed)]
-                              (-> ctx
-                                  (update :trace (fnil conj []) {:id interceptor-id :status res})
-                                  (assoc-in [:results-by-id interceptor-id] res))))
-                          initial-ctx interceptors)
-
-        ;; Construct :aggregate/meta
-        meta-data {:schema-version "aggregate.v1"
-                   :n-trials       n-trials
-                   :result-count   (count results)
-                   :comparison-keys (select-keys params [:scenario/family :profile/id :seed :defection-rate :shortfall-policy :temporal-mode])
-                   :artifact-summary {:evidence-count 0 ;; Placeholder until integrated with evidence subsystem
-                                      :checkpoint-collision-count 0
-                                      :artifact-registry-status :passed}
-                   :diagnostics []
-                   :warnings (if (zero? (:fraud-slashed-count base-aggregate 0))
-                               [{:type :aggregate/no-attacks-observed
-                                 :message "No attack attempts observed; detection-rate may be uninformative"}]
-                               [])
-                   :research/verdict {:status :passed :severity :none :confidence :high}}]
-
-    (merge base-aggregate
-           {:aggregate/meta meta-data
-            :interceptor/trace (:trace final-ctx)})))
-
 (defn run-batch
-  "Run N trials with given parameters and return aggregated stats with early-stopping.
-   
-   Governance defaults are merged automatically — callers do not need
-   to supply :resolver-fee-bps, :appeal-bond-bps, etc."
+  "Run N trials with given parameters and return aggregated stats with early-stopping."
   [rng n-trials params]
-  (let [n-trials      (or n-trials (:n-trials params 1000))
-        escrow-size   (:escrow-size params 10000)
-        params        (merge (rules/default-rules escrow-size) params)
-        base-strategy (or (:force-strategy params) (:strategy params :honest))
+  (let [base-strategy (or (:force-strategy params) (:strategy params :honest))
         strategy      (integration/adjust-strategy-for-bribery base-strategy params)
         params        (assoc params :adjusted-strategy strategy)
         min-trials    (get params :min-trials 10)
@@ -193,7 +132,7 @@
                    (or (>= (/ passes (max 1 i)) pass-threshold)
                        (<= (/ (- i passes) (max 1 i)) (- 1.0 pass-threshold)))))
         (let [final-results results
-              agg (build-aggregate-with-interceptors final-results i params)]
+              agg (build-aggregate final-results i params)]
           (if (< i n-trials)
             (assoc agg :early-stop? true :trials-run i)
             agg))
@@ -213,14 +152,11 @@
 
 (defn run-batch-with-attribution
   "Run N trials and return both aggregate stats and per-trial results.
-   
+
    Returns {:aggregate <same map as run-batch>
             :trials    [{per-trial result map} ...]}"
   [rng n-trials params]
-  (let [n-trials      (or n-trials (:n-trials params 1000))
-        escrow-size   (:escrow-size params 10000)
-        params        (merge (rules/default-rules escrow-size) params)
-        base-strategy (or (:force-strategy params) (:strategy params :honest))
+  (let [base-strategy (or (:force-strategy params) (:strategy params :honest))
         strategy      (integration/adjust-strategy-for-bribery base-strategy params)
         params        (assoc params :adjusted-strategy strategy)
         trials
@@ -235,7 +171,7 @@
                                  (:appeal-probability-if-wrong params)
                                  (:slashing-detection-probability params)
                                  (common-kwargs params))))]
-    {:aggregate (build-aggregate-with-interceptors trials n-trials params)
+    {:aggregate (build-aggregate trials n-trials params)
      :trials trials}))
 
 (defn run-ring-batch

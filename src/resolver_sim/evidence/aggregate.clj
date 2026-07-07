@@ -28,7 +28,7 @@
      :block-ts (time-ctx/block-ts world)
      :instant (str (time-ctx/now world))
      :clock/mode (:clock/mode tc :discrete-step)
-     :tick-seconds (:tick-seconds tc 86400)
+     :tick-seconds (:tick-seconds tc time-ctx/seconds-per-day)
      :world/hash world-hash}))
 
 (defn build-evidence-aggregate

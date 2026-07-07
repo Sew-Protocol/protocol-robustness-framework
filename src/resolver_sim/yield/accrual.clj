@@ -23,6 +23,7 @@
             [resolver-sim.yield.token :as tok]
             [resolver-sim.yield.loss :as loss]
             [resolver-sim.yield.risk :as risk-utils]
+            [resolver-sim.time.context :as time-ctx]
             [resolver-sim.util.attribution :as attr]
             [resolver-sim.yield.risk-monitor :as risk]
             [resolver-sim.io.event-evidence :as evidence]))
@@ -46,7 +47,7 @@
 
 (def ^:private default-stale-oracle-max-seconds
   "Default max staleness before full degradation (24 hours)."
-  86400)
+  time-ctx/seconds-per-day)
 
 (def ^:private default-stale-oracle-floor-bps
   "Default floor APY after stale oracle degradation (0 bps = 0%)."

@@ -5,6 +5,8 @@
             [clojure.test :refer [deftest is testing]]
             [resolver-sim.benchmark.runner]
             [resolver-sim.io.scenarios]
+            [resolver-sim.protocols.sew.accounting :as sew-accounting]
+            [resolver-sim.protocols.sew.types :as sew-types]
             [resolver-sim.scenario.suites]
             [resolver-sim.benchmark.game-theory-validation :as sut]))
 
@@ -170,3 +172,64 @@
                (get json-artifact "kind")))
         (is (= "game-theoretic-validation.artifact.v1"
                (get json-artifact "version")))))))
+
+(deftest held-custody-closed-form-validation-emits-artifact
+  (let [out-dir (str (System/getProperty "java.io.tmpdir")
+                     "/prf-held-custody-game-theory-validation")
+        world (-> (sew-types/empty-world)
+                  (sew-accounting/add-held :0xUSDC 100 {:action "create-escrow"
+                                                        :reason :escrow-principal-deposited
+                                                        :extra {:held/workflow-id 0
+                                                                :owner/address "0xAlice"
+                                                                :held/from "0xAlice"
+                                                                :held/to "0xBob"}})
+                  (sew-accounting/sub-held :0xUSDC 40 {:action "finalize-released"
+                                                       :reason :escrow-settlement-released
+                                                       :extra {:held/workflow-id 0
+                                                               :owner/address "0xBob"}}))
+        held-artifacts (vals (:held-artifacts world))
+        {:keys [exit-code artifact output-files]}
+        (sut/run-held-custody-closed-form-validation
+         :held-artifacts held-artifacts
+         :out-dir out-dir)
+        level (first (:level-verdicts artifact))]
+    (is (= 0 exit-code))
+    (is (= :claim/held-custody-conservation (:claim/id artifact)))
+    (is (= :benchmark/held-custody-local (:benchmark/id artifact)))
+    (is (= :custody/held-balance (:mechanism-level level)))
+    (is (= :pass (:verdict level)))
+    (is (= 2 (get-in artifact [:summary :matched-artifact-count])))
+    (is (every? #(= :pass (:status %)) (:check-results level)))
+    (is (= 2 (count output-files)))
+    (doseq [path output-files]
+      (is (.exists (io/file path)))
+      (is (seq (slurp path))))))
+
+(deftest held-custody-closed-form-validation-fails-on-tampered-artifact
+  (let [out-dir (str (System/getProperty "java.io.tmpdir")
+                     "/prf-held-custody-game-theory-validation-tampered")
+        world (-> (sew-types/empty-world)
+                  (sew-accounting/add-held :0xUSDC 100 {:action "create-escrow"
+                                                        :reason :escrow-principal-deposited
+                                                        :extra {:held/workflow-id 0
+                                                                :owner/address "0xAlice"
+                                                                :held/from "0xAlice"
+                                                                :held/to "0xBob"}})
+                  (sew-accounting/sub-held :0xUSDC 40 {:action "finalize-released"
+                                                       :reason :escrow-settlement-released
+                                                       :extra {:held/workflow-id 0
+                                                               :owner/address "0xBob"}}))
+        tampered-artifacts (->> (:held-artifacts world)
+                                vals
+                                (mapv (fn [artifact]
+                                        (if (= "held-adjustment-1" (:held-adjustment/id artifact))
+                                          (assoc artifact :held/after 999)
+                                          artifact))))
+        {:keys [exit-code artifact]}
+        (sut/run-held-custody-closed-form-validation
+         :held-artifacts tampered-artifacts
+         :out-dir out-dir)
+        level (first (:level-verdicts artifact))]
+    (is (= 1 exit-code))
+    (is (= :fail (:verdict level)))
+    (is (some #(= :fail (:status %)) (:check-results level)))))

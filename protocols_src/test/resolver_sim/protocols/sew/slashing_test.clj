@@ -74,6 +74,7 @@
                   (assoc-in [:pending-fraud-slashes slash-id]
                             {:resolver resolver-addr
                              :amount 100
+                             :token "USDC"
                              :status :appealed
                              :proposed-at 1000
                              :appeal-deadline 1100
@@ -522,6 +523,7 @@
           world1  (assoc-in world [:pending-fraud-slashes slash-id]
                             {:resolver         l0-res
                              :amount           500
+                             :token            "USDC"
                              :reason           :reversal
                              :status           :pending
                              :proposed-at      1000
@@ -579,6 +581,7 @@
                        (assoc-in [:pending-fraud-slashes slash-id]
                                  {:resolver         resolver
                                   :amount           300
+                                  :token            "USDC"
                                   :reason           :reversal
                                   :status           :appealed
                                   :proposed-at      1000

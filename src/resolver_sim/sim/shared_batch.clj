@@ -95,9 +95,9 @@
      :l2-detected?       (:l2-detected? m)
      :frozen?            (:frozen? m)
      :escaped?           (:escaped? m)
-      :reversal-pending?   (:reversal-pending? m)
-      :slashing-pending?   (:slashing-pending? m)
-      :slashing-delay-weeks (:slashing-delay-weeks m)}))
+     :reversal-pending?   (:reversal-pending? m)
+     :slashing-pending?   (:slashing-pending? m)
+     :slashing-delay-weeks (:slashing-delay-weeks m)}))
 
 ;; ---------------------------------------------------------------------------
 ;; Shared batch runner

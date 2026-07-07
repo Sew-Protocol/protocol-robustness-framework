@@ -18,6 +18,8 @@
 
 (declare sub-held record-fee record-claimable)
 
+(def ^:private held-custody-artifact-version "held-custody-adjustment.artifact.v1")
+
 ;; ---------------------------------------------------------------------------
 ;; total-held tracking
 ;; ---------------------------------------------------------------------------
@@ -86,9 +88,12 @@
                      :reason :invalid-amount
                      :amount amount}))))
 
+(def ^:const force-authorisation-scope-domain
+  "force-authorisation-scope")
+
 (defn- force-authorisation-scope-hash
   [scope-map]
-  (hash/domain-hash "force-authorisation-scope" scope-map))
+  (hash/domain-hash force-authorisation-scope-domain scope-map))
 
 (defn- force-authorisation-expired?
   "True when the scope hash in auth-provenance does not match the scope-map
@@ -101,12 +106,12 @@
 
 (defn- ensure-force-authorisation-usable!
   "Guard: check authorization not consumed and scope hash matches.
-   Also rejects cross-direction reuse when direction is stored on the
-   consumed entry.
+   Direction is already covered by the scope-hash (:held/direction
+   is part of the scope-map).
    Throws on already-consumed or scope mismatch.
    Does NOT short-circuit for idempotent replay — that is handled at the
    outer command layer (dispatch-action / force-authorized entry point)."
-  [world auth-provenance scope-map direction]
+  [world auth-provenance scope-map]
   (let [auth-id (:authorization/id auth-provenance)]
     (when-let [consumed (get-in world [:force-authorisations/consumed auth-id])]
       (throw (ex-info "force-authorisation already consumed"
@@ -248,6 +253,61 @@
   [world adjustment]
   (update world :held-adjustments (fnil conj []) adjustment))
 
+(defn build-held-custody-artifact
+  "Build a minimal research-grade artifact from a canonical held adjustment.
+   The held adjustment remains authoritative; this artifact is a stable,
+   content-addressed consumer surface for later closed-form validation."
+  [adjustment]
+  (let [body (cond-> {:schema-version held-custody-artifact-version
+                      :artifact/kind :held-custody-adjustment
+                      :held-adjustment/id (:held-adjustment/id adjustment)
+                      :held/direction (:held/direction adjustment)
+                      :token (:token adjustment)
+                      :amount (:amount adjustment)
+                      :held/before (:held/before adjustment)
+                      :held/after (:held/after adjustment)
+                      :held/reason (:held/reason adjustment)
+                      :held/action (:held/action adjustment)}
+               (:held/account adjustment)
+               (assoc :held/account (:held/account adjustment))
+
+               (:held/position-id adjustment)
+               (assoc :held/position-id (:held/position-id adjustment))
+
+               (:held/workflow-id adjustment)
+               (assoc :held/workflow-id (:held/workflow-id adjustment))
+
+               (:owner/address adjustment)
+               (assoc :owner/address (:owner/address adjustment))
+
+               (:authorization/provenance adjustment)
+               (assoc :authorization/provenance
+                      (select-keys (:authorization/provenance adjustment)
+                                   [:authorization/type
+                                    :authorization/basis
+                                    :authorization/check
+                                    :authorization/actor-id
+                                    :authorization/source])))]
+    (assoc body
+           :artifact/id (str "held-custody-" (:held-adjustment/id adjustment))
+           :artifact/hash (str "sha256:"
+                               (hash/hash-with-intent {:hash/intent :evidence-record}
+                                                      body)))))
+
+(defn- append-held-custody-artifact
+  [world artifact]
+  (assoc-in world [:held-artifacts (:held-adjustment/id artifact)] artifact))
+
+(defn rebuild-held-custody-artifacts
+  "Derive the materialized held-custody artifact map from the canonical
+   held-adjustment ledger."
+  [adjustments]
+  (into {}
+        (map (fn [adjustment]
+               (let [artifact (build-held-custody-artifact adjustment)]
+                 [(:held-adjustment/id artifact) artifact])))
+        adjustments))
+
 (defn- adjust-held
   [world token amount direction {:keys [action reason authorization-provenance extra]
                                  :or {action "adjust-held"}}]
@@ -275,7 +335,7 @@
                               :owner/address (:owner/address components)
                               :held/reason reason}
                              (select-keys (or extra {}) [:held/workflow-id]))]
-        (ensure-force-authorisation-usable! world authorization-provenance scope-map direction)))
+        (ensure-force-authorisation-usable! world authorization-provenance scope-map)))
     (let [current (get-in world [:total-held token] 0)]
       (when (and (= direction :out) (< current amount))
         (throw (ex-info "sub-held underflow"
@@ -291,8 +351,11 @@
                                               reason
                                               authorization-provenance
                                               extra)
+            artifact (build-held-custody-artifact adjustment)
             world' (update-ledger-index world adjustment)
-            world'' (append-held-adjustment world' adjustment)]
+            world'' (-> world'
+                        (append-held-adjustment adjustment)
+                        (append-held-custody-artifact artifact))]
         (if is-force-auth?
           (mark-force-authorisation-consumed world'' authorization-provenance adjustment)
           world'')))))
@@ -403,6 +466,131 @@
    rather than propagating an AssertionError past the catch boundary."
   ([world token amount opts]
    (adjust-held world token amount :out (merge {:action "sub-held"} opts))))
+
+(defn held-custody-closed-form-checks
+  "Deterministic closed-form checks for derived held custody artifacts.
+   These checks do not replace the canonical held-adjustment ledger; they
+   verify that the first-class artifact surface is internally consistent and
+   replay-consistent enough for researcher-facing validation.
+
+   Check ids:
+   - :held-custody/hash-integrity
+   - :held-custody/local-delta
+   - :held-custody/non-negative-after
+   - :held-custody/sequence-replay"
+  [artifacts]
+  (let [ordered (sort-by :held-adjustment/id artifacts)
+        artifact-hash-payload
+        (fn [artifact]
+          (cond-> {:schema-version (:schema-version artifact)
+                   :artifact/kind (:artifact/kind artifact)
+                   :held-adjustment/id (:held-adjustment/id artifact)
+                   :held/direction (:held/direction artifact)
+                   :token (:token artifact)
+                   :amount (:amount artifact)
+                   :held/before (:held/before artifact)
+                   :held/after (:held/after artifact)
+                   :held/reason (:held/reason artifact)
+                   :held/action (:held/action artifact)}
+            (:held/account artifact)
+            (assoc :held/account (:held/account artifact))
+
+            (:held/position-id artifact)
+            (assoc :held/position-id (:held/position-id artifact))
+
+            (:held/workflow-id artifact)
+            (assoc :held/workflow-id (:held/workflow-id artifact))
+
+            (:owner/address artifact)
+            (assoc :owner/address (:owner/address artifact))
+
+            (:authorization/provenance artifact)
+            (assoc :authorization/provenance (:authorization/provenance artifact))))
+        hash-violations
+        (->> ordered
+             (keep (fn [artifact]
+                     (let [expected (-> artifact
+                                        artifact-hash-payload
+                                        (#(str "sha256:"
+                                               (hash/hash-with-intent
+                                                {:hash/intent :evidence-record}
+                                                %))))]
+                       (when (not= expected (:artifact/hash artifact))
+                         {:held-adjustment/id (:held-adjustment/id artifact)
+                          :expected expected
+                          :actual (:artifact/hash artifact)}))))
+             vec)
+        local-delta-violations
+        (->> ordered
+             (keep (fn [artifact]
+                     (let [before (long (:held/before artifact 0))
+                           after (long (:held/after artifact 0))
+                           amount (long (:amount artifact 0))
+                           expected-after (case (:held/direction artifact)
+                                            :in (+ before amount)
+                                            :out (- before amount)
+                                            ::invalid)]
+                       (when (not= expected-after after)
+                         {:held-adjustment/id (:held-adjustment/id artifact)
+                          :expected-after expected-after
+                          :actual-after after}))))
+             vec)
+        negative-after-violations
+        (->> ordered
+             (keep (fn [artifact]
+                     (when (neg? (long (:held/after artifact 0)))
+                       {:held-adjustment/id (:held-adjustment/id artifact)
+                        :held/after (:held/after artifact)})))
+             vec)
+        replay-state
+        (reduce (fn [state artifact]
+                  (let [token (:token artifact)
+                        current (get state token (:held/before artifact))
+                        amount (long (:amount artifact 0))
+                        expected-after (case (:held/direction artifact)
+                                         :in (+ (long current) amount)
+                                         :out (- (long current) amount)
+                                         ::invalid)]
+                    (assoc state token expected-after)))
+                {}
+                ordered)
+        sequence-replay-violations
+        (loop [state {}
+               remaining ordered
+               violations []]
+          (if-let [artifact (first remaining)]
+            (let [token (:token artifact)
+                  current (get state token (:held/before artifact))
+                  before (long (:held/before artifact 0))
+                  amount (long (:amount artifact 0))
+                  expected-after (case (:held/direction artifact)
+                                   :in (+ (long current) amount)
+                                   :out (- (long current) amount)
+                                   ::invalid)
+                  violations' (cond-> violations
+                                (not= current before)
+                                (conj {:held-adjustment/id (:held-adjustment/id artifact)
+                                       :expected-before current
+                                       :actual-before before})
+                                (not= expected-after (:held/after artifact))
+                                (conj {:held-adjustment/id (:held-adjustment/id artifact)
+                                       :expected-after expected-after
+                                       :actual-after (:held/after artifact)}))]
+              (recur (assoc state token expected-after) (next remaining) violations'))
+            violations))]
+    [{:check/id :held-custody/hash-integrity
+      :status (if (empty? hash-violations) :pass :fail)
+      :details {:violations hash-violations}}
+     {:check/id :held-custody/local-delta
+      :status (if (empty? local-delta-violations) :pass :fail)
+      :details {:violations local-delta-violations}}
+     {:check/id :held-custody/non-negative-after
+      :status (if (empty? negative-after-violations) :pass :fail)
+      :details {:violations negative-after-violations}}
+     {:check/id :held-custody/sequence-replay
+      :status (if (empty? sequence-replay-violations) :pass :fail)
+      :details {:violations sequence-replay-violations
+                :replayed-final-state replay-state}}]))
 
 ;; ---------------------------------------------------------------------------
 ;; total-fees tracking

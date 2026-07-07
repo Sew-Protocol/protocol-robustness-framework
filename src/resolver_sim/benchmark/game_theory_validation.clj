@@ -11,6 +11,7 @@
 
   (:require [clojure.java.io :as io]
             [clojure.data.json :as json]
+            [resolver-sim.protocols.sew.accounting :as sew-accounting]
             [resolver-sim.benchmark.strategic-claim-validation :as strategic]
             [resolver-sim.sim.fixtures :as fixtures]))
 
@@ -105,6 +106,74 @@
     :summary "Mutual cancel strictly dominates unilateral default for honest participants."}])
 
 (def run-strategic-claim-validation strategic/run-strategic-claim-validation)
+
+(defn run-held-custody-closed-form-validation
+  "Emit a minimal deterministic game-theoretic validation artifact over
+   first-class held custody artifacts.
+
+   Inputs:
+   - :world         world containing :held-artifacts, or
+   - :held-artifacts explicit artifact collection
+
+   This is intentionally narrow: one closed-form custody conservation claim,
+   one mechanism level, deterministic checks only."
+  [& {:keys [world held-artifacts out-dir]
+      :or {out-dir "./prf-out/game-theory"}}]
+  (let [artifacts (->> (or held-artifacts
+                           (some-> world :held-artifacts vals)
+                           [])
+                       (sort-by :held-adjustment/id)
+                       vec)
+        check-results (sew-accounting/held-custody-closed-form-checks artifacts)
+        verdict (if (every? #(= :pass (:status %)) check-results) :pass :fail)
+        artifact {:artifact/kind :game-theoretic-validation
+                  :artifact/version "game-theoretic-validation.artifact.v1"
+                  :claim/id :claim/held-custody-conservation
+                  :claim/title "Held custody conservation"
+                  :claim/description
+                  "Held custody artifacts should remain content-addressed,
+                   locally conservative, non-negative after mutation, and
+                   replay-consistent across the artifact sequence."
+                  :benchmark/id :benchmark/held-custody-local
+                  :benchmark/scenario-suite nil
+                  :matched-artifacts
+                  (mapv (fn [artifact]
+                          {:artifact/id (:artifact/id artifact)
+                           :held-adjustment/id (:held-adjustment/id artifact)
+                           :held/reason (:held/reason artifact)
+                           :held/action (:held/action artifact)
+                           :evidence-references [{:reference/type :held-adjustment-id
+                                                  :reference/value (:held-adjustment/id artifact)}
+                                                 {:reference/type :held-custody-artifact-hash
+                                                  :reference/value (:artifact/hash artifact)}]})
+                        artifacts)
+                  :level-verdicts [{:mechanism-level :custody/held-balance
+                                    :verdict verdict
+                                    :artifact-ids (mapv :artifact/id artifacts)
+                                    :check-results check-results
+                                    :evidence-references
+                                    (mapv (fn [artifact]
+                                            {:reference/type :held-custody-artifact-hash
+                                             :reference/value (:artifact/hash artifact)})
+                                          artifacts)}]
+                  :coverage-gaps (if (seq artifacts)
+                                   []
+                                   [{:mechanism-level :custody/held-balance
+                                     :reason :no-held-custody-artifacts}])
+                  :summary {:matched-artifact-count (count artifacts)
+                            :passed-level-count (if (= :pass verdict) 1 0)
+                            :failed-level-count (if (= :fail verdict) 1 0)
+                            :uncovered-level-count (if (seq artifacts) 0 1)
+                            :valid? (and (seq artifacts) (= :pass verdict))}}
+        base-path (str out-dir "/held-custody-conservation")
+        edn-path (str base-path "/game-theoretic-validation-artifact.edn")
+        json-path (str base-path "/game-theoretic-validation-artifact.json")]
+    (io/make-parents edn-path)
+    (spit edn-path (pr-str artifact))
+    (spit json-path (json/write-str artifact {:key-fn name}))
+    {:exit-code (if (get-in artifact [:summary :valid?]) 0 1)
+     :artifact artifact
+     :output-files [edn-path json-path]}))
 
 ;; ── Orchestration ───────────────────────────────────────────────────────────
 

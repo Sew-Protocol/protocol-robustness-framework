@@ -26,11 +26,15 @@
 (defn get-evidence
   "Return a summary of yield state for evidence/trace purposes."
   [world]
-  (let [positions (:yield/positions world {})]
-    (into {} (map (fn [[oid pos]]
-                    (let [ms (market-state/get-market-state world (:module/id pos) (:token pos) (:block-time world))]
-                      [oid (extract-position-evidence oid pos ms)]))
-                  positions))))
+  (let [positions (:yield/positions world {})
+        position-evidence (into {} (map (fn [[oid pos]]
+                                          (let [ms (market-state/get-market-state world (:module/id pos) (:token pos) (:block-time world))]
+                                            [oid (extract-position-evidence oid pos ms)]))
+                                        positions))
+        partial-fill-decisions (:yield/partial-fill-decisions world {})]
+    (cond-> position-evidence
+      (seq partial-fill-decisions)
+      (assoc :partial-fill-decisions partial-fill-decisions))))
 
 (defn emit-shortfall-event
   "Record a shortfall lifecycle event in world state with a content-addressed hash.

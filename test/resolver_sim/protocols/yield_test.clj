@@ -30,6 +30,26 @@
     (is (= :pass (:outcome result)))
     (is (pos? (get-in result [:metrics :yield/position-unrealized])))))
 
+(deftest replay-shortfall-withdraw-exposes-partial-fill-decision
+  (let [scenario (assoc base-scenario
+                        :events [{:seq 0 :time 1000 :agent "vault" :action "yield_deposit"
+                                  :params {:token "USDC" :amount 10000}}
+                                 {:seq 1 :time 2000 :agent "vault" :action "set-yield-risk"
+                                  :params {:token "USDC"
+                                           :shortfall {:available-ratio 0.5
+                                                       :reason "liquidity-shortfall"}}}
+                                 {:seq 2 :time 3000 :agent "vault" :action "yield_withdraw"
+                                  :params {:token "USDC"}}]
+                        :protocol-params {:yield-profile "aave-v3"
+                                          :default-owner-id "vault"})
+        result (replay/replay-yield-scenario scenario)
+        decisions (get-in result [:world :yield/partial-fill-decisions])
+        snapshot-decisions (get-in (proto/world-snapshot yp/protocol (:world result))
+                                   [:yield-evidence :partial-fill-decisions])]
+    (is (= :pass (:outcome result)))
+    (is (= 1 (count decisions)))
+    (is (= decisions snapshot-decisions))))
+
 (deftest y01-long-accrue-expectations
   (let [scenario (assoc base-scenario
                         :events [{:seq 0 :time 1000 :agent "vault" :action "yield_deposit"

@@ -268,18 +268,18 @@
         (when slashed-detected?
           (distribute-bond-loss bond-loss))]
 
-     {:dispute-correct?      verdict-correct?
-      :appeal-triggered?     appealed?
-      :detected?             detected?
-      :l2-detected?          l2-slashed?
-      :escalated?            escalated?
-      :escalation-level      escalation-level
-      :slashed?              slashed-detected?
-      :frozen?               frozen?
-      :escaped?              escaped?
-      :reversal-pending?     reversal-pending?
-      :slashing-pending?     slashing-pending?
-      :slashing-delay-weeks  delay-weeks
+    {:dispute-correct?      verdict-correct?
+     :appeal-triggered?     appealed?
+     :detected?             detected?
+     :l2-detected?          l2-slashed?
+     :escalated?            escalated?
+     :escalation-level      escalation-level
+     :slashed?              slashed-detected?
+     :frozen?               frozen?
+     :escaped?              escaped?
+     :reversal-pending?     reversal-pending?
+     :slashing-pending?     slashing-pending?
+     :slashing-delay-weeks  delay-weeks
      :slashing-reason       slash-reason
      :bond-loss             (long (max 0 bond-loss))
      :profit-honest         profit-honest

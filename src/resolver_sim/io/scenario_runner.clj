@@ -31,6 +31,36 @@
             [resolver-sim.validation.scenario-id :as sid]
             [resolver-sim.yield.invariant-catalog :as yield-inv-cat]))
 
+;; ---------------------------------------------------------------------------
+;; Structured logging
+;; ---------------------------------------------------------------------------
+
+(def ^:dynamic *log-level*
+  "Log level threshold for structured stderr output.
+     :info   — all events (default)
+     :warn   — warnings and errors only
+     :silent — errors only"
+  :info)
+
+(defn- log-event
+  "Write a structured JSON-line event to stderr, subject to *log-level*.
+   event — keyword name (e.g. :pre-commitment, :dag-write)
+   data  — additional key-value pairs merged into the event map"
+  [level event & {:as data}]
+  (let [level-kw (if (keyword? level) level (keyword level))]
+    (when (case *log-level*
+            :info   (contains? #{:info :warn :error} level-kw)
+            :warn   (contains? #{:warn :error} level-kw)
+            :silent (= level-kw :error)
+            true)
+      (.println *err*
+                (json/write-str
+                 (merge {:event (name event)
+                         :ts    (str (java.time.Instant/now))
+                         :level (name level-kw)
+                         :thread (.getName (Thread/currentThread))}
+                        data))))))
+
 (def ^:private supported-scenario-profiles
   #{:minimal :research :forensic :demo :debug-heavy})
 
@@ -248,7 +278,7 @@
   (let [entries (:entries request)]
     (when-not (:parallel? opts)
       (doseq [{:keys [name protocol]} entries]
-        (println (format "[run:scenario] %s -> protocol %s" name protocol))))
+        (log-event :info :scenario-start :scenario-name name :protocol protocol)))
     (runner/run-collection
      {:entries   entries
       :replay-fn (fn [scenario]
@@ -696,6 +726,42 @@
 
 ;; ── Execution node spec builder ─────────────────────────────────────────────────
 
+;; ── Dry-run / error recovery ────────────────────────────────────────────────────
+
+(defn- run-dry
+  "Dry-run: count entries without replaying.
+   Returns {:exit-code 0 :dry-run true :entry-count n}."
+  [dispatch opts protocol-id]
+  (let [suite-key (:suite dispatch)]
+    {:exit-code   0
+     :dry-run     true
+     :entry-count
+     (case (dispatch-keyword dispatch)
+       :fixture-suite
+       (let [suite (io-fix/load-fixture (:fixture-suite dispatch))]
+         (count (:traces suite [])))
+       :suite
+       (if-let [paths (suites/suite-paths suite-key)]
+         (count paths)
+         0)
+       :scenario 1
+       :registry
+       (count (get-in registry-suite-runners [protocol-id :entries] []))
+       0)}))
+
+(defn- build-minimal-error-root
+  "Build a minimal bundle-root for error recovery when the normal path fails."
+  [dispatch protocol-id source-provenance error]
+  {:bundle/schema-version "bundle-root.v1"
+   :bundle/id             "error-recovery"
+   :run/request           {:runner/backend :local-current
+                           :protocol/default-id protocol-id}
+   :orchestrator/id       :error-recovery
+   :execution/summary     {:status :error
+                           :error  (.getMessage error)
+                           :exception (str (class error))}
+   :run/environment       {:clojure/version (clojure-version)}})
+
 (defn- build-execution-node-spec
   "Build the spec map for with-execution-node+ from resolved parameters."
   [dispatch opts runner-selection canonical? non-canonical-reason protocol-id source-provenance]
@@ -735,16 +801,16 @@
 (defn- populate-forensic-claims!
   "Run Phase 3 forensic claims/attestations population (best-effort)."
   []
-  (.println *err* "\n--- Forensic Claims & Attestations ---")
+  (log-event :info :forensic-claims-start)
   (try
     (let [rid (or (some-> (prov/provenance-map) :bundle/id) "unknown")
           pop-result (fp/populate-claims-and-attestations! rid)]
-      (.println *err* (format "  claims: %d, attestations: %d, all-pass?: %s"
-                              (:claim-count pop-result)
-                              (:attestation-count pop-result)
-                              (:all-pass? pop-result))))
+      (log-event :info :forensic-claims-done
+                 :claim-count (:claim-count pop-result)
+                 :attestation-count (:attestation-count pop-result)
+                 :all-pass? (:all-pass? pop-result)))
     (catch Exception e
-      (.println *err* (str "  warning: forensic populate failed: " (.getMessage e))))))
+      (log-event :warn :forensic-claims-failed :error (.getMessage e)))))
 
 (defn- build-enriched-bundle-root
   "Merge source provenance and execution node hashes into the bundle root."
@@ -761,29 +827,32 @@
   "CLI dispatcher: full invariant suite, named suite, or single file.
 
    `dispatch` is a map with optional keys:
-     :suite          — path-list keyword (e.g. :yield-provider-scenarios, :sew-yield-scenarios)
-     :fixture-suite  — EDN fixture keyword (e.g. :suites/all-invariants)
-     :scenario       — file path
-     :output-file    — JSON path when running a single scenario
-     :protocol       — protocol id (default sew-v1)
+      :suite          — path-list keyword (e.g. :yield-provider-scenarios, :sew-yield-scenarios)
+      :fixture-suite  — EDN fixture keyword (e.g. :suites/all-invariants)
+      :scenario       — file path
+      :output-file    — JSON path when running a single scenario
+      :protocol       — protocol id (default sew-v1)
+      :dry-run?       — when true, validate without replaying
    `opts` may include:
-     :parallel?      — when true, run scenarios concurrently via pmap
+      :parallel?      — when true, run scenarios concurrently via pmap
 
    Returns {:exit-code <int> :bundle-root <map> :execution-node <map>}."
   [dispatch opts]
   (validate-dispatch! dispatch)
   (let [protocol-id (resolve-protocol-id dispatch)
-        runner-selection (or (:runner-selection dispatch) default-runner-selection)
-        {:keys [canonical? non-canonical-reason]}
-        (determine-canonicality dispatch runner-selection)
-        tsa-url (System/getenv "PRF_TSA_URL")
         source-provenance (prov/source-provenance)]
+    (if (:dry-run? dispatch)
+      (run-dry dispatch opts protocol-id)
+      (let [runner-selection (or (:runner-selection dispatch) default-runner-selection)
+          {:keys [canonical? non-canonical-reason]}
+          (determine-canonicality dispatch runner-selection)
+          tsa-url (System/getenv "PRF_TSA_URL")]
     (when (and (not canonical?) non-canonical-reason)
       (log/warn! :non-canonical-run
                  {:reason non-canonical-reason
                   :message "Run is non-canonical; bundle will be marked accordingly"}))
-    (when tsa-url
-      (.println *err* (str "  TSA URL configured: " tsa-url)))
+      (when tsa-url
+        (log-event :info :tsa-url :tsa-url tsa-url))
 
     ;; Pre-run commitment (best-effort, lazy-loaded forensic namespaces)
     (let [suite-key (:suite dispatch)
@@ -794,74 +863,96 @@
                     ctx {:suite-key suite-key :run-id run-id}
                     commitment (prc ctx)
                     written (pwrite commitment)]
-                (.println *err* (str "  Pre-run commitment: " (:hash written)))
+                (log-event :info :pre-commitment :hash (:hash written))
                 ;; Sign if key available
                 (when (or (System/getenv "PRF_SIGNING_KEY")
                           (.exists (java.io.File. "signing-key.pem")))
                   (let [fsign (requiring-resolve 'resolver-sim.forensic.signing/sign-and-write!)]
                     (fsign (:path written) commitment)
-                    (.println *err* (str "  Pre-run commitment signed")))))
+                    (log-event :info :pre-commitment-signed))))
               (catch Exception e
-                (.println *err* (str "  WARN: pre-run commitment failed: " (.getMessage e)))))]
+                (log-event :warn :pre-commitment-failed :error (.getMessage e))))]
 
-      (ev-node/with-fresh-registry
-        (chain/with-fresh-registry
-          (chain/with-fresh-chain-cursor
-            (binding [ts/*tsa-url* (or tsa-url ts/*tsa-url*)
-                      evcfg/*artifact-dir* (str "./prf-runs/" run-id)]
-              (let [exec-spec (build-execution-node-spec
-                               dispatch opts runner-selection
-                               canonical? non-canonical-reason protocol-id
-                               source-provenance)
-                    result (ev-node/with-execution-node+
-                             exec-spec
-                             (fn []
-                               (execute-dispatch! dispatch opts protocol-id
-                                                  runner-selection)))
-                    thunk-result (:result result)
-                    execution-node (:execution-node result)
-                    thunk-error (:error result)
-                    _ (if thunk-error
-                        (throw thunk-error)
-                        (let [report-exit-code
-                              (dispatch-report-exit-code (:dispatch-key thunk-result)
-                                                         (:summary thunk-result)
-                                                         opts
-                                                         protocol-id)
-                              dispatch-exit-code (:exit-code thunk-result)]
-                          (when (and report-exit-code dispatch-exit-code
-                                     (not= report-exit-code dispatch-exit-code))
-                            (log/warn! :exit-code-mismatch
-                                       {:report-exit-code report-exit-code
-                                        :dispatch-exit-code dispatch-exit-code
-                                        :dispatch dispatch}))))
-                    bundle-root (:bundle-root thunk-result)
-                    _ (when (nil? bundle-root)
-                        (throw (ex-info "run-and-report: nil bundle-root from execute-dispatch!"
-                                        {:dispatch dispatch})))
-                    enriched-root (build-enriched-bundle-root
-                                   bundle-root execution-node source-provenance)]
-                (populate-forensic-claims!)
+        ;; P1b: Top-level try/catch — ensure structured output even on crash
+        (try
+          (ev-node/with-fresh-registry
+            (chain/with-fresh-registry
+              (chain/with-fresh-chain-cursor
+                (binding [ts/*tsa-url* (or tsa-url ts/*tsa-url*)
+                          evcfg/*artifact-dir* (str "./prf-runs/" run-id)]
+                  (let [exec-spec (-> (build-execution-node-spec
+                                        dispatch opts runner-selection
+                                        canonical? non-canonical-reason protocol-id
+                                        source-provenance)
+                                     (assoc :extensions-fn
+                                            (fn [thunk-result]
+                                              (let [summary (:summary thunk-result)
+                                                    results (:results summary)
+                                                    fixture-refs (->> results
+                                                                       (map :fixture-refs)
+                                                                       (remove nil?)
+                                                                       (apply concat)
+                                                                       seq)]
+                                                (when fixture-refs
+                                                  {:fixture/refs (vec fixture-refs)})))))
+                         result (ev-node/with-execution-node+
+                                 exec-spec
+                                 (fn []
+                                   (execute-dispatch! dispatch opts protocol-id
+                                                      runner-selection)))
+                         thunk-result (:result result)
+                         execution-node (:execution-node result)
+                         thunk-error (:error result)
+                         _ (if thunk-error
+                             (throw thunk-error)
+                             (let [report-exit-code
+                                   (dispatch-report-exit-code (:dispatch-key thunk-result)
+                                                              (:summary thunk-result)
+                                                              opts
+                                                              protocol-id)
+                                   dispatch-exit-code (:exit-code thunk-result)]
+                               (when (and report-exit-code dispatch-exit-code
+                                          (not= report-exit-code dispatch-exit-code))
+                                 (log/warn! :exit-code-mismatch
+                                            {:report-exit-code report-exit-code
+                                             :dispatch-exit-code dispatch-exit-code
+                                             :dispatch dispatch}))))
+                         bundle-root (:bundle-root thunk-result)
+                         _ (when (nil? bundle-root)
+                             (throw (ex-info "run-and-report: nil bundle-root from execute-dispatch!"
+                                             {:dispatch dispatch})))
+                         enriched-root (build-enriched-bundle-root
+                                        bundle-root execution-node source-provenance)]
+                    (populate-forensic-claims!)
 
-        ;; Execution DAG (best-effort, lazy-loaded)
-                (try
-                  (let [dag-build (requiring-resolve 'resolver-sim.forensic.execution-dag/build-dag)
-                        dag-write (requiring-resolve 'resolver-sim.forensic.execution-dag/write-dag!)
-                        dag-make-node (requiring-resolve 'resolver-sim.forensic.execution-dag/make-plan-node)
-                        paths (when suite-key (suites/suite-paths suite-key))
-                        nodes (mapv (fn [p] (dag-make-node
-                                             {:id (str "node:" (.getName (java.io.File. p)))
-                                              :type :scenario-run
-                                              :input-hashes {:scenario/path p}}))
-                                    (or paths []))
-                        dag (dag-build nodes [])]
-                    (dag-write dag run-id)
-                    (.println *err* (str "  Execution DAG: " (:dag/node-count dag) " nodes")))
-                  (catch Exception e
-                    (.println *err* (str "  WARN: execution DAG write failed: " (.getMessage e)))))
+            ;; Execution DAG (best-effort, lazy-loaded)
+                    (try
+                      (let [dag-build (requiring-resolve 'resolver-sim.forensic.execution-dag/build-dag)
+                            dag-write (requiring-resolve 'resolver-sim.forensic.execution-dag/write-dag!)
+                            dag-make-node (requiring-resolve 'resolver-sim.forensic.execution-dag/make-plan-node)
+                            paths (when suite-key (suites/suite-paths suite-key))
+                            nodes (mapv (fn [p] (dag-make-node
+                                                 {:id (str "node:" (.getName (java.io.File. p)))
+                                                  :type :scenario-run
+                                                  :input-hashes {:scenario/path p}}))
+                                        (or paths []))
+                            dag (dag-build nodes [])]
+                        (dag-write dag run-id)
+                        (log-event :info :dag-write :node-count (:dag/node-count dag)))
+                      (catch Exception e
+                        (log-event :warn :dag-write-failed :error (.getMessage e))))
 
-                (when-let [output-path (:output-file dispatch)]
-                  (write-result-json output-path enriched-root))
-                {:exit-code (:exit-code thunk-result)
-                 :bundle-root enriched-root
-                 :execution-node execution-node}))))))))
+                    (when-let [output-path (:output-file dispatch)]
+                      (write-result-json output-path enriched-root))
+                    {:exit-code (:exit-code thunk-result)
+                     :bundle-root enriched-root
+                     :execution-node execution-node}))))
+          ;; Top-level catch: produce minimal output on complete failure
+          (catch Throwable t
+            (log-event :error :run-failed :error (.getMessage t) :exception (str (class t)))
+            (let [minimal-root (build-minimal-error-root dispatch protocol-id source-provenance t)]
+              (when-let [output-path (:output-file dispatch)]
+                (write-result-json output-path minimal-root))
+              {:exit-code 1
+               :bundle-root minimal-root
+               :execution-node nil})))))))))

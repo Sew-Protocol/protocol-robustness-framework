@@ -8,8 +8,18 @@
 
    Use `with-attribute` to attach clarifying semantic annotations to a
    result entry — e.g. resolution outcome, dispute level, module identity.
-   Attributes are stored under `:attributes` and surfaced in verbose reports."
-  (:require [clojure.string :as str]
+   Attributes are stored under `:attributes` and surfaced in verbose reports.
+
+   ### Dynamic vars for inspectability
+
+     `*current-scenario*` — bound to the scenario-id before each entry runs.
+                           Loggers, middleware, and error handlers can read it.
+     `*progress-callback*` — called after each entry with a progress map:
+                             {:current n :total m :entry-name string
+                              :result entry-result :error? bool}
+                             For tooling, CI monitors, and progress bars."
+  (:require [clojure.data.json :as json]
+            [clojure.string :as str]
             [resolver-sim.scenario.expectations :as expectations]
             [resolver-sim.scenario.outcome-semantics :as ose]
             [resolver-sim.scenario.summary :as summary]
@@ -17,6 +27,53 @@
             [resolver-sim.scenario.theory :as theory]
             [resolver-sim.io.reasoning-registry :as registry]
             [resolver-sim.io.reasoning-capsule :as capsule]))
+
+;; ---------------------------------------------------------------------------
+;; Inspectability dynamic vars
+;; ---------------------------------------------------------------------------
+
+(def ^:dynamic *log-level*
+  "Log level threshold for structured output.
+     :info   — all events (default)
+     :warn   — warnings and errors only
+     :silent — errors only
+   Used by run-collection's event-log writer."
+  :info)
+
+(def ^:dynamic *current-scenario*
+  "The scenario-id currently being replayed, bound per-entry in run-collection.
+   Nil when no scenario is running."
+  nil)
+
+(def ^:dynamic *progress-callback*
+  "Called after each entry completes.
+   Args: {:current n :total m :entry-name string
+          :result entry-result :error? bool}
+   Can be bound by tooling, CLI progress bars, CI monitors."
+  nil)
+
+;; ---------------------------------------------------------------------------
+;; Error entry builder
+;; ---------------------------------------------------------------------------
+
+(defn- make-error-entry
+  "Build a well-formed entry map for a scenario that threw an exception.
+   Ensures build-summary can process it (needs :pass?)."
+  [entry exception]
+  (let [scenario (when (map? entry) (:scenario entry))
+        sid (or (:scenario-id scenario)
+                (when (vector? entry) (name (first entry)))
+                "unknown")]
+    {:name        (:name entry (str sid))
+     :scenario-id sid
+     :source      (:source entry :replay)
+     :outcome     :error
+     :error       (.getMessage exception)
+     :exception   (str (class exception))
+     :pass?       false
+     :steps       0
+     :reverts     0
+     :violations  0}))
 
 ;; ---------------------------------------------------------------------------
 ;; Attribute helpers — enrich result entries with clarifying annotations
@@ -355,22 +412,75 @@
   "Run a collection of scenarios. Returns a summary map from `summary/build-summary`.
 
    `collection` is a map:
-     :entries — vector of
-       {:name string :scenario map} |
-       [display-name scenario-or-pair]  (registry style)
-     :replay-fn — (fn [scenario] → replay result), required
-     :type-meta-fn — optional (fn [scenario-id] → metadata map for entry)
+      :entries — vector of
+        {:name string :scenario map} |
+        [display-name scenario-or-pair]  (registry style)
+      :replay-fn — (fn [scenario] → replay result), required
+      :type-meta-fn — optional (fn [scenario-id] → metadata map for entry)
 
    `opts` forwarded to build-entry-result / theory (e.g. :evaluate-theory?).
-   When `opts` includes `:parallel? true`, entries are run concurrently via pmap."
+   When `opts` includes `:parallel? true`, entries are run concurrently via pmap.
+
+   ### Inspectability
+
+   `*current-scenario*` is bound per-entry. `*progress-callback*` is called
+   after each entry completes.  When `opts` includes `:event-log` (file path),
+   JSON-line events are appended per entry."
   [{:keys [entries] :as collection} opts]
-  (let [t0      (System/currentTimeMillis)
-        parallel? (:parallel? opts)
-        do-run   (fn [entry] (run-entry entry (assoc opts :replay-fn (:replay-fn collection)
-                                                     :type-meta-fn (:type-meta-fn collection))))
-        results (if parallel?
-                  (vec (pmap do-run entries))
-                  (mapv do-run entries))
-        elapsed (- (System/currentTimeMillis) t0)]
+  (let [t0         (System/currentTimeMillis)
+        total      (count entries)
+        parallel?  (:parallel? opts)
+        event-log  (:event-log opts)
+        log-writer (when event-log
+                     (fn [event]
+                       (let [level (or (:level event) :info)]
+                         (when (case *log-level*
+                                 :info   (contains? #{:info :warn :error} (keyword level))
+                                 :warn   (contains? #{:warn :error} (keyword level))
+                                 :silent (= (keyword level) :error)
+                                 true)
+                           (spit event-log
+                                 (str (json/write-str
+                                       (assoc event
+                                              :ts (str (java.time.Instant/now))
+                                              :thread (.getName (Thread/currentThread))))
+                                      "\n")
+                                 :append true)))))
+        progress-atom (when parallel? (atom 0))
+        do-run   (fn [entry]
+                    (let [sid (or (when (map? entry) (get-in entry [:scenario :scenario-id]))
+                                  (when (vector? entry) (name (first entry)))
+                                  "unknown")]
+                      (binding [*current-scenario* sid]
+                        (let [result
+                              (try
+                                (run-entry entry (assoc opts :replay-fn (:replay-fn collection)
+                                                        :type-meta-fn (:type-meta-fn collection)))
+                                (catch Exception e
+                                  (let [err-entry (make-error-entry entry e)]
+                                    (when log-writer
+                                      (log-writer {:event "entry-error" :scenario-id sid
+                                                   :error (.getMessage e)
+                                                   :current (if parallel? (swap! progress-atom inc)
+                                                               0)}))
+                                    err-entry)))
+                              entry-name (:name result (str sid))]
+                          (when log-writer
+                            (log-writer {:event "entry-complete" :scenario-id sid
+                                         :outcome (name (:outcome result))
+                                         :pass? (:pass? result)
+                                         :current (if parallel? (swap! progress-atom inc) 0)
+                                         :total total}))
+                          (when *progress-callback*
+                            (*progress-callback* {:current (if parallel? @progress-atom 0)
+                                                   :total total
+                                                   :entry-name entry-name
+                                                   :result result
+                                                   :error? (= :error (:outcome result))}))
+                          result))))
+        results   (if parallel?
+                    (vec (pmap do-run entries))
+                    (mapv do-run entries))
+        elapsed   (- (System/currentTimeMillis) t0)]
     (summary/build-summary results {:elapsed-ms elapsed
                                     :suite-id   (:suite-id opts)})))

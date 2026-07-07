@@ -36,7 +36,10 @@
       (str "data/fixtures/" ns "/" nm ext)
       (str "data/fixtures/" nm ext))))
 
-(def ^:private allowed-fixture-namespaces
+(def allowed-fixture-namespaces
+  "Set of valid fixture namespace strings.
+   Used by valid-fixture-ref? and fixture-ref? (sim layer).
+   Add new fixture types here — both layers reference this single source."
   #{"protocol" "states" "actors" "authority" "tokens" "thresholds" "suites" "traces"})
 
 (defn valid-fixture-ref?
@@ -44,6 +47,24 @@
   [k]
   (boolean (and (keyword? k) (namespace k)
                 (contains? allowed-fixture-namespaces (namespace k)))))
+
+(defn fixture-exists?
+  "True when the fixture file for keyword k exists on disk or classpath.
+   Checks both resource:// and filesystem paths.
+   Returns false for invalid refs and missing files — never nil."
+  [k]
+  (boolean (when (valid-fixture-ref? k)
+             (let [path          (fixture-key->path k)
+                   resource-path (str "resource:" path)]
+               (or (rp/path-exists? resource-path)
+                   (.exists (io/file path)))))))
+
+(defn valid-fixture-reference?
+  "Full validity check: known namespace AND file exists.
+   Returns true/false — does not throw.
+   Use for pre-flight validation before suite execution."
+  [k]
+  (boolean (and (valid-fixture-ref? k) (fixture-exists? k))))
 
 ;; ---------------------------------------------------------------------------
 ;; Fixture file loading

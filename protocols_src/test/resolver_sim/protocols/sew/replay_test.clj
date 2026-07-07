@@ -17,7 +17,8 @@
             [resolver-sim.protocols.sew.invariants :as inv]
             [resolver-sim.protocols.sew.types     :as t]
             [resolver-sim.protocols.sew.resolution :as res]
-            [resolver-sim.testing.scenario-builder :as sb]))
+            [resolver-sim.testing.scenario-builder :as sb]
+            [resolver-sim.time.context             :as time-ctx]))
 
 ;; ---------------------------------------------------------------------------
 ;; Section 1: Structural validation
@@ -1024,7 +1025,7 @@
   (let [gov {:id "gov" :type "governance" :address "0xGov"}
         keeper {:id "keeper" :type "keeper" :address "0xKeeper"}
         slash-at 1255
-        freeze-until (+ slash-at (* 3 86400))
+        freeze-until (+ slash-at (* 3 time-ctx/seconds-per-day))
         r (sew/replay-with-sew-protocol
            (sb/sc :agents [alice bob resolver gov keeper]
                   :params (assoc default-params :appeal-window-duration 120)

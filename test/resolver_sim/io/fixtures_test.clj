@@ -138,6 +138,44 @@
                 {:scenario-id "test" :protocol-params-ref "invalid/foo" :events []}))))
 
 ;; ---------------------------------------------------------------------------
+;; fixture-exists?
+;; ---------------------------------------------------------------------------
+
+(deftest fixture-exists-known
+  (is (true? (sut/fixture-exists? :protocol/kleros)))
+  (is (true? (sut/fixture-exists? :traces/eq-v1-budget-balance-pass))))
+
+(deftest fixture-exists-missing
+  (is (false? (sut/fixture-exists? :protocol/nonexistent))))
+
+(deftest fixture-exists-invalid-namespace
+  (is (false? (sut/fixture-exists? :unknown/foo))))
+
+(deftest fixture-exists-bare-keyword
+  (is (false? (sut/fixture-exists? :protocol))))
+
+;; ---------------------------------------------------------------------------
+;; valid-fixture-reference? (full check: namespace + file existence)
+;; ---------------------------------------------------------------------------
+
+(deftest valid-fixture-reference-known
+  (is (true? (sut/valid-fixture-reference? :protocol/kleros)))
+  (is (true? (sut/valid-fixture-reference? :protocol/baseline)))
+  (is (true? (sut/valid-fixture-reference? :traces/eq-v1-budget-balance-pass))))
+
+(deftest valid-fixture-reference-missing-file
+  (is (false? (sut/valid-fixture-reference? :protocol/nonexistent))))
+
+(deftest valid-fixture-reference-invalid-namespace
+  (is (false? (sut/valid-fixture-reference? :unknown/foo))))
+
+(deftest valid-fixture-reference-bare-keyword
+  (is (false? (sut/valid-fixture-reference? :protocol))))
+
+(deftest valid-fixture-reference-string-rejected
+  (is (false? (sut/valid-fixture-reference? "protocol/kleros"))))
+
+;; ---------------------------------------------------------------------------
 ;; deep-merge (from util namespace)
 ;; ---------------------------------------------------------------------------
 

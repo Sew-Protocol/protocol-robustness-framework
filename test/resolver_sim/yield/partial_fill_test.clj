@@ -166,6 +166,50 @@
                   (long (get-in decision [:deferred k] 0))))
             (str "Bucket " k " should conserve: filled + deferred = requested"))))))
 
+(deftest test-partial-fill-closed-form-checks-pro-rata
+  (testing "closed-form partial-fill checks pass on a valid pro-rata decision"
+    (let [decision {:settlement-mode :partial-fill
+                    :requested {:a 40 :b 60}
+                    :filled {:a 20 :b 30}
+                    :deferred {:a 20 :b 30}
+                    :haircut {}
+                    :policy {:mode :pro-rata}
+                    :evidence {:available-liquidity 50}}
+          checks (pf/partial-fill-closed-form-checks decision)]
+      (is (= #{:pass}
+             (set (map :status checks)))))))
+
+(deftest test-partial-fill-closed-form-checks-detect-fairness-failure
+  (testing "cross-product check catches non-pro-rata allocation"
+    (let [decision {:settlement-mode :partial-fill
+                    :requested {:a 40 :b 60}
+                    :filled {:a 10 :b 40}
+                    :deferred {:a 30 :b 20}
+                    :haircut {}
+                    :policy {:mode :pro-rata}
+                    :evidence {:available-liquidity 50}}
+          checks (pf/partial-fill-closed-form-checks decision)
+          fairness (first (filter #(= :partial-fill/pro-rata-cross-product
+                                      (:check/id %))
+                                  checks))]
+      (is (= :fail (:status fairness)))
+      (is (seq (get-in fairness [:details :violations]))))))
+
+(deftest test-partial-fill-closed-form-checks-waterfall-not-applicable
+  (testing "pro-rata fairness is explicitly not-applicable outside pro-rata mode"
+    (let [decision {:settlement-mode :partial-fill
+                    :requested {:principal 100 :realized-yield 20}
+                    :filled {:principal 80}
+                    :deferred {:principal 20 :realized-yield 20}
+                    :haircut {}
+                    :policy {:mode :waterfall}
+                    :evidence {:available-liquidity 80}}
+          checks (pf/partial-fill-closed-form-checks decision)
+          fairness (first (filter #(= :partial-fill/pro-rata-cross-product
+                                      (:check/id %))
+                                  checks))]
+      (is (= :not-applicable (:status fairness))))))
+
 (deftest test-largest-remainder-policy
   (testing "Largest-remainder rounding policy for partial fill"
     (let [policy {:mode :pro-rata

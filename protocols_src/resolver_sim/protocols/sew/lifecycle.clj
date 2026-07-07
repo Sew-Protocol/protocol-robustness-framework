@@ -185,14 +185,15 @@
         result (-> world-after-policy
                    (acct/sub-held token
                                   sub-held-amt
-                                  {:action (str "finalize-" (name direction))
-                                   :reason held-reason
-                                   :authorization-provenance authorization-provenance
-                                   :extra {:held/action (str "finalize-" (name direction))
-                                           :held/workflow-id workflow-id
-                                           :held/recipient recipient
-                                           :held/settlement-direction direction
-                                           :held/settled-amount settled-amt}})
+                                   {:action (str "finalize-" (name direction))
+                                    :reason held-reason
+                                    :authorization-provenance authorization-provenance
+                                    :extra {:held/action (str "finalize-" (name direction))
+                                            :held/workflow-id workflow-id
+                                            :owner/address recipient
+                                            :held/recipient recipient
+                                            :held/settlement-direction direction
+                                            :held/settled-amount settled-amt}})
                    (record-fn token settled-amt)
                    ;; Track outbound FoT fee
                    (update-in [:total-fot-fees token] (fnil + 0) (- amt net-amt))
@@ -363,6 +364,7 @@
                                                      :reason :escrow-principal-deposited
                                                      :extra {:held/action "create-escrow"
                                                              :held/workflow-id workflow-id
+                                                             :owner/address caller
                                                              :held/from caller
                                                              :held/to to}})
                                      (acct/record-fee token fee)

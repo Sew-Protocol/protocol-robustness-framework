@@ -14,33 +14,28 @@
             [resolver-sim.stochastic.rng :as rng]
             [resolver-sim.protocols.sew.economics :as sew-econ]
             [resolver-sim.notebook-support.views :as views]
-            [resolver-sim.notebook-support.checks :as checks]))
+            [resolver-sim.notebook-support.checks :as checks]
+            [resolver-sim.io.params :as io-params]))
 
 ;; Force dark theme
 ^{::clerk/visibility {:code :hide :result :hide}}
 (clerk/html [:style ":root { color-scheme: dark; } .clerk-root { background: #0f172a; color: #e2e8f0; }"])
 
-;; Shared constants
+;; Shared constants loaded from notebook-local config.
+;; Edit notebooks/appeal_config.edn to change parameter bands.
 ^{::clerk/visibility {:code :hide :result :hide}}
 (defonce const
-  {:seed             42
-   :escrow-amount    1000
-   :escrow-token     "USDC"
-   :resolver-bond-bps-default 1000
-   :resolver-bond-bps-breakeven 21000
-   :batch-config
-   {:escrow-distribution {:type :fixed :value 10000}
-    :oracle-fixture      {:mode :stochastic}
-    :parallelism         :auto}
-   :sweep-detection-probs [0.0 0.05 0.10 0.25 0.50]})
+  (io-params/load-edn "notebooks/appeal_config.edn"))
 
 ^{::clerk/visibility {:code :hide :result :hide}}
 (defn- run-batch
   [n-trials strategy-mix & [extra-opts]]
   (let [c const
-        base (merge (:batch-config c) {:n-trials n-trials :min-trials 10
-                                       :strategy-mix strategy-mix
-                                       :slashing-detection-probability 0.25})]
+        bc (:batch-config c)
+        base (merge bc {:n-trials n-trials
+                        :min-trials (:min-trials bc)
+                        :strategy-mix strategy-mix
+                        :slashing-detection-probability (:detection-prob-default bc)})]
     (delay (batch/run-batch (rng/make-rng (:seed c)) n-trials
                             (merge base extra-opts)))))
 
@@ -48,9 +43,11 @@
 (defn- run-batch-with-seed
   [seed n-trials strategy-mix & [extra-opts]]
   (let [c const
-        base (merge (:batch-config c) {:n-trials n-trials :min-trials 10
-                                       :strategy-mix strategy-mix
-                                       :slashing-detection-probability 0.25})]
+        bc (:batch-config c)
+        base (merge bc {:n-trials n-trials
+                        :min-trials (:min-trials bc)
+                        :strategy-mix strategy-mix
+                        :slashing-detection-probability (:detection-prob-default bc)})]
     (delay (batch/run-batch (rng/make-rng seed) n-trials
                             (merge base extra-opts)))))
 
@@ -363,12 +360,12 @@
 
 ^{::clerk/visibility {:code :hide :result :hide}}
 (defonce sweep-default
-  (delay (sweep-at-bond "Default bond (10%)" (:resolver-bond-bps-default const)
+  (delay (sweep-at-bond "Default bond (10%)" (get-in const [:resolver-bonds :bps-default])
                         (:sweep-detection-probs const))))
 
 ^{::clerk/visibility {:code :hide :result :hide}}
 (defonce sweep-breakeven
-  (delay (sweep-at-bond "Breakeven bond (210%)" (:resolver-bond-bps-breakeven const)
+  (delay (sweep-at-bond "Breakeven bond (210%)" (get-in const [:resolver-bonds :bps-breakeven])
                         (:sweep-detection-probs const))))
 
 ^{::clerk/visibility {:code :fold :result :show}

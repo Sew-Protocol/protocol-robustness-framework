@@ -2,7 +2,15 @@
 
 ## [Unreleased]
 
+### Changed (2026-07-07)
+
+- **Hardcodings extracted to notebook-local config file:** Created `notebooks/appeal_config.edn` as shared parameter-band source. Refactored `appeal_analysis.clj` (all economic bands, stochastic assumptions, full-appeal params) and `not_governance.clj` (batch config, bond params, sweep probs) to read from the config instead of inline values. (`notebooks/appeal_config.edn`, `notebooks/appeal_analysis.clj`, `notebooks/not_governance.clj`)
+
 ### Fixed (2026-07-07)
+
+- **High (Bug 1): Cross-type slash collision — `active-manual-fraud-slash?` now scans all pending entries for workflow-id:** Manual fraud slashes (integer key `wf-id`) and reversal slashes (string key `"<wf-id>-reversal-<level>"`) share the same `:pending-fraud-slashes` map but use different key namespaces, allowing both to be pending simultaneously for the same workflow. Fixed by making `active-manual-fraud-slash?` scan all entries for any pending/appealed slash referencing the same workflow-id. Also added the same cross-check to `handle-reversal-slashing` idempotency guard. (`protocols_src/resolver_sim/protocols/sew/resolution.clj:413-430, 254-262`)
+
+- **Medium (Bug 2): `slash-status-consistent?` invariant doesn't validate `:appealed` or `:reversed-with-credit`:** Both status values fell through to `true` (no validation). Added explicit rules: `:appealed` requires `proposed-at > 0` and `appeal-deadline > proposed-at` (same as `:pending`); `:reversed-with-credit` requires `proposed-at > 0` (same as `:executed`/`:reversed`). Unknown statuses now return `false` (violation). (`protocols_src/resolver_sim/protocols/sew/invariants.clj:483-510`)
 
 - **`cancel-disputed-escrow-now` now self-contained with `cleanup-orphaned-slashes`:** Moved `cleanup-orphaned-slashes` from `resolution.clj` to `lifecycle.clj` as a public function. Added the call inside `cancel-disputed-escrow-now` so orphaned Track 2 reversal slashes are cleaned up regardless of caller, not only when invoked through `automate-timed-actions`. Removed redundant `(update :dispute-timestamps dissoc workflow-id)` since `finalize` already does this. (`protocols_src/resolver_sim/protocols/sew/lifecycle.clj:612-626, 676-679`, `protocols_src/resolver_sim/protocols/sew/resolution.clj`)
 
@@ -27,6 +35,10 @@
 - **Legacy 3-arg `add-held`/`sub-held` calls in tests:** Updated `add-held-rejects-invalid-inputs` and `sub-held-rejects-underflow-and-invalid-inputs` to pass required 4th opts argument. Removed dead `held-adjustments-complete-rejects-legacy-uses` test that asserted against a violation type (`:held-adjustments-legacy-uses-present`) never produced by the invariant. (`protocols_src/test/resolver_sim/protocols/sew/accounting_test.clj`)
 
 ### Added (2026-07-07)
+
+- **Minimal research-grade held custody artifact for `add-held`/`sub-held`:** Every canonical held adjustment now emits a derived, content-addressed `:held-custody-adjustment` artifact stored under `:held-artifacts` and keyed by `:held-adjustment/id`. The artifact is explicitly non-authoritative and exposes stable fields for later closed-form game-theoretic and custody-accounting validation without changing ledger semantics. Added focused accounting coverage for artifact emission and ledger/artifact id parity. (`protocols_src/resolver_sim/protocols/sew/accounting.clj`, `protocols_src/test/resolver_sim/protocols/sew/accounting_test.clj`)
+
+- **First-class partial-fill decision artifacts for yield shortfalls:** Partial-fill withdrawals now persist a content-addressed `:yield/partial-fill-decision` artifact in world state under `:yield/partial-fill-decisions`, and the same artifact is surfaced through yield evidence snapshots for direct downstream consumption. The liquid-lending withdraw path now attaches the artifact exactly where the settlement decision is computed and includes it in withdraw evidence inputs. Added focused integration coverage for shortfall emission, full-withdraw absence, and replay snapshot visibility. (`src/resolver_sim/yield/partial_fill.clj`, `src/resolver_sim/yield/modules/liquid_lending.clj`, `src/resolver_sim/yield/evidence.clj`, `test/resolver_sim/yield/liquid_lending_v2_test.clj`, `test/resolver_sim/protocols/yield_test.clj`)
 
 - **Appeal analysis notebook:** Created `notebooks/appeal_analysis.clj` — comprehensive Clerk notebook covering appeal subsystem lifecycle, bond custody, economics, scenarios, invariants, boundary testing, Kleros/escalation analysis, governance paths, and a grant-facing summary section. Reuses existing appeal utilities from `resolver-sim.protocols.sew.*` and research analytics. Registered in `data/notebooks.edn`. (`notebooks/appeal_analysis.clj`, `data/notebooks.edn`)
 

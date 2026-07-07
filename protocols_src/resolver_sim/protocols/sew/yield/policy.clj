@@ -56,6 +56,7 @@
                                          :reason :yield-distributed
                                          :extra {:held/action "apply-yield-policy"
                                                  :held/workflow-id escrow-id
+                                                 :owner/address (:to et)
                                                  :held/settlement-outcome settlement-outcome
                                                  :held/yield-preset preset}})
                         ;; Capture any remaining yield (not allocated to participants) as additional protocol fees

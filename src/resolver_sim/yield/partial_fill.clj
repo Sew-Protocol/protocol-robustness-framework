@@ -15,10 +15,12 @@
       :rounding-policy :floor-and-carry}"
   (:require [resolver-sim.evidence.config :as evcfg]
             [resolver-sim.economics.payoffs :as payoffs]
+            [resolver-sim.hash.canonical :as hc]
             [resolver-sim.yield.exact-math :as m]
             [resolver-sim.yield.position :as pos]
             [resolver-sim.yield.token :as tok]
             [resolver-sim.util.attribution :as attr]
+            [resolver-sim.util.evidence :as util-evidence]
             [resolver-sim.io.event-evidence :as evidence]))
 
 (def ^:private schema-version (evcfg/schema :partial-fill-decision))
@@ -494,6 +496,157 @@
   [decision]
   (= :partial-fill (:settlement-mode decision)))
 
+(defn decision-artifact
+  "Build a stable first-class artifact for a partial-fill settlement decision.
+   The artifact is content-addressed so downstream consumers can link the same
+   decision across world state, snapshots, and evidence."
+  ([position decision]
+   (decision-artifact position decision {}))
+  ([position decision {:keys [decision-source]
+                       :or {decision-source :yield-withdraw}}]
+   (let [owner-id (or (:owner/id position) (-> (pos/position-identity position) second))
+         token (normalize-token (or (:token position) (get-in position [:position/id 3])))
+         base {:schema-version schema-version
+               :artifact/kind :yield/partial-fill-decision
+               :decision/source decision-source
+               :position/id owner-id
+               :module/id (:module/id position)
+               :token token
+               :settlement-mode (:settlement-mode decision)
+               :requested (:requested decision)
+               :filled (:filled decision)
+               :deferred (:deferred decision)
+               :haircut (:haircut decision)
+               :unrealized (:unrealized decision)
+               :policy (:policy decision)
+               :evidence (:evidence decision)}
+         decision-hash (str "sha256:"
+                            (hc/hash-with-intent {:hash/intent :evidence-record}
+                                                 base))]
+     (assoc base
+            :decision/id (str "partial-fill-" (subs decision-hash 7 (min (count decision-hash) 23)))
+            :decision/hash decision-hash))))
+
+(defn attach-decision-artifact
+  "Attach a partial-fill decision artifact to world state under a stable map."
+  [world artifact]
+  (assoc-in world [:yield/partial-fill-decisions (:decision/id artifact)] artifact))
+
+(defn- sum-long-values
+  [m]
+  (reduce + 0 (map long (vals (or m {})))))
+
+(defn- positive-requested-claims
+  [decision]
+  (->> (:requested decision)
+       (filter (fn [[_ v]] (pos? (long v))))
+       (into {})))
+
+(defn- check-result
+  [check-id status details]
+  {:check/id check-id
+   :status status
+   :details details})
+
+(defn partial-fill-closed-form-checks
+  "Research-grade closed-form criteria for a partial-fill decision.
+
+   Checks:
+   - :partial-fill/conservation
+   - :partial-fill/capacity-bound
+   - :partial-fill/per-claim-bound
+   - :partial-fill/pro-rata-cross-product
+   - :partial-fill/rounding-residual-bounded
+
+   These checks operate on the structured decision returned by
+   calculate-fulfillment*. They intentionally stay local to the decision
+   map and do not infer broader replay semantics."
+  [decision]
+  (let [requested (:requested decision)
+        filled (:filled decision)
+        deferred (:deferred decision)
+        haircut (:haircut decision)
+        policy (:policy decision)
+        mode (:mode policy)
+        available (long (get-in decision [:evidence :available-liquidity] 0))
+        total-requested (sum-long-values requested)
+        total-filled (sum-long-values filled)
+        total-deferred (sum-long-values deferred)
+        total-haircut (sum-long-values haircut)
+        positive-claims (positive-requested-claims decision)
+        eligible-claim-count (count positive-claims)
+        residual (- available total-filled)
+        conservation-ok? (= total-requested (+ total-filled total-deferred total-haircut))
+        capacity-ok? (<= total-filled available)
+        per-claim-violations
+        (->> positive-claims
+             (keep (fn [[k claim]]
+                     (let [f (long (get filled k 0))]
+                       (when (> f (long claim))
+                         {:claim k :claim-amount (long claim) :filled f}))))
+             vec)
+        pro-rata-pairs
+        (when (= :pro-rata mode)
+          (->> positive-claims
+               keys
+               sort
+               vec))
+        pro-rata-violations
+        (if (= :pro-rata mode)
+          (->> (for [i (range (count pro-rata-pairs))
+                     j (range (inc i) (count pro-rata-pairs))]
+                 (let [ki (nth pro-rata-pairs i)
+                       kj (nth pro-rata-pairs j)
+                       claim-i (long (get positive-claims ki 0))
+                       claim-j (long (get positive-claims kj 0))
+                       filled-i (long (get filled ki 0))
+                       filled-j (long (get filled kj 0))]
+                   (when (and (pos? claim-i)
+                              (pos? claim-j)
+                              (not= (* filled-i claim-j)
+                                    (* filled-j claim-i)))
+                     {:left ki
+                      :right kj
+                      :left-cross (* filled-i claim-j)
+                      :right-cross (* filled-j claim-i)})))
+               (remove nil?)
+               vec)
+          [])
+        residual-ok? (and (<= 0 residual)
+                          (< residual (max 1 eligible-claim-count)))]
+    (let [conservation-ch (future
+                            (check-result :partial-fill/conservation
+                                          (if conservation-ok? :pass :fail)
+                                          {:total-requested total-requested
+                                           :total-filled total-filled
+                                           :total-deferred total-deferred
+                                           :total-haircut total-haircut}))
+          capacity-ch (future
+                        (check-result :partial-fill/capacity-bound
+                                      (if capacity-ok? :pass :fail)
+                                      {:available-liquidity available
+                                       :total-filled total-filled}))
+          per-claim-ch (future
+                         (check-result :partial-fill/per-claim-bound
+                                       (if (empty? per-claim-violations) :pass :fail)
+                                       {:violations per-claim-violations}))
+          cross-product-ch (future
+                             (if (= :pro-rata mode)
+                               (check-result :partial-fill/pro-rata-cross-product
+                                             (if (empty? pro-rata-violations) :pass :fail)
+                                             {:violations pro-rata-violations})
+                               (check-result :partial-fill/pro-rata-cross-product
+                                             :not-applicable
+                                             {:mode mode})))
+          residual-ch (future
+                        (check-result :partial-fill/rounding-residual-bounded
+                                      (if residual-ok? :pass :fail)
+                                      {:available-liquidity available
+                                       :total-filled total-filled
+                                       :residual residual
+                                       :eligible-claim-count eligible-claim-count}))]
+      (mapv deref [conservation-ch capacity-ch per-claim-ch cross-product-ch residual-ch]))))
+
 (defn post-partial-fill-position
   "Update a position after a partial-fill settlement decision has been applied.
 
@@ -583,12 +736,50 @@
              :settlement/position-id (:owner/id position)}]
     (attr/with-attribution ctx
       (let [world' (apply-partial-fill world position decision)]
-        (evidence/capture-event-evidence!
-         :settlement-fill
-         {:settlement/before (select-keys world [:total-held :yield/positions])}
-         {:settlement/after (select-keys world' [:total-held :yield/positions])}
-         {:settlement/decision decision}
-         nil
-         {:world-before world
-          :world-after world'})
-        world'))))
+         (evidence/capture-event-evidence!
+          :settlement-fill
+          {:settlement/before (select-keys world [:total-held :yield/positions])}
+          {:settlement/after (select-keys world' [:total-held :yield/positions])}
+          {:settlement/decision decision}
+          nil
+          {:world-before world
+           :world-after world'})
+         world'))))
+
+(defn batch-partial-fill
+  "Process multiple partial-fill settlements in parallel compute, serial apply.
+
+   Args:
+     world   — current world state
+     inputs  — collection of
+               {:available-liquidity <long>
+                :position            <position map>
+                :policy              <optional policy>
+                :opts                <optional opts>}
+
+   Returns updated world after all settlements applied.
+
+   Parallel pattern:
+   1. snapshot world
+   2. parallel pure compute — calculate-fulfillment per input
+   3. collect deterministic ordered decisions
+   4. serial apply — apply-partial-fill-with-attribution per decision
+   5. serial evidence capture (inside apply step)"
+  [world inputs]
+  (let [inputs (vec inputs)
+        ;; 1: snapshot world (implicit — world is captured by closure)
+        ;; 2: parallel pure compute — each fulfillment is independent
+        decisions (util-evidence/contextual-pmap
+                   (fn [{:keys [available-liquidity position policy opts]}]
+                     (let [policy' (if (some? policy)
+                                    (merge default-partial-fill-policy policy)
+                                    default-partial-fill-policy)]
+                       (calculate-fulfillment available-liquidity position policy' opts)))
+                   inputs)
+        ;; 3-4: collect deterministic ordered, serial apply to world
+        pairs (map vector inputs decisions)]
+    (reduce (fn [w [input decision]]
+              (apply-partial-fill-with-attribution
+               w (:position input) decision))
+            world
+            pairs)))

@@ -72,7 +72,7 @@
 
 (defn- fixture-ref? [x]
   (and (keyword? x) (namespace x)
-       (contains? #{"protocol" "states" "actors" "authority" "tokens" "thresholds" "suites" "traces"} (namespace x))))
+       (contains? io-fix/allowed-fixture-namespaces (namespace x))))
 
 (defn compose-suite
   ([x] (compose-suite x #{}))
@@ -94,7 +94,7 @@
                                                  "threshold" "actor" "token" "minimize"} ns-str)))
                       (throw (ex-info "Unrecognized fixture namespace keyword"
                                       {:key k :namespace ns-str})))
-                    (assoc m k (if (contains? #{:suite/id :protocol/id :state/id :authority/id :threshold/id :actor/id :token/id} k)
+                    (assoc m k (if (contains? #{:suite/id :protocol/id :state/id :authority/id :threshold/id :actor/id :token/id :protocol-params-ref} k)
                                  v
                                  (compose-suite v seen)))))
                 {} x)
@@ -244,15 +244,18 @@
          traces (mapv (fn [entry]
                         (if (and (map? entry) (contains? entry :trace))
                           (let [trace-ref (:trace entry)
-                                trace (if (fixture-ref? trace-ref)
-                                        (compose-suite trace-ref)
-                                        trace-ref)]
+                                trace (-> (if (fixture-ref? trace-ref)
+                                            (compose-suite trace-ref)
+                                            trace-ref)
+                                          io-fix/resolve-protocol-params-ref)]
                             {:trace trace
                              :expected-outcome (:expected-outcome entry)
                              :expected-halt-reason (:expected-halt-reason entry)})
-                          {:trace (if (fixture-ref? entry)
-                                    (compose-suite entry)
-                                    entry)}))
+                          (let [trace (-> (if (fixture-ref? entry)
+                                            (compose-suite entry)
+                                            entry)
+                                          io-fix/resolve-protocol-params-ref)]
+                            {:trace trace})))
                       trace-entries)
          thresholds (:thresholds suite {})
          proto (:protocol suite)

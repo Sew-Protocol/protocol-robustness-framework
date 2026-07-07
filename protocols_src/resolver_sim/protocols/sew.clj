@@ -1007,6 +1007,9 @@
       :claimable           (:claimable world {})
       :claimable-v2        (:claimable-v2 world {})
       :bond-balances       (:bond-balances world {})
+      :held-adjustments    (:held-adjustments world [])
+      :held-artifacts      (:held-artifacts world {})
+      :held-ledger/index   (:held-ledger/index world {})
       :yield-evidence      (yield-evi/get-evidence world)})))
 
 (def ^:private sew-state-error-codes
