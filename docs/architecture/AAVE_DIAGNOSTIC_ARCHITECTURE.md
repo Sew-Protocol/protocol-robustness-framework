@@ -42,6 +42,10 @@ is backed by indexed evidence.
 7. **"Would this survive a governance pause, an oracle shock, or a cap
    breach?"** — Risk-override and scenario-variant tests exercise those
    conditions.
+8. **"What happens when the normal resolution path is unavailable?"** —
+   Resolver overflow and force-authorisation provide replayable, auditable
+   liveness recovery with cryptographic scope-hash binding and governance
+   provenance.
 
 ---
 
@@ -258,6 +262,7 @@ to live Aave markets, forked state, or onchain data feeds.
 | Partner-safe integration | Simulation-only; no live data connection. Fork-replay and live-snapshot paths are framework-ready but not wired |
 | Extensible scenario library | New scenarios (borrow, liquidation, Umbrella-style deficit) can be added as JSON/EDN without engine changes |
 | Clear gaps documented | Borrow/debt/liquidation/health-factor/Umbrella coverage documented as planned, not claimed |
+| Liveness / exceptional recovery | Resolver overflow and force-authorisation mechanisms with full evidence trail, scope-hash binding, and governance provenance |
 
 ---
 
@@ -271,3 +276,4 @@ to live Aave markets, forked state, or onchain data feeds.
 - `docs/architecture/EVIDENCE_CHAIN_ARCHITECTURE.md` — evidence chain linking
 - `docs/architecture/FORENSIC_EVIDENCE.md` — forensic evidence specifications
 - `docs/architecture/ARCHITECTURE.md` — system-wide architecture
+- `docs/architecture/RESOLVER_OVERFLOW_AND_FORCE_AUTHORISATION.md` — resolver overflow and force-authorisation liveness mechanisms

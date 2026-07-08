@@ -47,7 +47,6 @@
 
 (def ^:private default-benchmark-manifest
   "resource:benchmarks/packs/sew/escrow-dispute-v1.edn")
-(def ^:private legacy-registry-path "BENCHMARKS.edn")
 
 (defn- load-index
   "Read benchmarks/registry.edn, walk the pack hierarchy, and return
@@ -64,7 +63,7 @@
                                      (rp/pack-registry-path (:pack/registry pack))))
              (:packs registry))}
     (do (println "benchmarks/registry.edn not found, falling back to BENCHMARKS.edn")
-        (when-let [legacy (try (rp/edn-read legacy-registry-path)
+        (when-let [legacy (try (rp/edn-read "BENCHMARKS.edn")
                                (catch Exception _ nil))]
           {:benchmarks legacy}))))
 
@@ -363,7 +362,7 @@
       (if errors
         (do (run! println errors) (System/exit 1))
         (case subcmd
-          "run-and-report"         (dispatch-run-and-report arguments options)
+          "run-benchmark"          (dispatch-run-and-report arguments options)
           "validate"               (dispatch-validate arguments options)
           "validate-game-theory"   (dispatch-game-theory arguments options)
           "game-theoretic-validation" (dispatch-game-theory arguments options)
@@ -386,7 +385,7 @@
         (println "Usage: java -jar prf-benchmark.jar <subcommand> [options]")
         (println)
         (println "Subcommands:")
-        (println "  run-and-report <benchmark-id>    Run a benchmark (default)")
+        (println "  run-benchmark <benchmark-id>    Run a benchmark (default)")
         (println "  validate [resources]             Run static validation checks")
         (println "  validate-game-theory [options]   Run equilibrium or strategic validation")
         (println "  game-theoretic-validation        Alias for validate-game-theory")

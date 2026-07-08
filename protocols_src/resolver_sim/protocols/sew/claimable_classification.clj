@@ -526,13 +526,6 @@
   (reduce + 0
           (map :total_claimable (vals (aggregate-class-observations [world])))))
 
-(defn- legacy-claimable-total
-  "Sum of legacy `:claimable` map (terminal accounting; may persist after v2 cleared)."
-  [worlds]
-  (reduce + 0
-          (map #(get-in (proj/funds-ledger-view %) [:global :claimable-total] 0)
-               worlds)))
-
 (defn- classified-claimable-total
   [worlds]
   (reduce + 0 (map total-claimable-all-classes worlds)))
@@ -542,7 +535,7 @@
   [worlds]
   (when (seq worlds)
     (let [views              (map proj/funds-ledger-view worlds)
-          legacy-total       (legacy-claimable-total worlds)
+          legacy-total       (reduce + 0 (map #(get-in (proj/funds-ledger-view %) [:global :claimable-total] 0) worlds))
           classified-total   (classified-claimable-total worlds)]
       {:aggregation "sum-across-terminal-worlds"
        :terminal_world_count (count worlds)
@@ -670,7 +663,7 @@
 (defn- base-observations
   "Shared observation keys that appear in every output regardless of context."
   [worlds contexts scenarios-passed aggregation aggregation-note]
-  (let [legacy-total     (legacy-claimable-total worlds)
+  (let [legacy-total     (reduce + 0 (map #(get-in (proj/funds-ledger-view %) [:global :claimable-total] 0) worlds))
         classified-total (classified-claimable-total worlds)
         single-scenario? (= "single-terminal-world" aggregation)
         all-classes      (aggregate-class-observations worlds)]

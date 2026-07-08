@@ -700,6 +700,21 @@
                                      (default-report-opts
                                       (assoc opts :title title))))))
 
+(defn- extract-protocol-state
+  "Extract protocol state hashing data from summary results.
+   Merges :force-authorisations and :force-authorisations/consumed from
+   the final world of each scenario result. Returns a map suitable for
+   merging into the run-result for build-bundle-root, or nil when empty."
+  [summary]
+  (let [results (:results summary)
+        worlds (keep (comp :world :replay-result) results)]
+    (when (seq worlds)
+      (let [fa (into {} (map :force-authorisations) worlds)
+            fa-consumed (into {} (map :force-authorisations/consumed) worlds)]
+        (cond-> {}
+          (seq fa) (assoc :protocol/force-authorisations fa)
+          (seq fa-consumed) (assoc :protocol/force-authorisations-consumed fa-consumed))))))
+
 (defn- execute-dispatch!
   "Run the appropriate scenario/suite/fixture and return {:exit-code :dispatch-key
    :run-request :run-result :bundle-root}."
@@ -715,6 +730,8 @@
                             :output/profile (:output-profile opts)}
                            (:scenario-run/request summary))
         run-result (summary->run-result dispatch run-request summary)
+        proto-state (extract-protocol-state summary)
+        run-result (if proto-state (merge run-result proto-state) run-result)
         exit-code (if (= :pass (:status run-result)) 0 1)
         bundle-root (br/build-bundle-root run-request run-result)]
     {:exit-code exit-code

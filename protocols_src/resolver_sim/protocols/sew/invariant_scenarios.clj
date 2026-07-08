@@ -145,6 +145,10 @@
     ["S107 reversal-track2-appeal-rejected-executes"    reversal/s107]
     ["S108 senior-coverage-consumed-by-slash"           adversarial/s108]
     ["S109 senior-coverage-exhausted-by-slash"          adversarial/s109]
+    ["S110 multi-junior-coverage"                        adversarial/s110]
+    ["S111 gradual-coverage-exhaustion"                  adversarial/s111]
+    ["S112 coverage-exceeded-error"                      adversarial/s112]
+    ["S113 insurance-bps-override"                       adversarial/s113]
     ["S43k dr3-kleros-reversal-slash"                    reversal/s43-kleros-reversal-slash]
    ["S66  cooldown-boundary-reorg"                      adversarial/s66]
    ["S67  reentrancy-callback"                          adversarial/s67]
@@ -309,6 +313,26 @@
    {:scenario/type :stress
     :adversary/type :coverage-economics
     :adversary/traits #{:senior-bond :coverage-exhaustion}}
+
+   "s110-multi-junior-coverage"
+   {:scenario/type :stress
+    :adversary/type :coverage-economics
+    :adversary/traits #{:senior-bond :multi-junior-coverage}}
+
+   "s111-gradual-coverage-exhaustion"
+   {:scenario/type :stress
+    :adversary/type :coverage-economics
+    :adversary/traits #{:senior-bond :gradual-exhaustion}}
+
+   "s112-coverage-exceeded-error"
+   {:scenario/type :stress
+    :adversary/type :coverage-economics
+    :adversary/traits #{:senior-bond :coverage-exceeded-error}}
+
+   "s113-insurance-bps-override"
+   {:scenario/type :stress
+    :adversary/type :coverage-economics
+    :adversary/traits #{:insurance-bps-override}}
 
    "s43-auth-rejected-then-authorized-recovery"
    {:scenario/type :edge-case

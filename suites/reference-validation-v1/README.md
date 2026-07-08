@@ -23,4 +23,3 @@ clojure -M:reference-validation --refresh-expected   # refresh pinned hashes aft
 ./scripts/test.sh reference-validation
 ```
 
-Draft scenarios under `draft/expected/` are not part of the CI gate.

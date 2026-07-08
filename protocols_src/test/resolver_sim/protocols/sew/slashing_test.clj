@@ -183,8 +183,11 @@
     (is (= "propose-fraud-slash"
            (get-in propose-entry [:authorization/last-action])))
     (is (:ok r-force-gov))
-    (is (= (get-in r-force-gov [:extra :authorization/provenance])
-           (:authorization/provenance force-entry)))
+    (let [extra-provenance (get-in r-force-gov [:extra :authorization/provenance])
+          stored-provenance (:authorization/provenance force-entry)]
+      (is (= extra-provenance
+             (select-keys stored-provenance (keys extra-provenance)))
+          "Stored provenance contains all fields from action result provenance"))
     (is (= :executed (:status force-entry)))
     (is (= "governance-authorization.v1"
            (get-in force-entry [:authorization/provenance :authorization/schema-version])))

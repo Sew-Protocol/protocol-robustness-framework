@@ -16,6 +16,7 @@
      - Escalation is modelled with Priority-3 authority (no custom-resolver):
        et.dispute-resolver tracks the current-round resolver through escalations."
   (:require [resolver-sim.time.model :as tm]
+            [resolver-sim.time.context :as time-ctx]
             [resolver-sim.protocols.sew.snapshot  :as snap]
             [resolver-sim.protocols.sew.types      :as t]
             [resolver-sim.protocols.sew.lifecycle  :as lc]
@@ -41,10 +42,10 @@
      :appeal-bond-protocol-fee-bps — protocol cut of appeal bond (default 0)"
   [{:keys [resolver-fee-bps appeal-window-duration max-dispute-duration
            appeal-bond-protocol-fee-bps]
-    :or   {resolver-fee-bps             50
-           appeal-window-duration       0
-           max-dispute-duration         2592000
-           appeal-bond-protocol-fee-bps 0}}]
+   :or   {resolver-fee-bps             50
+            appeal-window-duration       0
+            max-dispute-duration         (* 30 time-ctx/seconds-per-day)
+            appeal-bond-protocol-fee-bps 0}}]
   (snap/make-escrow-snapshot
    {:escrow-fee-bps               resolver-fee-bps
     :appeal-window-duration       appeal-window-duration
@@ -64,120 +65,7 @@
 ;; Internal: single-trial lifecycle with multi-round escalation
 ;; ---------------------------------------------------------------------------
 
-(defn- run-lifecycle
-  "Drive one escrow trial through the contract model with optional escalation.
-
-   @deprecated Use run-lifecycle-monadic instead.  The monadic path threads
-   AttributedState through protocol transitions and produces artifact-grade
-   evidence records.  Legacy path retained for emergency rollback only —
-   will be removed after soak period.
-
-   Uses Priority-3 authority (no custom-resolver): et.dispute-resolver is set
-   directly on the escrow transfer and tracks through escalation rounds.
-
-   Parameters:
-     rng-fn                   — (fn [] → [0,1)) for probabilistic decisions
-     escrow-amount            — gross wei
-     from / to / resolver-addr / token — participant addresses
-     snap                     — ModuleSnapshot
-     appeal-bond-bps          — bond expressed as bps of amount-after-fee
-     strategy                 — :honest | :lazy | :malicious | :collusive
-     escalation-prob-correct  — probability party escalates a correct verdict
-     escalation-prob-wrong    — probability party escalates a wrong verdict
-     detection-prob           — probability malicious act is detected
-
-   Returns a map with the same shape as dispute/resolve-dispute plus :cm/* extras."
-  [rng-fn escrow-amount from to resolver-addr token snap appeal-bond-bps strategy
-   escalation-prob-correct escalation-prob-wrong detection-prob]
-  (let [;; Step 1: Create escrow WITHOUT custom-resolver (use Priority-3 path)
-        settings  (t/make-escrow-settings {})
-        w0        (t/empty-world 1000)
-        cr        (lc/create-escrow w0 from token to escrow-amount settings snap)]
-    (when-not (:ok cr) (throw (ex-info "create-escrow failed" cr)))
-    (let [wf-id     0
-          ;; Attach the initial resolver via Priority-3 (et.dispute-resolver)
-          w1        (assoc-in (:world cr) [:escrow-transfers wf-id :dispute-resolver] resolver-addr)
-          tk        (keyword token)
-          fee       (get-in w1 [:total-fees tk] 0)
-          afa       (get-in w1 [:escrow-transfers wf-id :amount-after-fee] 0)
-          resolvers (resolver-chain resolver-addr)
-
-          ;; Step 2: Dispute is always raised in adversarial trials
-          dr    (lc/raise-dispute w1 wf-id from)
-          _     (when-not (:ok dr) (throw (ex-info "raise-dispute failed" dr)))
-          w2    (:world dr)
-
-          ;; Step 3-N: Resolution loop with possible multi-round escalation.
-          {w-final          :world-after
-           verdict-correct? :verdict-correct?
-           escalated?       :escalated?
-           escalation-level :escalation-level}
-          (loop [w     w2
-                 level 0]
-            (let [current-resolver (get-in w [:escrow-transfers wf-id :dispute-resolver])
-                  verdict-correct? (case strategy
-                                     :honest    true
-                                     :lazy      (< (rng-fn) 0.5)
-                                     :malicious (< (rng-fn) 0.3)
-                                     :collusive (< (rng-fn) 0.8))
-                  is-release verdict-correct?
-                  rr           (res/execute-resolution w wf-id current-resolver is-release "0xhash" nil)
-                  w-resolved   (if (:ok rr) (:world rr) w)
-                  has-pending? (and (:ok rr) (:exists (t/get-pending w-resolved wf-id)))
-                  esc-prob    (if verdict-correct? escalation-prob-correct escalation-prob-wrong)
-                  escalate?   (and has-pending? (< (rng-fn) esc-prob))]
-              (if escalate?
-                (let [next-resolver (get resolvers (inc level) "0xKleros")
-                      er            (res/escalate-dispute w-resolved wf-id from
-                                                          (fn [_ _ _ _]
-                                                            {:ok true :new-resolver next-resolver}))]
-                  (if (:ok er)
-                    (recur (:world er) (inc level))
-                    (let [w-fin (if has-pending?
-                                  (let [dl  (:appeal-deadline (t/get-pending w-resolved wf-id))
-                                        w-t (tm/advance w-resolved {:seconds (+ dl 1)})
-                                        er2 (res/execute-pending-settlement w-t wf-id)]
-                                    (if (:ok er2) (:world er2) w-t))
-                                  w-resolved)]
-                      {:world-after      w-fin
-                       :verdict-correct? verdict-correct?
-                       :escalated?       (> level 0)
-                       :escalation-level level})))
-                (let [w-fin (if has-pending?
-                              (let [dl  (:appeal-deadline (t/get-pending w-resolved wf-id))
-                                    w-t (tm/advance w-resolved {:seconds (+ dl 1)})
-                                    er  (res/execute-pending-settlement w-t wf-id)]
-                                (if (:ok er) (:world er) w-t))
-                              w-resolved)]
-                  {:world-after      w-fin
-                   :verdict-correct? verdict-correct?
-                   :escalated?       (> level 0)
-                   :escalation-level level}))))
-
-          detected?     (and (not verdict-correct?) (< (rng-fn) detection-prob))
-          bond-amt      (long (/ (* afa appeal-bond-bps) 10000))
-          profit-honest (long fee)
-          profit-malice (if detected? (long (- fee bond-amt)) (long fee))
-          final-state  (t/escrow-state w-final wf-id)
-          inv-result   (inv/check-all w-final)]
-      {:dispute-correct?      verdict-correct?
-       :appeal-triggered?     escalated?
-       :escalated?            escalated?
-       :escalation-level      escalation-level
-       :slashed?              detected?
-       :frozen?               detected?
-       :escaped?              false
-       :slashing-pending?     false
-       :slashing-delay-weeks  0
-       :slashing-reason       (when detected? :fraud)
-       :profit-honest         profit-honest
-       :profit-malice         profit-malice
-       :strategy              strategy
-       :cm/final-state        final-state
-       :cm/fee                fee
-       :cm/afa                afa
-       :cm/invariants-ok?     (:all-hold? inv-result)
-       :cm/inv-violations     (when-not (:all-hold? inv-result) (:results inv-result))})))
+;; run-lifecycle (deprecated) removed — only monadic path remains.
 ;; ---------------------------------------------------------------------------
 ;; Internal: resolution loop (shared logic, imperative, not monadic)
 ;; ---------------------------------------------------------------------------
@@ -343,9 +231,8 @@
    rng-fn — (fn [] → double in [0,1))"
   [rng-fn params]
   (let [snap    (make-trial-snapshot params)
-        strategy (get params :strategy :honest)
-        run-fn (if (get params :attributed? true) run-lifecycle-monadic run-lifecycle)]
-    (run-fn
+        strategy (get params :strategy :honest)]
+    (run-lifecycle-monadic
      rng-fn
      (get params :escrow-size 10000)
      "0xAlice"

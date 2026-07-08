@@ -13,4 +13,3 @@ Canonical CI set (8 scenarios). Source of truth: `../manifest.edn`.
 | appeal-failure-cascade-v1 | corrupt-verdict-must-survive-escalation | appeal-layer-breakdown | simulator-backed | yes (S20) | high |
 | yield-accrual-efficiency-v1 | yield-accrual-covers-protocol-fees | fee-drag-on-long-escrows | simulator-backed | yes (S88) | high |
 
-Draft / future scenarios (not gated in CI) live under `../draft/expected/`.

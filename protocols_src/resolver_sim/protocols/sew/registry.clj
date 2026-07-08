@@ -192,7 +192,7 @@
                                   (fnil - 0) from-coverage))
                      (update-in [:resolver-stakes resolver-addr] (fnil - 0) from-stake)
                      (acct/distribute-slashed-funds actual challenger bounty-bps workflow-id)
-                     (update-in [:resolver-slash-total resolver-addr] (fnil + 0) from-stake)
+                     (update-in [:resolver-slash-total resolver-addr] (fnil + 0) actual)
                        (cond-> sub-held?
                          (acct/sub-held token
                                         actual

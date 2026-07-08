@@ -254,7 +254,8 @@
                                :deferred-amount (if recoverable? deferred-total 0)
                                :haircut-amount (if recoverable? haircut-total
                                                    (+ deferred-total haircut-total))
-                               :as-of-index (:current-index pos-after-accrue)}))
+                               :as-of-index (:current-index pos-after-accrue)
+                               :started-at now}))
 
             ;; Step 5: Update position status.
             ;; When the withdrawal fully covers the obligation (no shortfall), realize
@@ -357,7 +358,8 @@
                            :deferred-amount (if recoverable? deferred-total 0)
                            :haircut-amount (if recoverable? haircut-total
                                                (+ deferred-total haircut-total))
-                           :as-of-index (:current-index pos)}))
+                           :as-of-index (:current-index pos)
+                           :started-at now}))
             realized-yield (if shortfall
                              (max 0
                                   (min (:unrealized-yield pos 0)

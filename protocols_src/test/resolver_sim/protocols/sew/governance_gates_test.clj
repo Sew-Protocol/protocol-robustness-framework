@@ -74,18 +74,18 @@
     (is (= :with-governance-actor
            (get-in record [:authorization/provenance :authorization/check])))))
 
-(deftest force-authorization-policy-rejects-non-allowlisted-action
+(deftest force-authorisation-policy-rejects-non-allowlisted-action
   (let [ctx {:governance-mode :restricted}
         event {:agent "gov" :action "set_paused"}
         thrown (try
-                 (sew/build-force-authorization-provenance
+                 (sew/build-force-authorisation-provenance
                   ctx event "0xGov"
                   {:reason :resolver-overcapacity
                    :capacity-context {:resolver "0xResolver"}})
                  nil
                  (catch clojure.lang.ExceptionInfo ex ex))]
     (is thrown)
-    (is (= :invalid-force-authorization
+    (is (= :invalid-force-authorisation
            (:type (ex-data thrown))))
     (is (= "set-paused"
            (:action (ex-data thrown))))))

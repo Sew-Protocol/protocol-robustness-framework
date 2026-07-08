@@ -13,6 +13,7 @@
   (:require [clojure.java.io :as io]
             [clojure.string :as str]
             [resolver-sim.io.scenario-runner :as sr]
+            [resolver-sim.io.scenarios :as sc]
             [resolver-sim.protocols.registry :as preg]
             [resolver-sim.protocols.sew.invariant-scenarios :as inv-sc]
             [resolver-sim.scenario.suites :as suites]))
@@ -30,8 +31,15 @@
   [protocol-id]
   ((set (preg/known-protocol-ids)) protocol-id))
 
+(defn- resolve-suite-paths
+  "Resolve :scenario-ids via sc/scenario-path, or return :paths as-is."
+  [{:keys [scenario-ids paths]}]
+  (if scenario-ids
+    (mapv sc/scenario-path scenario-ids)
+    paths))
+
 (defn- validate-suite-definition!
-  [suite-key {:keys [paths protocol-id kind] :as suite-def}]
+  [suite-key {:keys [scenario-ids paths protocol-id kind] :as suite-def}]
   (when-not (map? suite-def)
     (throw (ex-info "Malformed file-backed suite registry entry"
                     {:suite/key suite-key
@@ -44,23 +52,24 @@
                      :reason :unexpected-suite-kind
                      :expected :file-path-suite
                      :actual kind})))
-  (when-not (vector? paths)
-    (throw (ex-info "File-backed suite registry entry must provide :paths as a vector"
-                    {:suite/key suite-key
-                     :suite/definition suite-def
-                     :reason :suite-paths-not-a-vector
-                     :actual paths})))
-  (when-not (seq paths)
-    (throw (ex-info "File-backed suite registry entry must provide at least one path"
-                    {:suite/key suite-key
-                     :suite/definition suite-def
-                     :reason :suite-paths-empty})))
-  (when-not (every? string? paths)
-    (throw (ex-info "File-backed suite registry paths must all be strings"
-                    {:suite/key suite-key
-                     :suite/definition suite-def
-                     :reason :suite-path-not-a-string
-                     :paths paths})))
+  (let [effective-paths (or scenario-ids paths)]
+    (when-not (vector? effective-paths)
+      (throw (ex-info "File-backed suite registry entry must provide :scenario-ids or :paths as a vector"
+                      {:suite/key suite-key
+                       :suite/definition suite-def
+                       :reason :suite-paths-not-a-vector
+                       :actual effective-paths})))
+    (when-not (seq effective-paths)
+      (throw (ex-info "File-backed suite registry entry must provide at least one scenario-id or path"
+                      {:suite/key suite-key
+                       :suite/definition suite-def
+                       :reason :suite-paths-empty})))
+    (when-not (every? string? effective-paths)
+      (throw (ex-info "File-backed suite registry scenario-ids/paths must all be strings"
+                      {:suite/key suite-key
+                       :suite/definition suite-def
+                       :reason :suite-path-not-a-string
+                       :paths effective-paths}))))
   (when-not (string? protocol-id)
     (throw (ex-info "File-backed suite registry entry must provide :protocol-id as a string"
                     {:suite/key suite-key
@@ -146,11 +155,11 @@
   ([suite-registry]
    (let [suite-keys   (->> (keys suite-registry) sort vec)
          entries      (mapcat (fn [suite-key]
-                                (let [{:keys [paths protocol-id] :as suite-def}
-                                      (get suite-registry suite-key)]
+                                (let [suite-def (get suite-registry suite-key)
+                                      protocol-id (:protocol-id suite-def)]
                                   (validate-suite-definition! suite-key suite-def)
                                   (mapv #(validate-suite-scenario-entry! suite-key protocol-id %)
-                                        paths)))
+                                        (resolve-suite-paths suite-def))))
                               suite-keys)
          scenario-ids (mapv :scenario/id entries)
          duplicates   (duplicate-values scenario-ids)]

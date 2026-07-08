@@ -94,3 +94,12 @@ A future Foundry test can consume the committed JSON fixtures as follows:
 5. Optionally verify `canonical-input-hash`, `canonical-expected-output-hash`, and `full-vector-hash` using the same canonical JSON rules.
 
 The Clojure model is the reference model for parity tests, not a trusted runtime for production settlement.
+
+## Evidence artifacts
+
+See `docs/pro_rata_proportional_math_spec.md` Section 5 for the complete evidence
+stack: projection artifacts, allocation result artifacts, claim evaluation nodes,
+execution evidence nodes, and the artifact dependency graph. Test vectors are
+the committed, schema-versioned subset of this stack — they freeze the input,
+expected output, and invariants for Solidity parity testing without depending
+on the full replay pipeline.

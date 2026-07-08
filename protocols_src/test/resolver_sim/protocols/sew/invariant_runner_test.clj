@@ -6,7 +6,7 @@
             [resolver-sim.scenario.runner :as scenario-runner]))
 
 (deftest test-registry-size
-  (is (= 133 (count sc/all-scenarios))))
+  (is (= 137 (count sc/all-scenarios))))
 
 (deftest test-registry-validation-passes
   (is (true? (sc/validate-all-scenarios!))))

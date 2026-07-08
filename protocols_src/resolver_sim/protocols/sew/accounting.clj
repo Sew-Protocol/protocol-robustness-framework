@@ -12,6 +12,7 @@
    All arithmetic uses integer division (uint256 truncation semantics)."
   (:require [resolver-sim.protocols.sew.types :as t]
             [resolver-sim.protocols.sew.economics :as sew-econ]
+            [resolver-sim.protocols.sew.related-claims :as rc]
             [resolver-sim.util.attribution :as attr]
             [resolver-sim.evidence.capture :as cap]
             [resolver-sim.hash.canonical :as hash]))
@@ -95,7 +96,7 @@
   [scope-map]
   (hash/domain-hash force-authorisation-scope-domain scope-map))
 
-(defn- force-authorisation-expired?
+(defn- scope-hash-mismatch?
   "True when the scope hash in auth-provenance does not match the scope-map
    derived from the actual held adjustment fields.  Prevents scope drift between
    authorization and execution."
@@ -106,44 +107,113 @@
 
 (defn- ensure-force-authorisation-usable!
   "Guard: check authorization not consumed and scope hash matches.
-   Direction is already covered by the scope-hash (:held/direction
-   is part of the scope-map).
-   Throws on already-consumed or scope mismatch.
+   Supports two scope kinds:
+     :single-claim (default) — checks whole auth not consumed, scope hash matches.
+     :related-claims        — checks relationship active, member scope hash in
+                               authorized set, and member not yet consumed.
+   Throws on already-consumed, scope mismatch, or inactive relationship.
    Does NOT short-circuit for idempotent replay — that is handled at the
-   outer command layer (dispatch-action / force-authorized entry point)."
+   outer command layer (dispatch-action / force-authorised entry point)."
   [world auth-provenance scope-map]
-  (let [auth-id (:authorization/id auth-provenance)]
-    (when-let [consumed (get-in world [:force-authorisations/consumed auth-id])]
-      (throw (ex-info "force-authorisation already consumed"
-                      {:type :authorization/already-consumed
-                       :authorization/id auth-id
-                       :consumed consumed
-                       :attempt scope-map})))
-    (when (force-authorisation-expired? auth-provenance scope-map)
-      (throw (ex-info "force-authorisation scope mismatch"
-                      {:type :authorization/scope-mismatch
-                       :authorization/id auth-id
-                       :authorization/scope-hash (:authorization/scope-hash auth-provenance)
-                       :derived-scope-hash (force-authorisation-scope-hash scope-map)
-                       :scope-map scope-map})))))
+  (let [auth-id (:authorization/id auth-provenance)
+        scope-kind (:authorization/scope-kind auth-provenance :single-claim)]
+    (if (= :related-claims scope-kind)
+      ;; Related-claims: per-member consumption tracking
+      (let [rel-id (:relationship/id auth-provenance)
+            rel (when rel-id (rc/get-related-claims world rel-id))]
+        (when-not (and rel (rc/related-claims-active? world rel-id))
+          (throw (ex-info "related-claims relationship not active"
+                          {:type :authorization/relationship-inactive
+                           :authorization/id auth-id
+                           :relationship/id rel-id})))
+        (let [member-hash (force-authorisation-scope-hash scope-map)
+              member-hashes (:member-scope-hashes auth-provenance [])]
+          (when-not (contains? (set member-hashes) member-hash)
+            (throw (ex-info "force-authorisation member scope not in authorized set"
+                            {:type :authorization/member-scope-not-authorized
+                             :authorization/id auth-id
+                             :member-scope-hash member-hash
+                             :authorized member-hashes})))
+          (let [consumed (get-in world [:force-authorisations/consumed auth-id] {})
+                consumed-members (:consumed-members consumed #{})]
+            (when (contains? consumed-members member-hash)
+              (throw (ex-info "force-authorisation member scope already consumed"
+                              {:type :authorization/member-already-consumed
+                               :authorization/id auth-id
+                               :member-scope-hash member-hash}))))))
+      ;; Single-claim (default): check entire auth not consumed, scope hash matches
+      (do
+        (when-let [consumed (get-in world [:force-authorisations/consumed auth-id])]
+          (throw (ex-info "force-authorisation already consumed"
+                          {:type :authorization/already-consumed
+                           :authorization/id auth-id
+                           :consumed consumed
+                           :attempt scope-map})))
+        (when (scope-hash-mismatch? auth-provenance scope-map)
+          (throw (ex-info "force-authorisation scope mismatch"
+                          {:type :authorization/scope-mismatch
+                           :authorization/id auth-id
+                           :authorization/scope-hash (:authorization/scope-hash auth-provenance)
+                           :derived-scope-hash (force-authorisation-scope-hash scope-map)
+                           :scope-map scope-map})))))))
+
+(defn- member-scope-hash-from-adjustment
+  "Recompute the force-authorisation scope hash from a held adjustment.
+   Used for related-claims per-member consumption tracking."
+  [auth-provenance adjustment]
+  (force-authorisation-scope-hash
+   {:authorization/id (:authorization/id auth-provenance)
+    :authorization/type :force-authorisation
+    :held/direction (:held/direction adjustment)
+    :token (:token adjustment)
+    :amount (:amount adjustment)
+    :held/account (:held/account adjustment)
+    :owner/address (:owner/address adjustment)
+    :held/reason (:held/reason adjustment)
+    :held/workflow-id (:held/workflow-id adjustment)}))
 
 (defn- mark-force-authorisation-consumed
   [world auth-provenance adjustment]
-  (let [auth-id (:authorization/id auth-provenance)]
-    (assoc-in world [:force-authorisations/consumed auth-id]
-              (merge {:consumed? true
-                      :authorization/id auth-id
-                      :authorization/type (:authorization/type auth-provenance)
-                      :authorization/scope-hash (:authorization/scope-hash auth-provenance)
-                      :held-adjustment/id (:held-adjustment/id adjustment)
-                      :token (:token adjustment)
-                      :amount (:amount adjustment)
-                      :owner/address (:owner/address adjustment)
-                      :workflow-id (:held/workflow-id adjustment)
-                      :held/reason (:held/reason adjustment)
-                      :consumed/action (:held/action adjustment)}
-                     (when-let [d (:held/direction adjustment)]
-                       {:held/direction d})))))
+  (let [auth-id (:authorization/id auth-provenance)
+        scope-kind (:authorization/scope-kind auth-provenance :single-claim)
+        base {:consumed? true
+              :authorization/id auth-id
+              :authorization/type (:authorization/type auth-provenance)
+              :authorization/scope-hash (:authorization/scope-hash auth-provenance)
+              :held-adjustment/id (:held-adjustment/id adjustment)
+              :token (:token adjustment)
+              :amount (:amount adjustment)
+              :owner/address (:owner/address adjustment)
+              :workflow-id (:held/workflow-id adjustment)
+              :held/reason (:held/reason adjustment)
+              :consumed/action (:held/action adjustment)}]
+    (if (= :related-claims scope-kind)
+      ;; Per-member consumption: add member scope hash to consumed set
+      (let [member-hash (member-scope-hash-from-adjustment auth-provenance adjustment)]
+        (update-in world [:force-authorisations/consumed auth-id]
+                   (fn [existing]
+                      (let [existing (or existing
+                                         {:consumed? false
+                                          :authorization/id auth-id
+                                          :authorization/type :force-authorisation
+                                          :authorization/scope-hash (:authorization/scope-hash auth-provenance)
+                                          :authorization/scope-kind :related-claims
+                                          :relationship/id (:relationship/id auth-provenance)
+                                          :relationship/hash (:relationship/hash auth-provenance)
+                                          :member-scope-hashes (:member-scope-hashes auth-provenance [])
+                                          :consumed-members #{} :member-count 0})]
+                       (-> existing
+                           (assoc :consumed? true
+                                  :last-consumed-at (:held-adjustment/id adjustment))
+                           (update :consumed-members conj member-hash)
+                           (update :member-count inc)
+                           (assoc :last-consumed-adjustment-id (:held-adjustment/id adjustment)
+                                  :last-consumed-workflow-id (:held/workflow-id adjustment)))))))
+      ;; Single-claim: consume entire auth (current behavior)
+      (assoc-in world [:force-authorisations/consumed auth-id]
+                (merge base
+                       (when-let [d (:held/direction adjustment)]
+                         {:held/direction d}))))))
 
 (defn- next-held-adjustment-id
   [world]
@@ -335,7 +405,7 @@
                               :held/account (:held/account components)
                               :owner/address (:owner/address components)
                               :held/reason reason}
-                             (select-keys (or extra {}) [:held/workflow-id]))]
+                             (select-keys (or extra {}) [:held/workflow-id :shortfall/started-at]))]
         (ensure-force-authorisation-usable! world authorization-provenance scope-map)))
     (let [current (get-in world [:total-held token] 0)]
       (when (and (= direction :out) (< current amount))
@@ -660,57 +730,43 @@
 ;; Funds are delivered explicitly via withdrawEscrow().
 ;; ---------------------------------------------------------------------------
 
-(defn record-claimable
-  "Record amount as claimable by addr for workflow-id.
-   Depreciated: use record-claimable-v2 instead.
-   Mirrors: claimableBalances[workflowId][recipient] += amount"
-  [world workflow-id addr amount]
-  (let [;; Fallback domain for legacy calls: settle to settlement/principal
-        world' (update-in world [:claimable workflow-id addr] (fnil + 0) amount)]
-    (update-in world' [:claimable-v2 workflow-id :settlement/principal addr] (fnil + 0) amount)))
-
 (defn record-claimable-v2
   "Record amount as claimable by addr for workflow-id in a specific domain.
-   Also updates the legacy :claimable map for temporary backward compatibility."
+   Mirrors: claimableBalances[workflowId][domain][recipient] += amount
+   Legacy dual-writes :settlement/principal and :settlement/yield to :claimable."
   [world workflow-id domain addr amount]
-  (let [world' (update-in world [:claimable-v2 workflow-id domain addr] (fnil + 0) amount)]
-    ;; Maintain dual-write to legacy map for settlement claimables (withdraw path)
-    (if (#{:settlement/principal :settlement/yield} domain)
-      (update-in world' [:claimable workflow-id addr] (fnil + 0) amount)
-      world')))
+  (-> world
+      (update-in [:claimable-v2 workflow-id domain addr] (fnil + 0) amount)
+      (cond-> (#{:settlement/principal :settlement/yield} domain)
+        (update-in [:claimable workflow-id addr] (fnil + 0) amount))))
 
 (defn clear-claimable-v2-kind
-  "Clear all v2 claimables for a workflow + kind.
+  "Clear all v2 claimables for a workflow + kind, and legacy :claimable for settlement domains.
    Idempotent by construction (dissoc-based), so repeated calls do not create negatives.
-   For :settlement/principal, clears legacy :claimable for backward-compat parity.
    This function never infers claimants and never creates nil claimant keys."
   [world workflow-id kind]
-  (let [world' (update-in world [:claimable-v2 workflow-id] dissoc kind)]
-    (if (= kind :settlement/principal)
-      (update world' :claimable dissoc workflow-id)
-      world')))
-
-(defn clear-claimable-v2-domain
-  "Backward-compatible alias for clear-claimable-v2-kind."
-  [world workflow-id domain]
-  (clear-claimable-v2-kind world workflow-id domain))
+  (-> world
+      (update-in [:claimable-v2 workflow-id] dissoc kind)
+      (cond-> (#{:settlement/principal :settlement/yield} kind)
+        (update :claimable dissoc workflow-id))))
 
 (defn- clear-claimable-v2-for-addr
-  "Remove claimable-v2 entries for addr on workflow-id (all domains).
+  "Remove claimable-v2 entries for addr on workflow-id (all domains), and legacy :claimable.
    Dissocs addr from each domain; cleans up empty domain and workflow maps."
   [world wf-id addr]
-  (if-let [domains (get-in world [:claimable-v2 wf-id])]
-    (let [cleaned (reduce-kv (fn [m domain addr-map]
-                              (let [without-addr (dissoc addr-map addr)]
-                                (if (seq without-addr)
-                                  (assoc m domain without-addr)
-                                  m)))
-                            {}
-                            domains)]
-      (if (seq cleaned)
-        (assoc-in world [:claimable-v2 wf-id] cleaned)
-        (update world :claimable-v2 dissoc wf-id)))
-    world))
+  (let [legacy-world (update-in world [:claimable wf-id] dissoc addr)]
+    (if-let [domains (get-in legacy-world [:claimable-v2 wf-id])]
+      (let [cleaned (reduce-kv (fn [m domain addr-map]
+                                (let [without-addr (dissoc addr-map addr)]
+                                  (if (seq without-addr)
+                                    (assoc m domain without-addr)
+                                    m)))
+                              {}
+                              domains)]
+        (if (seq cleaned)
+          (assoc-in legacy-world [:claimable-v2 wf-id] cleaned)
+          (update legacy-world :claimable-v2 dissoc wf-id)))
+      legacy-world)))
 
 (defn withdraw-escrow
   "Claim claimable balance for addr on workflow-id.
@@ -730,25 +786,24 @@
         (not (t/terminal-state? world wf-id))
         (t/fail :transfer-not-finalized)
 
-        :else
-         (let [legacy-amount (get-in world [:claimable wf-id addr] 0)
-               bond-refund   (get-in world [:claimable-v2 wf-id :bond/refund addr] 0)
-               bounty        (get-in world [:claimable-v2 wf-id :liability/challenge-bounty addr] 0)
-               amount        (+ legacy-amount bond-refund bounty)
-              et     (t/get-transfer world wf-id)
-              token  (:token et)]
-          (cond
-            (zero? amount)
-            (t/fail :no-claimable-balance)
+         :else
+          (let [settlement-amt (get-in world [:claimable-v2 wf-id :settlement/principal addr] 0)
+                bond-refund    (get-in world [:claimable-v2 wf-id :bond/refund addr] 0)
+                bounty         (get-in world [:claimable-v2 wf-id :liability/challenge-bounty addr] 0)
+                amount         (+ settlement-amt bond-refund bounty)
+               et      (t/get-transfer world wf-id)
+               token   (:token et)]
+           (cond
+             (zero? amount)
+             (t/fail :no-claimable-balance)
 
-            (contains? (:token-liquidity-crunch world #{}) token)
-            (t/fail :liquidity-insufficient)
+             (contains? (:token-liquidity-crunch world #{}) token)
+             (t/fail :liquidity-insufficient)
 
-            :else
-            (let [world' (-> world
-                             (assoc-in [:claimable wf-id addr] 0)
-                             (clear-claimable-v2-for-addr wf-id addr)
-                             (update-in [:total-withdrawn token] (fnil + 0) amount))]
+             :else
+             (let [world' (-> world
+                              (clear-claimable-v2-for-addr wf-id addr)
+                              (update-in [:total-withdrawn token] (fnil + 0) amount))]
               (attr/with-attribution {:subject/type :escrow
                                       :subject/id wf-id
                                       :action/type :escrow/withdraw
@@ -758,7 +813,7 @@
                  {:withdraw/before {:claimable amount
                                     :workflow-id wf-id
                                     :recipient addr}}
-                 {:withdraw/after {:claimable (get-in world' [:claimable wf-id addr])
+                  {:withdraw/after {:claimable (get-in world' [:claimable-v2 wf-id :settlement/principal addr] 0)
                                    :total-withdrawn (get-in world' [:total-withdrawn token])}}
                  {:withdraw/workflow-id wf-id
                   :withdraw/recipient addr
@@ -953,7 +1008,7 @@
                                           :held/bond-id (str workflow-id "-" appellant)
                                           :held/actor appellant}})
                        (assoc-in [:bond-balances workflow-id appellant] 0)
-                       (record-claimable workflow-id appellant amount))]
+                       (record-claimable-v2 workflow-id :settlement/principal appellant amount))]
         (attr/with-attribution {:subject/type :bond
                                 :subject/id (str workflow-id "-" appellant)
                                 :action/type :bond/return
@@ -994,8 +1049,8 @@
                                               :held/bond-id (str workflow-id "-" appellant)
                                               :held/actor appellant}})
                            (assoc-in [:bond-balances workflow-id appellant] 0)
-                           (record-claimable workflow-id appellant amount))
-                       w))
-                   world
-                   wf-bonds))
+                            (record-claimable-v2 workflow-id :settlement/principal appellant amount))
+                        w))
+                    world
+                    wf-bonds))
       world)))

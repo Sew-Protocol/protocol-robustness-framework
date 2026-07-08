@@ -4,6 +4,30 @@
 
 ### Fixed (2026-07-08)
 
+- **Force-authorisation naming standardised:** Renamed all `force-authorization` (American 'z') to `force-authorisation` (British 's') across protocol code, REPL, and tests. Action dispatch strings keep old names as backward-compatible aliases via `get-method` delegation. (`protocols_src/resolver_sim/protocols/sew.clj`, `src/resolver_sim/repl/interactive_resolution.clj`, tests)
+
+- **Force-authorisation Gap 1 (CRITICAL): duplicate resolution at same level:** Added guard in `force-authorised` REPL function to reject a second force-authorised resolution at the same dispute level. Stored `:resolution-source` in `[:previous-decisions workflow-id level]` so the guard can distinguish force-authorised from normal resolutions. (`src/resolver_sim/repl/interactive_resolution.clj:324-337`, `protocols_src/resolver_sim/protocols/sew/resolution.clj:651-652`)
+
+- **Force-authorisation Gap 3 (MEDIUM): resolver-already-resolved check:** Added `:resolver-already-resolved` to `resolver-unavailable-reason` checks in the force-authorised entry point. (`src/resolver_sim/repl/interactive_resolution.clj:245-247`)
+
+- **Scope-hash literal → domain constant:** Fixed `sew.clj:728` using literal string `"force-authorisation-scope"` instead of the `acct/force-authorisation-scope-domain` constant. (`protocols_src/resolver_sim/protocols/sew.clj:728`)
+
+- **Misleading function name:** Renamed `force-authorisation-expired?` to `scope-hash-mismatch?` — it checks scope-hash drift, not time-based expiry. (`protocols_src/resolver_sim/protocols/sew/accounting.clj:99`)
+
+- **`:protocol/state-hashes` in bundle root:** Added `hash-sorted-map` helper and `:protocol/state-hashes` section to `build-bundle-root` in `bundle_root.clj`. Captures `:force-authorisations/hash` and `:force-authorisations/consumed-hash` from the final world when available. Registered `:protocol-state` hash intent in `canonical.clj`. (`src/resolver_sim/run/bundle_root.clj`, `src/resolver_sim/hash/canonical.clj`)
+
+- **Protocol state extraction in scenario runner:** Added `extract-protocol-state` helper in `scenario_runner.clj` that merges force-authorisation state from all scenario worlds and passes it through to `build-bundle-root`. (`src/resolver_sim/io/scenario_runner.clj:703-719`)
+
+- **Force-authorisation lifecycle tests:** Created 4 scenario tests covering grant→execute→consumed, grant→revoke→execute, grant→expired→execute, and grant→execute→execute-again. (`protocols_src/test/resolver_sim/protocols/sew/force_authorisation_test.clj`)
+
+- **Forensic validate.py pre-checks:** Added `scripts/forensic/validate.py` for force-authorisation lifecycle validation. Scans evidence events, requires `:protocol/state-hashes` when force-auth is detected, validates grant-before-execute and no-double-execute. Wired as `bb forensic:validate` task. (`scripts/forensic/validate.py`, `bb.edn`)
+
+- **reproduce.py protocol state comparison:** Added `protocol/state-hashes/*` to `FIELD_CLASSIFICATION` as core fields, added dynamic comparison loop in `compare_bundle_fields`. (`scripts/forensic/reproduce.py`)
+
+- **Python test coverage:** Added 20 new Python tests for validate.py, reproduce.py protocol state comparison, and source hash classification. Fixed existing test for `classify_source_precheck` API change. (`tests/forensic_python/test_validate.py`, `tests/forensic_python/test_reproduce_protocol_state.py`, `tests/forensic_python/test_source_hash.py`)
+
+- **`bb fmt` nil-in-bracket corruption fix:** Fixed `cljfmt` bug where `(get-in m [:key] nil)` was reformatted to `(get-in m [:key nil])`, changing `nil` from a default value into a path key. (`protocols_src/test/resolver_sim/protocols/sew/resolution_test.clj:97`, `protocols_src/test/resolver_sim/protocols/sew/idempotence_checklist_test.clj:37`)
+
 - **`bb backstop`/`bb backstop:fast` classpath:** Changed `-M:cli` to `-M:cli/sew` in `bb.edn` — `:cli` alias lacks `protocols_src`, causing `FileNotFoundException` when `resolver-sim.sim.reference-validation` loads `resolver-sim.protocols.sew`. (`bb.edn:887,891,895`)
 
 - **Property tests 9–14 flaky failures:** Fixed 6 pre-breaking tests in `properties_test.clj`:
@@ -19,6 +43,24 @@
 - **Missing `:workflow-id` fallback in `resolve-appeal`:** Restored `_workflow-id` parameter as fallback for `wf-id` when neither custody nor pending entry have `:workflow-id`. (`protocols_src/resolver_sim/protocols/sew/resolution.clj:1338`)
 
 - **Test data missing `:token`:** Fixed 5 test constructions of slash entries that lacked the `:token` field. (`protocols_src/test/resolver_sim/protocols/sew/slashing_test.clj`)
+
+- **SPEDS narrative carousel — gaps and hardcodings remediated (Phases 1–4):**
+  - **P1a — Deterministic hash:** Replaced JVM-instance-dependent `(hash scenario-id)` with SHA-256 via `java.security.MessageDigest` so evidence hashes are reproducible across restarts. (`src/resolver_sim/notebook_support/speds/data.clj`)
+  - **P1b — Unify severity:** Removed dead `severity`/`status-kind`/`purpose->family` functions from `issues.clj` — issues now inherit severity from findings, eliminating a code path that could produce inconsistent severity values. (`src/resolver_sim/notebook_support/speds/issues.clj`)
+  - **P1c — Configurable fixture paths:** `:traces-dir`/`:golden-dir` now respect `PRF_TRACES_DIR`/`PRF_GOLDEN_DIR` env vars with current defaults as fallback. (`src/resolver_sim/notebook_support/speds/config.clj`)
+  - **P2a — Trace digest in provenance:** Every finding now computes a SHA-256 digest of its scenario trace when available (`"computed"`) vs gracefully marking `"unavailable"` — no longer hardcoded `nil`/`"missing"`. (`src/resolver_sim/notebook_support/speds/findings.clj`)
+  - **P2b — Critical findings from data:** `:critical_findings` count derived from actual severity data instead of hardcoded `0`. (`src/resolver_sim/notebook_support/speds/findings.clj`)
+  - **P2c — Data-driven actionability:** `:owner`/`:release-gate-impact`/`:next-step` now driven by classification label and severity instead of hardcoded `:triage`/`:review-required`/literal string. (`src/resolver_sim/notebook_support/speds/findings.clj`)
+  - **P2d — Evidence-grounded confidence:** Confidence level derived from trace availability, deterministic replay match %, and golden report match — `high` when all three confirm, `low` when none, `medium` otherwise. (`src/resolver_sim/notebook_support/speds/findings.clj`)
+  - **P3a — Enriched story context:** `build-story-data` now accepts optional finding and populates `:finding`, `:outcome`, `:invariant-results`, `:baseline-comparison` in the story context. (`src/resolver_sim/notebook_support/speds/story_data.clj`)
+  - **P3b — Thread finding through story pipeline:** `generate-story-by-family` accepts optional finding; `generate-issue-gallery` passes it through so frame specs get actual run data. (`src/resolver_sim/notebook_support/speds/story.clj`)
+  - **P3c-d — Data-driven invariant display:** All 5 story families (deflection, deadline-boundary, theory-falsification, collusion, economic-solvency) now use `inv-status` helper to show actual invariant pass/fail status from scenario results instead of hardcoded `:ok`/`:fail`. (`src/resolver_sim/notebook_support/speds/story.clj`)
+  - **P4a — Golden key collision protection:** `find-golden-report` tries exact key first, then legacy underscore→hyphen fallback — eliminates collision between IDs differing only by `_` vs `-`. (`src/resolver_sim/notebook_support/speds/data.clj`)
+  - **P4b — Empty carousel guard:** `render-carousel` returns `"No frames to display"` for all layouts when frame-specs is empty. (`src/resolver_sim/notebook_support/speds/core.clj`)
+  - **P4c — Family fallback warning:** Logs a warning when no story-family rules match a scenario, making missing rules observable instead of silent. (`src/resolver_sim/notebook_support/speds/story.clj`)
+  - **P4d — Duplicate scenario ID warning:** `find-scenario-by-id` logs a warning when coverage contains duplicate scenario IDs. (`src/resolver_sim/notebook_support/speds/data.clj`)
+  - **P4e — Findings staleness guard:** `generate-issues-bundle` skips stale on-disk findings when the summary artifact is newer. (`src/resolver_sim/notebook_support/speds/findings.clj`, `src/resolver_sim/notebook_support/speds/issues.clj`)
+  - **P4f — Progress bar scale to config:** `(* freq 10)` multiplier moved to `config/threat-tag-bar-scale` with a named constant. (`src/resolver_sim/notebook_support/speds/config.clj`, `src/resolver_sim/notebook_support/speds/story.clj`)
 
 ### Changed (2026-07-07)
 

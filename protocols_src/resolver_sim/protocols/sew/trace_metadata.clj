@@ -421,24 +421,7 @@
             :transition/unknown)))
 
 ;; ---------------------------------------------------------------------------
-;; B4. Effect classifier
-;; ---------------------------------------------------------------------------
-
-(defn ^:deprecated effect-type
-  "DEPRECATED — no longer called by classify-transition.
-   :effect/type was removed from trace-metadata because accounting effects
-   cannot be correctly derived from action name alone (e.g. execute_resolution
-   can release, refund, or create a pending settlement depending on world state).
-   Retained here as vocabulary reference; do not call from new code."
-  [result-kw]
-  (case result-kw
-    :ok                 :effect/state-change
-    :rejected           :effect/revert
-    :invariant-violated :effect/halt
-    :effect/none))
-
-;; ---------------------------------------------------------------------------
-;; B5. Scenario classifier
+;; B4. Scenario classifier
 ;; Active — called from io/trace_export.clj to populate fixture :metadata block.
 ;; ---------------------------------------------------------------------------
 

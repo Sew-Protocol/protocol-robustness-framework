@@ -423,11 +423,11 @@
   (let [;; Manually put a terminal escrow in place
         w0 (base-world)
         w1 (assoc-in w0 [:escrow-transfers 0 :escrow-state] :released)
-        w2 (ac/record-claimable w1 0 bob 995)
+        w2 (ac/record-claimable-v2 w1 0 :settlement/principal bob 995)
         r  (ac/withdraw-escrow w2 0 bob)]
     (is (true? (:ok r)))
     (is (= 995 (:amount r)))
-    (is (= 0 (get-in (:world r) [:claimable 0 bob] 0))
+    (is (= 0 (get-in (:world r) [:claimable-v2 0 :settlement/principal bob] 0))
         "claimable cleared after withdrawal")))
 
 (deftest withdraw-claimable-not-finalized
@@ -493,7 +493,7 @@
     (is (true? (:ok r)))
     (is (= 980 (:returned r)))
     (is (= 0 (get-in (:world r) [:bond-balances 0 alice] 0)))
-    (is (= 980 (get-in (:world r) [:claimable 0 alice] 0)))
+    (is (= 980 (get-in (:world r) [:claimable-v2 0 :settlement/principal alice] 0)))
     (is (= :appeal-bond-returned
            (:held/reason (last (:held-adjustments (:world r))))))))
 

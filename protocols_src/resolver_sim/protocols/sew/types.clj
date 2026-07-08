@@ -283,9 +283,11 @@
      :escalation-counts-per-addr          {} ; {addr count} — Sybil mitigation Layer B
      :yield-rates            {} ; {token-addr rate-bps} — Current annualized yield rate
      :total-yield-generated  {} ; {token-addr nat-int} — All-time yield accrued
-     :next-workflow-id       0
-     :paused?                false
-     :block-time          block-time})))
+      :next-workflow-id       0
+      :related-claims        {}   ; {relationship-id -> relationship-record}
+      :next-related-claim-id 0
+      :paused?                false
+      :block-time          block-time})))
 
 ;; ---------------------------------------------------------------------------
 ;; Result constructors

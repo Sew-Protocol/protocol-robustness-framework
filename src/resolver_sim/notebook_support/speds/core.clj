@@ -150,16 +150,18 @@
    - :single — centered single frame (first frame only, for deep-dive)
    - :row — horizontal scrollable row"
   [content-fn frame-specs {:keys [columns gap layout] :or {columns 2 gap "40px" layout :grid}}]
-  (case layout
-    :single
-    (if-let [spec (first frame-specs)]
-      [:div.single-frame {:style {:display "flex" :justifyContent "center"}}
-       (content-fn 1 1 spec)]
-      [:div "No frames to display"])
-    :row
-    [:div.frame-carousel {:style {:display "flex" :gap gap :overflowX "auto" :paddingBottom "12px"}}
-     (for [[idx specs] (map-indexed vector frame-specs)]
-       (content-fn (inc idx) (count frame-specs) specs))]
-    [:div.frame-carousel {:style {:display "grid" :gridTemplateColumns (str "repeat(" columns ", 1fr)") :gap gap}}
-     (for [[idx specs] (map-indexed vector frame-specs)]
-       (content-fn (inc idx) (count frame-specs) specs))]))
+  (if (empty? frame-specs)
+    [:div "No frames to display"]
+    (case layout
+      :single
+      (if-let [spec (first frame-specs)]
+        [:div.single-frame {:style {:display "flex" :justifyContent "center"}}
+         (content-fn 1 1 spec)]
+        [:div "No frames to display"])
+      :row
+      [:div.frame-carousel {:style {:display "flex" :gap gap :overflowX "auto" :paddingBottom "12px"}}
+       (for [[idx specs] (map-indexed vector frame-specs)]
+         (content-fn (inc idx) (count frame-specs) specs))]
+      [:div.frame-carousel {:style {:display "grid" :gridTemplateColumns (str "repeat(" columns ", 1fr)") :gap gap}}
+       (for [[idx specs] (map-indexed vector frame-specs)]
+         (content-fn (inc idx) (count frame-specs) specs))])))

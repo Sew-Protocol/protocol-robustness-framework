@@ -74,13 +74,6 @@
   [world]
   (:clock/mode (temporal-context world)))
 
-(defn project-legacy-time
-  "Project canonical block-ts back to legacy root :block-time field.
-   Used at boundary points for backward compatibility."
-  [world]
-  (let [bt (block-ts world)]
-    (assoc world :block-time bt)))
-
 (defn with-temporal-context
   "Update world with a new temporal context map.
    Maintains internal consistency between block-ts and instant.
@@ -90,8 +83,9 @@
         inst (or (:instant ctx) (when bt (java.time.Instant/ofEpochSecond bt)))
         ctx' (cond-> ctx
                (and bt (not (:instant ctx)))    (assoc :instant inst)
-               (and inst (not (:block-ts ctx))) (assoc :block-ts (.getEpochSecond ^java.time.Instant inst)))]
-    (project-legacy-time (assoc world :context/time ctx'))))
+               (and inst (not (:block-ts ctx))) (assoc :block-ts (.getEpochSecond ^java.time.Instant inst)))
+        world' (assoc world :context/time ctx')]
+    (assoc world' :block-time (block-ts world'))))
 
 (defn advance-time
   "Atomically advance simulation time and step.

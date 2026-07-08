@@ -36,8 +36,11 @@ FIELD_CLASSIFICATION: dict[str, str] = {
     "execution/summary/totals/expected-failed": "core",
     "execution/summary/totals/unexpected-failed": "core",
     "source/tree-hash": "core",
+    "protocol/state-hashes/force-authorisations/hash": "core",
+    "protocol/state-hashes/force-authorisations/consumed-hash": "core",
 }
 # Registry snapshot hashes are all CORE (added dynamically)
+# Protocol state hashes are all CORE (added explicitly)
 # Everything else defaults to DIAGNOSTIC
 
 
@@ -150,6 +153,12 @@ def compare_bundle_fields(orig: dict, new: dict,
     snap_b = new.get("registry/snapshot", {}) or {}
     for k in sorted(set(list(snap_a.keys()) + list(snap_b.keys()))):
         add_check(f"registry/snapshot/{k}", snap_a.get(k), snap_b.get(k))
+
+    # Protocol state hashes — all CORE
+    proto_a = orig.get("protocol/state-hashes", {}) or {}
+    proto_b = new.get("protocol/state-hashes", {}) or {}
+    for k in sorted(set(list(proto_a.keys()) + list(proto_b.keys()))):
+        add_check(f"protocol/state-hashes/{k}", proto_a.get(k), proto_b.get(k))
 
     # Source provenance
     for k in ("source/tree-hash", "source/tree-hash-algorithm"):

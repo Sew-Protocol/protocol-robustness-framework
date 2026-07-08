@@ -44,13 +44,13 @@ java -jar target/prf-runner-benchmark-0.1.0-uber.jar --list
 java -jar target/prf-runner-benchmark-0.1.0-uber.jar
 
 # Run a specific benchmark by ID
-java -jar target/prf-runner-benchmark-0.1.0-uber.jar run-and-report escrow-dispute-v1
+java -jar target/prf-runner-benchmark-0.1.0-uber.jar run-benchmark escrow-dispute-v1
 
 # Run with explicit output path
-java -jar target/prf-runner-benchmark-0.1.0-uber.jar run-and-report --output ./out/evidence.edn escrow-dispute-v1
+java -jar target/prf-runner-benchmark-0.1.0-uber.jar run-benchmark --output ./out/evidence.edn escrow-dispute-v1
 
 # Sign the evidence with a key
-java -jar target/prf-runner-benchmark-0.1.0-uber.jar run-and-report -k ./signing-key.pem escrow-dispute-v1
+java -jar target/prf-runner-benchmark-0.1.0-uber.jar run-benchmark -k ./signing-key.pem escrow-dispute-v1
 ```
 
 ### Exit codes

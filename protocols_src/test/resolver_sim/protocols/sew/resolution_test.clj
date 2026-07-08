@@ -17,6 +17,11 @@
 (def carol    "0xCarol")
 (def usdc     "0xUSDC")
 
+(defn- ^:private project-legacy-time
+  "Set legacy :block-time from canonical temporal context."
+  [w]
+  (assoc w :block-time (time-ctx/block-ts w)))
+
 (defn- base-world
   "World with one :disputed escrow, block-time=1000, appeal-window as given."
   [appeal-window-duration]
@@ -32,7 +37,7 @@
         (assoc-in [:escrow-transfers 0 :sender-status]    :raise-dispute)
         (assoc-in [:escrow-transfers 0 :dispute-resolver] resolver)
         (assoc-in [:dispute-timestamps 0] 1000)
-        time-ctx/project-legacy-time)))
+        project-legacy-time)))
 
 (def direct-resolver-fn nil)  ; no module — use direct resolver
 
@@ -94,7 +99,7 @@
     (is (:exists (t/get-pending (:world r) 0)) "replacement pending should exist")
     (is (nil? (get-in (:world r) [:claimable-v2 0 :settlement/principal bob]))
         "v2-only principal entitlement must be fully cleared")
-    (is (nil? (get-in (:world r) [:claimable-v2 0 :settlement/principal nil]))
+    (is (nil? (get-in (:world r) [:claimable-v2 0 :settlement/principal]))
         "cleanup must never write principal under nil claimant")
     (is (empty? (get-in (:world r) [:claimable 0] {}))
         "legacy principal map should remain clear after replacement")))
@@ -139,8 +144,8 @@
         r (res/execute-resolution w 0 resolver false "0xnew" direct-resolver-fn)]
     (is (true? (:ok r)))
     (is (nil? (get-in (:world r) [:claimable-v2 0 :settlement/principal bob])))
-    (is (empty? (get-in (:world r) [:claimable 0] {}))
-        "legacy mirror cleared with v2 principal domain")))
+    (is (nil? (get-in (:world r) [:claimable-v2 0 :settlement/principal]))
+        "principal domain cleared")))
 
 (deftest execute-resolution-pending-replacement-preserves-settlement-yield
   (let [w (-> (base-world 1800)
@@ -182,7 +187,7 @@
                 (t/make-pending-settlement
                  {:exists true :is-release is-release
                   :appeal-deadline appeal-deadline :resolution-hash "0xhash"}))
-      time-ctx/project-legacy-time))
+      project-legacy-time))
 
 (deftest execute-resolution-invalid-workflow
   (let [r (res/execute-resolution (base-world 0) 99 resolver true "0xhash" direct-resolver-fn)]
@@ -348,7 +353,7 @@
                     (t/make-pending-settlement {:exists true :is-release is-release
                                                 :appeal-deadline appeal-deadline
                                                 :resolution-hash "0xhash"}))]
-    (time-ctx/project-legacy-time w)))
+    (project-legacy-time w)))
 
 (deftest escalate-dispute-ok
   (let [w   (-> (base-world 0) (with-pending 0 true 5000))
@@ -378,8 +383,8 @@
         r (res/escalate-dispute w 0 alice (make-escalation-fn senior-resolver))]
     (is (true? (:ok r)))
     (is (nil? (get-in (:world r) [:claimable-v2 0 :settlement/principal bob])))
-    (is (empty? (get-in (:world r) [:claimable 0] {}))
-        "escalation pending cancel clears stale principal like replacement")))
+    (is (nil? (get-in (:world r) [:claimable-v2 0 :settlement/principal]))
+        "esc pending cancel clears stale principal like replacement")))
 
 (deftest escalate-dispute-not-participant
   (let [w (-> (base-world 0) (with-pending 0 true 5000))

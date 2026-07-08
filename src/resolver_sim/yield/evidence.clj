@@ -19,7 +19,8 @@
                  :basis (:basis-amount sf)
                  :fulfilled (:fulfilled-amount sf)
                  :deferred (:deferred-amount sf)
-                 :haircut (:haircut-amount sf)})
+                 :haircut (:haircut-amount sf)
+                 :started-at (:started-at sf)})
    :market-state {:available-ratio (:available-ratio ms)
                   :apy (:apy ms)}})
 

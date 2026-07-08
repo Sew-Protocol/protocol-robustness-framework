@@ -3,6 +3,8 @@
   (:require [clojure.string :as str]
             [resolver-sim.evidence.config :as evcfg]))
 
+(def threat-tag-bar-scale 10)
+
 (def success-patterns
   [#"100\.0%"
    #"REPLAY:\s*1\.00\s*MATCH"
@@ -16,8 +18,8 @@
    :findings     (evcfg/artifact-path :findings)
    :issues       (evcfg/artifact-path :issues)
    :manifest     (str (evcfg/artifact-dir) "/evidence-manifest.json")
-   :traces-dir   "data/fixtures/traces"
-   :golden-dir   "data/fixtures/golden"})
+   :traces-dir   (or (System/getenv "PRF_TRACES_DIR") "data/fixtures/traces")
+   :golden-dir   (or (System/getenv "PRF_GOLDEN_DIR") "data/fixtures/golden")})
 
 (def protocol-defaults
   {:id          "dispute-resolution-validation-v1"

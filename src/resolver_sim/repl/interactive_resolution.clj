@@ -8,6 +8,7 @@
             [resolver-sim.protocols.sew.types :as t]
             [resolver-sim.protocols.sew.resolution :as res]
             [resolver-sim.protocols.sew.accounting :as ac]
+            [resolver-sim.protocols.sew.related-claims :as rc]
             [resolver-sim.protocols.sew.state-machine :as sm]
             [resolver-sim.hash.canonical :as hash]
             [resolver-sim.time.context :as time-ctx]
@@ -239,22 +240,25 @@
       (contains? (:resolver-unavailable world #{}) resolver)
       :resolver-unavailable
 
+      (get-in world [:previous-decisions workflow-id (t/dispute-level world workflow-id)])
+      :resolver-already-resolved
+
       :else
       :manual-override)))
 
-(defn force-authorized
+(defn force-authorised
   "Execute an exceptional resolution path with explicit governance provenance.
    This is intentionally narrow: it only supports execute-resolution overrides."
   [session event {:keys [governed-by reason] :as _opts}]
   (let [action-name (:action event)]
     (if (not= "execute-resolution" action-name)
       (do
-        (println (str "[FAIL] force-authorized only supports execute-resolution, got " action-name))
+        (println (str "[FAIL] force-authorised only supports execute-resolution, got " action-name))
         session)
       (let [gov-res (resolve-governance-agent session governed-by)]
         (if-not (:ok gov-res)
           (do
-            (println (str "[FAIL] force-authorized failed: " (:error gov-res)))
+            (println (str "[FAIL] force-authorised failed: " (:error gov-res)))
             session)
           (let [agent (:agent gov-res)
                 workflow-id (:workflow-id (:params event))
@@ -265,12 +269,12 @@
                                   (get-in (:world session)
                                           [:escrow-transfers workflow-id :dispute-resolver])])
                 provenance
-                (sew/build-force-authorization-provenance
+                (sew/build-force-authorisation-provenance
                  (:context session)
                  {:action action-name :agent governed-by}
                  (:address agent)
                  {:reason unavailable-reason
-                  :check :force-authorized
+                  :check :force-authorised
                   :source :repl-interactive-session
                   :capacity-context
                   {:workflow-id workflow-id
@@ -283,14 +287,14 @@
                         :params (:params event)
                         :actor (:agent event)
                         :type (if (:agent event) :agent :keeper)
-                        :summary (str "force-authorized: " (:action event))
+                        :summary (str "force-authorised: " (:action event))
                         :governed-by governed-by
                         :apply-fn
                         (fn [session' _event]
                           (let [params (:params event)
                                 wf workflow-id
                                 is-release (get params :is-release true)
-                                resolution-hash (get params :resolution-hash "0xforce-authorized")
+                                resolution-hash (get params :resolution-hash "0xforce-authorised")
                                  ;; Read workflow data to compute force-authorisation scope
                                 et       (t/get-transfer (:world session') wf)
                                 token    (:token et)
@@ -298,11 +302,13 @@
                                 direction :out
                                 fa-reason (if is-release :force-authorised-release
                                               :force-authorised-refund)
+                                amount   (:amount-after-fee et)
                                  ;; Build scope-map matching adjust-held in accounting.clj
                                 scope-map {:authorization/id nil
                                            :authorization/type :force-authorisation
                                            :held/direction direction
                                            :token token
+                                           :amount amount
                                            :held/account :escrow-principal
                                            :owner/address recipient
                                            :held/reason fa-reason
@@ -317,11 +323,18 @@
                                         :authorization/id auth-id
                                         :authorization/scope-hash scope-hash
                                         :authorization/governance-provenance provenance})
-                                result (res/apply-resolution-transition
-                                        (:world session') wf (:address agent)
-                                        is-release resolution-hash nil
-                                        :resolution-source :force-authorized
-                                        :authorization-provenance force-auth-provenance)]
+                                 ;; Gap 1 guard: reject second force-authorised resolution at same level
+                                prev-decision (get-in (:world session')
+                                                      [:previous-decisions wf
+                                                       (t/dispute-level (:world session') wf)])
+                                result (if (and prev-decision
+                                                (= :force-authorised (:resolution-source prev-decision)))
+                                         (t/fail :force-authorisation-already-executed)
+                                         (res/apply-resolution-transition
+                                          (:world session') wf (:address agent)
+                                          is-release resolution-hash nil
+                                          :resolution-source :force-authorised
+                                          :authorization-provenance force-auth-provenance))]
                             (if (:ok result)
                               (update result :extra merge
                                       {:authorization/id auth-id
@@ -331,6 +344,46 @@
             (println (str "[FORCE] " governed-by " overrides resolver authorization for workflow " workflow-id
                           " (" (name unavailable-reason) ")"))
             (apply-choice session choice)))))))
+
+(defn create-related-claims
+  "Create a related-claims relationship between workflows.
+   Event: {:action \"create-related-claims\"
+           :params {:type :same-incident
+                    :workflow-ids [12 13]
+                    :reason \"shared-dispute-context\"
+                    :semantics #{:audit-only}}}"
+  [session event {:keys [created-by] :as _opts}]
+  (let [params (:params event)
+        type (get params :type :same-incident)
+        workflow-ids (get params :workflow-ids [])
+        reason (get params :reason "related-claims")
+        semantics (get params :semantics #{:audit-only})
+        created-by (or created-by {:actor/type :governance
+                                   :actor/address "0xInteractiveSession"})
+        created-at-step (count (:steps session))
+        members (for [wf-id workflow-ids]
+                  {:claim/kind :sew/workflow
+                   :workflow/id (t/normalize-workflow-id wf-id)})
+        choice {:action (:action event)
+                :params (:params event)
+                :actor (:agent event)
+                :type (if (:agent event) :agent :keeper)
+                :summary (str "create-related-claims: " type " " workflow-ids)
+                :apply-fn
+                (fn [session' _event]
+                  (let [result (rc/create-related-claims!
+                                (:world session')
+                                {:type type
+                                 :members members
+                                 :semantics semantics
+                                 :reason reason
+                                 :created-by created-by
+                                 :created-at-step created-at-step})]
+                    result))}]
+    (println (str "[RELATED] created relationship type " type
+                  " for workflows " workflow-ids
+                  " (" reason ")"))
+    (apply-choice session choice)))
 
 (defn- apply-choice
   "Apply a choice action, return updated session."
@@ -411,7 +464,7 @@
      (apply-choice session choice)))
   ([session event opts]
    (if (:governed-by opts)
-     (force-authorized session event opts)
+     (force-authorised session event opts)
      (apply-event session event))))
 
 (defn auto-until-decision

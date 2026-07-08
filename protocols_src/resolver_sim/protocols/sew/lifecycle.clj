@@ -182,18 +182,21 @@
                             (>= held (+ fulfilled haircut)) (+ fulfilled haircut)
                             :else fulfilled))
                         amt)
+        shortfall-started (:started-at pos-shortfall)
         result (-> world-after-policy
                    (acct/sub-held token
                                   sub-held-amt
                                    {:action (str "finalize-" (name direction))
                                     :reason held-reason
                                     :authorization-provenance authorization-provenance
-                                    :extra {:held/action (str "finalize-" (name direction))
-                                            :held/workflow-id workflow-id
-                                            :owner/address recipient
-                                            :held/recipient recipient
-                                            :held/settlement-direction direction
-                                            :held/settled-amount settled-amt}})
+                                    :extra (cond-> {:held/action (str "finalize-" (name direction))
+                                                    :held/workflow-id workflow-id
+                                                    :owner/address recipient
+                                                    :held/recipient recipient
+                                                    :held/settlement-direction direction
+                                                    :held/settled-amount settled-amt}
+                                              shortfall-started
+                                              (assoc :shortfall/started-at shortfall-started))})
                    (record-fn token settled-amt)
                    ;; Track outbound FoT fee
                    (update-in [:total-fot-fees token] (fnil + 0) (- amt net-amt))

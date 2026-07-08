@@ -329,3 +329,33 @@ bb validate
 Report changed files, Clojure edit tools used, REPL evaluations, validation
 commands, skipped checks, failures, discrepancies, and remaining uncertainty.
 
+
+
+
+
+
+# Project Rules
+
+## No Hardcoded Literals
+
+All numerical constants, configuration values, timeout durations, fee rates, bond amounts, and similar param values must be defined in a central configuration namespace or parameterized as function arguments. They must not appear as bare literals scattered across source, test, research, and simulation files.
+
+### Required approach
+
+1. **Central config namespace** — Group related constants into a single `config.clj` namespace (e.g., `resolver-sim.protocols.sew.config`). Name each def clearly with its units and purpose.
+
+2. **Function parameterization** — Where a value varies by context, pass it as a function parameter with a documented default.
+
+3. **Scenario protocol-params** — Scenario-specific values go in the scenario's `:protocol-params` map, not hardcoded in the scenario runner or action handlers.
+
+### Permitted exceptions
+
+A bare literal is acceptable only when:
+- It is `0` or `1` used as an arithmetic identity (increment, decrement, flag toggle).
+- It is a trivial sentinel (`nil`, `false`, `0`) in a guard check where naming it would add no clarity.
+- The value is inherently ephemeral to a single expression and has no meaning outside it.
+
+### Enforcement
+
+After adding any new constant to config, update all call sites. After editing any Clojure source, run `bb validate`. If a lint or review flags a hardcoded literal that could reasonably be centralized, centralize it.
+

@@ -12,8 +12,6 @@
             [resolver-sim.notebook-support.common :as common]
             [resolver-sim.notebook-support.speds.data :as data]
             [resolver-sim.notebook-support.speds.findings :as findings]
-            [resolver-sim.notebook-support.speds.semantics :as sem]
-            [resolver-sim.scenario.outcome-semantics :as ose]
             [resolver-sim.notebook-support.speds.config :as config]))
 
 (def issues-path (evcfg/artifact-path :issues))
@@ -22,28 +20,6 @@
 (def required-issue-keys
   #{:issue/id :scenario/id :kind :severity :status-kind :title
     :story/family :priority :evidence/refs :provenance :one_line_description})
-
-(defn- purpose->family [purpose]
-  (sem/purpose->story-family-kw purpose))
-
-(defn- status-kind [scenario summary]
-  (let [purpose (:purpose scenario)
-        failed (or (:failing_scenarios summary)
-                   (:failed_scenarios summary)
-                   (:failed summary)
-                   0)]
-    (cond
-      (ose/negative-test-purpose? purpose) :expected-negative
-      (pos? (long (or failed 0))) :detected
-      :else :observed)))
-
-(defn- severity [scenario summary]
-  (let [tags (set (map #(-> % name str/lower-case) (or (:threat-tags scenario) [])))
-        failed (pos? (long (or (:failed summary) (:failing_scenarios summary) 0)))]
-    (cond
-      (or (contains? tags "reentrancy") (contains? tags "solvency") failed) :high
-      (or (contains? tags "appeal-escalation") (contains? tags "timing-boundary")) :medium
-      :else :low)))
 
 (defn- priority [sev]
   (case sev :high 90 :medium 60 :low 30 10))
@@ -122,10 +98,12 @@
   ([artifacts] (generate-issues-bundle artifacts default-issue-policy {}))
   ([artifacts policy] (generate-issues-bundle artifacts policy {}))
   ([artifacts policy {:keys [comparator-config]}]
-   (let [findings-bundle (or (findings/load-findings)
+   (let [findings-bundle (let [cached (findings/load-findings)]
+                           (if (and cached (findings/findings-fresh?))
+                             cached
                              (findings/generate-findings-bundle
                               artifacts
-                              {:comparator-config (or comparator-config findings/default-comparator-config)}))
+                              {:comparator-config (or comparator-config findings/default-comparator-config)})))
          run-id (get-in findings-bundle [:run :run_id])
          comparator-config (get findings-bundle :comparator_config findings/default-comparator-config)
          findings-list (or (:findings findings-bundle) [])

@@ -101,28 +101,6 @@
           world
           (or shocks [])))
 
-(defn apply-legacy-risk-params
-  "Backward-compatible flat params from set-yield-risk events."
-  [world module-id token {:keys [liquidity-mode loss-mode failure-modes apy shortfall]}]
-  (let [tok (if (keyword? token) token (keyword token))
-        world' (cond-> world
-                 apy (assoc-in [:yield/rates module-id tok] (double apy))
-                 liquidity-mode
-                 (assoc-in [:yield/risk module-id tok :liquidity-mode] (keyword liquidity-mode))
-                 loss-mode
-                 (assoc-in [:yield/risk module-id tok :loss-mode] (keyword loss-mode))
-                 failure-modes
-                 (assoc-in [:yield/risk module-id tok :failure-modes]
-                           (normalize-failure-modes failure-modes))
-                 shortfall
-                 (assoc-in [:yield/risk module-id tok :shortfall] shortfall))]
-    (if (and failure-modes (nil? loss-mode))
-      (let [risk (get-in world' [:yield/risk module-id tok] {})]
-        (assoc-in world' [:yield/risk module-id tok :loss-mode]
-                  (effective-loss-mode (assoc risk :failure-modes
-                                              (normalize-failure-modes failure-modes)))))
-      world')))
-
 (defn apply-market-shock
   "Entry point for scenario actions: shocks vector and/or legacy flat fields."
   [world module-id token params]
@@ -130,5 +108,18 @@
         shocks (:shocks params)
         world' (if (seq shocks)
                  (apply-shocks world module-id tok shocks)
-                 world)]
-    (apply-legacy-risk-params world' module-id tok params)))
+                 world)
+        {:keys [liquidity-mode loss-mode failure-modes apy shortfall]} params]
+    (-> world'
+        (cond-> apy (assoc-in [:yield/rates module-id tok] (double apy))
+                liquidity-mode (assoc-in [:yield/risk module-id tok :liquidity-mode] (keyword liquidity-mode))
+                loss-mode (assoc-in [:yield/risk module-id tok :loss-mode] (keyword loss-mode))
+                failure-modes (assoc-in [:yield/risk module-id tok :failure-modes] (normalize-failure-modes failure-modes))
+                shortfall (assoc-in [:yield/risk module-id tok :shortfall] shortfall))
+        (as-> w
+              (if (and failure-modes (nil? loss-mode))
+                (let [risk (get-in w [:yield/risk module-id tok] {})]
+                  (assoc-in w [:yield/risk module-id tok :loss-mode]
+                            (effective-loss-mode (assoc risk :failure-modes
+                                                        (normalize-failure-modes failure-modes)))))
+                w)))))

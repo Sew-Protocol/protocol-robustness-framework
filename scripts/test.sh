@@ -422,7 +422,7 @@ run_invariants() {
 (require 'resolver-sim.evidence.chain
          '[resolver-sim.io.scenario-runner :as sr])
 (binding [resolver-sim.evidence.chain/*allow-dirty* true]
-  (sr/run-invariants))"
+  (sr/run-registry-suite-and-report))"
   return $?
 }
 
@@ -458,7 +458,7 @@ run_named_path_suite() {
 (require 'resolver-sim.evidence.chain
          '[resolver-sim.io.scenario-runner :as sr])
 (binding [resolver-sim.evidence.chain/*allow-dirty* true]
-  (sr/run-invariants :suite $suite))"
+  (sr/run-named-suite-and-report (keyword \"$suite\") {}))"
   return $?
 }
 

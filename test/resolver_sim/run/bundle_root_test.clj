@@ -79,6 +79,77 @@
     (is (not= (:overview/hash b1) (:overview/hash b2)))
     (is (not= (:bundle/hash b1) (:bundle/hash b2)))))
 
+(def sample-result-with-protocol-state
+  "Like sample-result but includes force-authorisation protocol state."
+  (assoc sample-result
+         :protocol/force-authorisations
+         {"fa-0-release-abc"
+          {:authorization/id "fa-0-release-abc"
+           :authorization/type :force-authorisation
+           :authorization/status :consumed
+           :workflow-id 0
+           :allowed-action "execute-resolution"
+           :consumed? true
+           :starts-at 1000
+           :expires-at nil
+           :created-at 1000
+           :created-by "0xGov"
+           :reason :resolver-overcapacity}
+          "fa-0-refund-def"
+          {:authorization/id "fa-0-refund-def"
+           :authorization/type :force-authorisation
+           :authorization/status :revoked
+           :workflow-id 0
+           :allowed-action "execute-resolution"
+           :consumed? false
+           :starts-at 1000
+           :expires-at nil
+           :created-at 1000
+           :created-by "0xGov"
+           :reason :resolver-overcapacity}}
+         :protocol/force-authorisations-consumed
+         {"fa-0-release-abc"
+          {:consumed? true
+           :authorization/id "fa-0-release-abc"
+           :authorization/type :force-authorisation
+           :held/adjustment-id "held-0"
+           :token "USDC"
+           :amount 5000}}))
+
+(deftest build-bundle-root-omits-protocol-state-hashes-when-not-present
+  (let [bundle (br/build-bundle-root sample-request sample-result)]
+    (is (nil? (:protocol/state-hashes bundle))
+        "protocol/state-hashes should be absent when no protocol state provided")))
+
+(deftest build-bundle-root-includes-protocol-state-hashes
+  (let [bundle (br/build-bundle-root sample-request sample-result-with-protocol-state)
+        ph (:protocol/state-hashes bundle)]
+    (is (map? ph) "protocol/state-hashes should be a map")
+    (is (string? (:force-authorisations/hash ph))
+        "force-authorisations/hash should be a string")
+    (is (string? (:force-authorisations/consumed-hash ph))
+        "force-authorisations/consumed-hash should be a string")))
+
+(deftest build-bundle-root-protocol-state-hashes-are-stable
+  (let [b1 (br/build-bundle-root sample-request sample-result-with-protocol-state)
+        b2 (br/build-bundle-root sample-request sample-result-with-protocol-state)
+        h1 (:protocol/state-hashes b1)
+        h2 (:protocol/state-hashes b2)]
+    (is (= h1 h2) "protocol/state-hashes should be identical across calls")
+    (is (= (:bundle/hash b1) (:bundle/hash b2))
+        "bundle/hash should be stable when protocol state is identical")))
+
+(deftest build-bundle-root-protocol-state-hashes-change-when-state-differs
+  (let [diff-state (assoc-in sample-result-with-protocol-state
+                             [:protocol/force-authorisations "fa-0-release-abc" :reason]
+                             :circuit-breaker-active)
+        b1 (br/build-bundle-root sample-request sample-result-with-protocol-state)
+        b2 (br/build-bundle-root sample-request diff-state)]
+    (is (not= (:protocol/state-hashes b1) (:protocol/state-hashes b2))
+        "protocol/state-hashes should differ when force-auth state differs")
+    (is (not= (:bundle/hash b1) (:bundle/hash b2))
+        "bundle/hash should differ when protocol state differs")))
+
 (deftest bundle-root-is-runnable
   (let [bundle (assoc (br/build-bundle-root sample-request sample-result)
                       :dag/root-node-hash "test-dag-root-hash")

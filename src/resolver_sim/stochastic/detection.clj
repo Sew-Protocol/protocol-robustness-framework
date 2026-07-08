@@ -95,20 +95,6 @@
      :on-unknown-roll-kind on-unknown-roll-kind
      :rolls rolls}))
 
-(defn- orphan-legacy-oracle-keys
-  "Top-level legacy keys that are ignored given the effective normalized fixture."
-  [params effective]
-  (let [mode (:mode effective)
-        fixed-mode? (= mode :fixed-roll-sequence)]
-    (cond-> []
-      (and (seq (:oracle-roll-sequence params))
-           (not fixed-mode?))
-      (conj :oracle-roll-sequence)
-
-      (and (:oracle-mode params)
-           (not= (normalize-oracle-mode (:oracle-mode params)) mode))
-      (conj :oracle-mode))))
-
 (defn validate-oracle-params!
   "Validate merged oracle-fixture / :fixed-or / legacy flat keys.
 
@@ -157,11 +143,19 @@
     (when (and (= mode :fixed-roll-sequence) (not (or (vector? rolls) (map? rolls))))
       (throw (ex-info "oracle-fixture :rolls must be a vector or map for :fixed-roll-sequence"
                       {:rolls rolls :rolls-type (type rolls)})))
-    (when-let [orphans (seq (orphan-legacy-oracle-keys params effective))]
-      (throw (ex-info "Orphan oracle legacy keys ignored by effective fixture"
-                      {:orphan-keys orphans
-                       :effective-mode mode
-                       :hint (str "Remove " orphans " or align :oracle-fixture :mode")})))
+    (let [fixed-mode? (= mode :fixed-roll-sequence)
+          orphans (cond-> []
+                    (and (seq (:oracle-roll-sequence params))
+                         (not fixed-mode?))
+                    (conj :oracle-roll-sequence)
+                    (and (:oracle-mode params)
+                         (not= (normalize-oracle-mode (:oracle-mode params)) mode))
+                    (conj :oracle-mode))]
+      (when (seq orphans)
+        (throw (ex-info "Orphan oracle legacy keys ignored by effective fixture"
+                        {:orphan-keys orphans
+                         :effective-mode mode
+                         :hint (str "Remove " orphans " or align :oracle-fixture :mode")}))))
     (assoc params :oracle-effective effective)))
 
 (defn oracle-roll-in-scope?

@@ -31,10 +31,10 @@ It runs from any directory and does **not** require:
 java -jar prf-benchmark.jar --list
 
 # Run a benchmark by ID
-java -jar prf-benchmark.jar run-and-report escrow-dispute-v1
+java -jar prf-benchmark.jar run-benchmark escrow-dispute-v1
 
 # Run a benchmark by ID with output path
-java -jar prf-benchmark.jar run-and-report --output ./results/evidence.edn escrow-dispute-v1
+java -jar prf-benchmark.jar run-benchmark --output ./results/evidence.edn escrow-dispute-v1
 
 # Run with a specific manifest file
 java -jar prf-benchmark.jar benchmarks/packs/sew/escrow-dispute-v1.edn
@@ -48,7 +48,7 @@ java -jar prf-benchmark.jar escrow-dispute-v1
 Use `--bundle` or pass explicit file paths for external concepts:
 
 ```bash
-java -jar prf-benchmark.jar run-and-report --bundle ./my-concepts.edn my-experimental-pack.edn
+java -jar prf-benchmark.jar run-benchmark --bundle ./my-concepts.edn my-experimental-pack.edn
 ```
 
 ## Resource path scheme

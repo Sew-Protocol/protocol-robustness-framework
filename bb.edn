@@ -1028,11 +1028,17 @@ Env:   PRF_SOURCE_ROOTS, PRF_RUNS_ROOT, PRF_ARTIFACT_DIR, PRF_CODE_HASH_ALGORITH
   {:doc "Reproduce a forensic run from its bundle and compare results. Usage: bb forensic:reproduce <run-dir>"
    :task (apply shell "python3" "scripts/forensic/reproduce.py" *command-line-args*)}
 
-  forensic:self-test
-  {:doc "Run forensic pipeline twice and compare — validates determinism. Usage: bb forensic:self-test"
-   :task (apply shell "python3" "scripts/forensic/self_test.py" *command-line-args*)}
+   forensic:validate
+   {:doc "Pre-validate a forensic run bundle: force-authorisation lifecycle checks.
+ Usage: bb forensic:validate <run-dir>
+        bb forensic:validate <bundle-root.json> [--run-dir <dir>]"
+    :task (apply shell "python3" "scripts/forensic/validate.py" *command-line-args*)}
 
-  forensic:quorum
+   forensic:self-test
+   {:doc "Run forensic pipeline twice and compare — validates determinism. Usage: bb forensic:self-test"
+    :task (apply shell "python3" "scripts/forensic/self_test.py" *command-line-args*)}
+
+   forensic:quorum
   {:doc "Local repeated-execution quorum: run N times in parallel, compare, report agreement.
 Usage: bb forensic:quorum [--suite <key>] [--runs 3] [--threshold 2] [--workers 4]"
    :task (apply shell "python3" "scripts/forensic/quorum.py" *command-line-args*)}

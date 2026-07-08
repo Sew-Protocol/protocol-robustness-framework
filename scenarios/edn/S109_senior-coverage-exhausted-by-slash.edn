@@ -8,7 +8,7 @@
           {:id "seller" :address "0xseller" :strategy "honest"}
           {:id "governance" :address "0xgov" :role "governance"}
           {:id "keeper" :address "0xkeeper" :role "keeper"}]
- :protocol-params {:resolver-fee-bps 150 :appeal-window-duration 120 :max-dispute-duration 600 :resolver-bond-bps 0 :governance-mode :full}
+ :protocol-params {:resolver-fee-bps 150 :appeal-window-duration 120 :max-dispute-duration 600 :resolver-bond-bps 0 :governance-mode :full :slash-epoch-cap-bps 10000 :max-slash-per-offense-bps 10000}
  :allow-open-disputes? true
  :events [{:seq 0 :time 1000 :agent "senior" :action "register_senior_bond"
            :params {:coverage-max 10000}}

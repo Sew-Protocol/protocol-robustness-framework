@@ -393,30 +393,37 @@
 
 (defn submit-evidence
   "Record that new evidence was submitted for workflow-id (Track 2 reversal slashing).
-   May be called while :disputed before the reversing resolution is executed."
+   May be called while :disputed before the reversing resolution is executed.
+   When the snapshot has a positive :evidence-window-duration, evidence submitted
+   after the deadline (dispute-raise-time + window) is rejected with
+   :evidence-deadline-exceeded."
   [world workflow-id _caller & [{:keys [evidence-hash]}]]
   (cond
     (not (t/valid-workflow-id? world workflow-id))
     (t/fail :invalid-workflow-id)
-
     (not= :disputed (t/escrow-state world workflow-id))
     (t/fail :transfer-not-in-dispute)
-
     :else
-    (let [world' (cond-> (assoc-in world [:evidence-updated? workflow-id] true)
-                   evidence-hash (update-in [:evidence-hashes workflow-id]
-                                            (fnil conj []) evidence-hash))]
-      (attr/with-attribution {:subject/type :dispute
-                              :subject/id workflow-id
-                              :action/type :dispute/submit-evidence
-                              :evidence/reason :evidence-submitted}
-        (cap/capture-event-evidence!
-         :evidence-submitted
-         {:evidence/before {:evidence-updated? (get-in world [:evidence-updated? workflow-id] false)}}
-         {:evidence/after {:evidence-updated? true :evidence-hash evidence-hash}}
-         {:evidence/workflow-id workflow-id
-          :evidence/hash evidence-hash}))
-      (t/ok world'))))
+    (let [snap       (t/get-snapshot world workflow-id)
+          window-dur (:evidence-window-duration snap 0)
+          now        (time-ctx/block-ts world)
+          dispute-ts (get-in world [:dispute-timestamps workflow-id] 0)]
+      (if (and (pos? window-dur) (> now (+ dispute-ts window-dur)))
+        (t/fail :evidence-deadline-exceeded)
+        (let [world' (cond-> (assoc-in world [:evidence-updated? workflow-id] true)
+                       evidence-hash (update-in [:evidence-hashes workflow-id]
+                                                 (fnil conj []) evidence-hash))]
+          (attr/with-attribution {:subject/type :dispute
+                                  :subject/id workflow-id
+                                  :action/type :dispute/submit-evidence
+                                  :evidence/reason :evidence-submitted}
+            (cap/capture-event-evidence!
+             :evidence-submitted
+             {:evidence/before {:evidence-updated? (get-in world [:evidence-updated? workflow-id] false)}}
+             {:evidence/after {:evidence-updated? true :evidence-hash evidence-hash}}
+             {:evidence/workflow-id workflow-id
+              :evidence/hash evidence-hash}))
+          (t/ok world'))))))
 
 (defn- fraud-slash-workflow-eligible?
   "Manual fraud slash requires the workflow to have entered the dispute path:
@@ -498,7 +505,7 @@
                "propose-fraud-slash"
                authorization-provenance))))
 
-(defn- update-unavailability
+(defn update-unavailability
   "Idempotent resolver unavailability accounting + circuit breaker trigger.
    Mirrors Solidity behavior at a model level."
   [world resolver unavailable?]
@@ -641,7 +648,8 @@
                         (handle-reversal-slashing workflow-id is-release)
                         (reverse-reversal-slash-on-vindication workflow-id is-release))
             world''        (assoc-in world' [:previous-decisions workflow-id (t/dispute-level world workflow-id)]
-                                     {:resolver caller :is-release is-release})
+                                     {:resolver caller :is-release is-release
+                                      :resolution-source (or resolution-source :normal)})
             decision-info {:decision-id (str "resolve-" workflow-id "-" (t/dispute-level world workflow-id))
                            :step (time-ctx/block-ts world)
                            :alternatives [:release :refund]

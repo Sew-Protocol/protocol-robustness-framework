@@ -1,7 +1,8 @@
 (ns resolver-sim.notebook-support.speds.story
   "SPEDS Phase 3: Narrative Story Engines.
    Templates for automated 4-frame validation stories."
-  (:require [resolver-sim.notebook-support.speds.core :as speds]
+  (:require [resolver-sim.logging :as log]
+            [resolver-sim.notebook-support.speds.core :as speds]
             [resolver-sim.notebook-support.speds.config :as config]
             [resolver-sim.notebook-support.speds.data :as data]
             [resolver-sim.notebook-support.speds.findings :as findings]
@@ -47,6 +48,15 @@
      cta (conj [:div {:style {:marginTop "24px" :padding "12px" :background "#03DAC6" :color "#020617" :textAlign "center" :fontWeight 900 :fontSize "14px"}}
                 cta]))})
 
+(defn- inv-status
+  "Returns the invariant status from context data, defaulting to :ok."
+  [ctx simple-id]
+  (let [results (or (:invariant-results ctx) {})
+        full-key (keyword "invariant" (name simple-id))]
+    (or (get results full-key)
+        (get results simple-id)
+        :ok)))
+
 ;; ---
 ;; Internal Narrative Helpers
 
@@ -79,13 +89,17 @@
         matches? (fn [{:keys [purposes id-substrings tag-substrings]}]
                    (or (and (seq purposes) (contains? purposes purpose))
                        (some #(str/includes? id-lc %) (or id-substrings []))
-                       (some #(str/includes? tag-text %) (or tag-substrings []))))]
-    (or (:family (first (filter matches? families)))
-        default
-        :deflection)))
+                       (some #(str/includes? tag-text %) (or tag-substrings []))))
+        matched (first (filter matches? families))
+        result (or (:family matched) default :deflection)]
+    (when-not matched
+      (log/warn! "No story-family rules matched; using fallback"
+                 {:scenario-id scenario-id :purpose purpose
+                  :threat-tags (:threat-tags scenario) :fallback result}))
+    result))
 
 (defn- deflection-frame-specs
-  [{:keys [trace-id git-sha hash title replay-match-label]}]
+  [{:keys [trace-id git-sha hash title replay-match-label] :as ctx}]
   [{:header "STATUS: ALERT"
     :footer-left trace-id
     :footer-right (str "GIT:" git-sha)
@@ -115,7 +129,7 @@
     :content
     [(speds/v-res "Protocol Guard")
      [:div {:style {:marginTop "20px"}}
-      (speds/v-inv :solvency :ok)]
+      (speds/v-inv :solvency (inv-status ctx :solvency))]
      [:h2 {:style {:fontSize "52px" :fontWeight 900 :lineHeight 0.9 :color "#03DAC6" :marginTop "20px" :textShadow speds/teal-shadow}} "ATTACK" [:br] "DEFLECTED"]]}
    (verified-closing-frame {:replay-match-label replay-match-label :hash hash}
                            ["SIGNED" [:br] "DETERMINISTIC" [:br] "EVIDENCE"]
@@ -123,7 +137,7 @@
                            :cta "VERIFY DETERMINISTIC REPLAY")])
 
 (defn- deadline-frame-specs
-  [{:keys [trace-id git-sha hash title replay-match-label]}]
+  [{:keys [trace-id git-sha hash title replay-match-label] :as ctx}]
   [{:header "STATUS: DEADLINE_WINDOW"
     :footer-left trace-id
     :footer-right (str "GIT:" git-sha)
@@ -138,21 +152,21 @@
     :footer-right "ACTION: APPEAL"
     :claims [{:claim-id :window-open-rule :value "T <= deadline" :source-artifact "scenario" :source-path [:coverage :scenarios]}]
     :content
-    [[:div {:style {:marginBottom "20px"}} (speds/v-inv :deadline :ok)]
+    [[:div {:style {:marginBottom "20px"}} (speds/v-inv :deadline (inv-status ctx :deadline))]
      [:h2 {:style {:fontSize "30px" :fontWeight 900 :lineHeight 0.9 :color "#fff"}} "WITHIN WINDOW" [:br] "ACTION ACCEPTED"]]}
    {:header "STATUS: WINDOW_CLOSED"
     :footer-left "RULE: T > DEADLINE"
     :footer-right "ACTION: APPEAL"
     :claims [{:claim-id :window-closed-reject :value "ERR_WINDOW_CLOSED" :source-artifact "scenario" :source-path [:coverage :scenarios]}]
     :content
-    [[:div {:style {:marginBottom "20px"}} (speds/v-inv :deadline :fail)]
+    [[:div {:style {:marginBottom "20px"}} (speds/v-inv :deadline (inv-status ctx :deadline))]
      [:h2 {:style {:fontSize "40px" :fontWeight 900 :lineHeight 0.9 :color "#FF9800"}} "LATE APPEAL" [:br] "REJECTED"]]}
    (verified-closing-frame {:replay-match-label replay-match-label :hash hash}
                            ["DETERMINISTIC" [:br] "DEADLINE" [:br] "ENFORCEMENT"]
                            :claim-id :deadline-replay-alignment)])
 
 (defn- falsification-frame-specs
-  [{:keys [trace-id git-sha hash title replay-match-label]}]
+  [{:keys [trace-id git-sha hash title replay-match-label] :as ctx}]
   [{:header "STATUS: HYPOTHESIS"
     :footer-left trace-id
     :footer-right (str "GIT:" git-sha)
@@ -175,7 +189,7 @@
     :footer-right "CLASS: RESEARCH"
     :claims [{:claim-id :observed-outcome :value "expected-negative" :source-artifact "report" :source-path [:report :status-kind]}]
     :content
-    [[:div {:style {:marginBottom "20px"}} (speds/v-inv :boundary :fail)]
+    [[:div {:style {:marginBottom "20px"}} (speds/v-inv :boundary (inv-status ctx :boundary))]
      [:h2 {:style {:fontSize "42px" :fontWeight 900 :lineHeight 0.9 :color "#FF9800"}} "MODEL LIMIT" [:br] "LOCATED"]
      [:p {:style {:fontSize "14px" :marginTop "16px" :color "#FF9800" :fontWeight 700}}
       "Negative result is treated as falsification evidence, not protocol marketing output."]]}
@@ -184,7 +198,7 @@
                            :claim-id :falsification-replay)])
 
 (defn- collusion-frame-specs
-  [{:keys [trace-id git-sha hash title replay-match-label]}]
+  [{:keys [trace-id git-sha hash title replay-match-label] :as ctx}]
   [{:header "STATUS: ALERT"
     :footer-left trace-id
     :footer-right (str "GIT:" git-sha)
@@ -208,13 +222,13 @@
     :footer-right "SLASHER: TRIGGERED"
     :content
     [(speds/v-res "Collusion Guard")
-     [:div {:style {:marginTop "20px"}} (speds/v-inv :solvency :ok)]
+     [:div {:style {:marginTop "20px"}} (speds/v-inv :solvency (inv-status ctx :solvency))]
      [:h2 {:style {:fontSize "50px" :fontWeight 900 :lineHeight 0.9 :color "#03DAC6" :marginTop "20px" :textShadow speds/teal-shadow}} "BRIBERY" [:br] "DEFLECTED"]]}
    (verified-closing-frame {:replay-match-label replay-match-label :hash hash}
                            ["EQUILIBRIUM" [:br] "RESTORED"])])
 
 (defn- economic-solvency-frame-specs
-  [{:keys [trace-id git-sha hash title replay-match-label]}]
+  [{:keys [trace-id git-sha hash title replay-match-label] :as ctx}]
   [{:header "STATUS: MONITORING"
     :footer-left trace-id
     :footer-right (str "GIT:" git-sha)
@@ -237,8 +251,8 @@
     :footer-right "MARGIN: 100%"
     :content
     [[:div {:style {:display "flex" :gap "20px" :marginBottom "20px"}}
-      (speds/v-inv :solvency :ok)
-      (speds/v-inv :conservation :ok)]
+      (speds/v-inv :solvency (inv-status ctx :solvency))
+      (speds/v-inv :conservation (inv-status ctx :conservation))]
      [:h2 {:style {:fontSize "40px" :fontWeight 900 :lineHeight 0.9 :color "#fff"}} "SOLVENCY" [:br] "GUARANTEED"]]}
    (verified-closing-frame {:replay-match-label replay-match-label :hash hash}
                            ["DETERMINISTIC" [:br] "SOLVENCY" [:br] "BUNDLE"])])
@@ -313,7 +327,7 @@
            (when (seq baseline-note)
              [:p {:style {:fontSize "11px" :color "#94a3b8" :marginBottom "10px"}}
               baseline-note])
-           (generate-story-by-family (or (:scenario_id f) (:default-theory-falsification-scenario-id @config/profile)) artifacts)]))])))
+           (generate-story-by-family (or (:scenario_id f) (:default-theory-falsification-scenario-id @config/profile)) artifacts f)]))])))
 
 (defn generate-scenario-deep-dive
   "Deep-dive mode, typically selected from issue list."
@@ -372,7 +386,7 @@
           [:div {:style {:display "flex" :alignItems "center" :gap "10px"}}
            [:div {:style {:width "150px" :fontSize "10px" :fontFamily "JetBrains Mono"}} (name tag)]
            [:div {:style {:flex 1 :height "8px" :background "#004D59"}}
-            [:div {:style {:width (str (min 100 (* freq 10)) "%")
+            [:div {:style {:width (str (min 100 (* freq config/threat-tag-bar-scale)) "%")
                            :height "100%"
                            :background "#7ADDDC"}}]]])]]
 
@@ -408,11 +422,12 @@
   "Generates a multi-frame narrative for a scenario, dispatching on
    the story family determined from scenario metadata.
    This is the canonical entry point for SPEDS story generation."
-  [scenario-id artifacts]
-  (let [ctx (story-data/build-story-data artifacts scenario-id)
-        family (story-family scenario-id (:scenario ctx))
-        frame-specs (frame-specs-for-family family ctx)]
-    (render-frame-specs frame-specs)))
+  ([scenario-id artifacts] (generate-story-by-family scenario-id artifacts nil))
+  ([scenario-id artifacts finding]
+   (let [ctx (story-data/build-story-data artifacts scenario-id finding)
+         family (story-family scenario-id (:scenario ctx))
+         frame-specs (frame-specs-for-family family ctx)]
+     (render-frame-specs frame-specs))))
 
 (defn generate-deflection-story
   "Deprecated alias for generate-story-by-family. Retained for

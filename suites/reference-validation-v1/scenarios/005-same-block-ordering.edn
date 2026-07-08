@@ -2,6 +2,6 @@
  :scenario/title "005-same-block-ordering"
  :scenario/version "1.0.0"
  :scenario/status :public-candidate
- :scenario/purpose "Canonical reference-validation scenario for trust evidence mapping."
+ :scenario/purpose "Verifies settlement paths remain mutually exclusive under concurrent ordering."
  :protocol/phase :dr3
  :expected-result {:status :pass :classification :regression-protected}}

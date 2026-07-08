@@ -20,7 +20,7 @@
 
 (defn- save-scenario [scenario]
   (let [path (str "scenarios/" (:scenario-id scenario) ".json")]
-    (spit path (json/write-str scenario {:escape-slash false :indent true})))
+    (spit path (json/write-str scenario {:escape-slash false :indent true}))
 
     (println "Generated:" path)))
 

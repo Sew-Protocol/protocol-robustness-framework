@@ -59,6 +59,26 @@
   [v]
   (.getBytes (json-encode-safe v) "UTF-8"))
 
+;; ── Protocol state hashing ────────────────────────────────────────────────────
+
+(defn- hash-sorted-map
+  "Compute a deterministic hash of a map by sorting all keys recursively.
+   Only includes keys whose values are maps — filters out fns, refs, etc.
+   Returns nil if the map is empty or nil."
+  [label m]
+  (when (seq m)
+    (letfn [(sorted [x]
+              (cond
+                (instance? java.util.Map x)
+                (into (sorted-map) (map (fn [[k v]] [(str k) (sorted v)]) x))
+                (vector? x) (mapv sorted x)
+                (keyword? x) (name x)
+                (instance? clojure.lang.Var x) (str (.sym ^clojure.lang.Var x))
+                (fn? x) (str (.getName (class x)))
+                :else x))]
+      (let [cleaned (sorted m)]
+        (hc/hash-with-intent {:hash/intent :protocol-state :section label} cleaned)))))
+
 ;; ── Registry snapshot helpers ─────────────────────────────────────────────────
 
 (defn- canonicalize-registry
@@ -151,9 +171,12 @@
   "Build a bundle root from a run request and run result.
    request M-bM-^@M-^T the :scenario-run/request map
    result  M-bM-^@M-^T the :scenario-run/result map
+   Optional :protocol/force-authorisations and :protocol/force-authorisations-consumed
+   keys in result will be hashed into :protocol/state-hashes.
    Returns a bundle-root.v1 map with:
    - run request (for reproducibility)
    - registry snapshot hashes
+   - protocol state hashes (when provided)
    - execution environment
    - execution summary
    - normalized overview hash
@@ -168,6 +191,13 @@
                           :evidence/profile :output/profile])
         runner-id (get-in request [:runner-selection :runner-id])
         orch-id (lookup-orchestrator-id runner-id)
+        proto-fa (hash-sorted-map :force-authorisations
+                                  (:protocol/force-authorisations result))
+        proto-fa-consumed (hash-sorted-map :force-authorisations-consumed
+                                           (:protocol/force-authorisations-consumed result))
+        proto-hashes (cond-> {}
+                       proto-fa (assoc :force-authorisations/hash proto-fa)
+                       proto-fa-consumed (assoc :force-authorisations/consumed-hash proto-fa-consumed))
         base {:bundle/schema-version schema-version
               :run/request (assoc req
                                   :registry-key (or (:registry-key request) :default)
@@ -179,6 +209,9 @@
               :execution/summary (select-keys result [:totals :status])
               :overview/hash overview-h
               :overview overview}
+        base (if (seq proto-hashes)
+               (assoc base :protocol/state-hashes proto-hashes)
+               base)
         bundle-hash (hc/hash-with-intent {:hash/intent :bundle-root} base)]
     (assoc base
            :bundle/id bundle-hash

@@ -31,7 +31,9 @@
              :validate              (requiring-resolve 'resolver-sim.commands.validate/run)
              :concepts-validate     (requiring-resolve 'resolver-sim.commands.concepts/validate)
              :benchmark-validate    (requiring-resolve 'resolver-sim.commands.benchmark/validate)
-             :scenario-run          (requiring-resolve 'resolver-sim.commands.scenario/run)
+             :run-scenario          (requiring-resolve 'resolver-sim.commands.scenario/run)
+             :run-invariants        (requiring-resolve 'resolver-sim.commands.invariants/run)
+             :run-benchmark         (requiring-resolve 'resolver-sim.commands.run-benchmark/run)
              :fmt-check             (requiring-resolve 'resolver-sim.commands.validate/fmt-check)
              :lint                  (requiring-resolve 'resolver-sim.commands.validate/lint)}))
   @handler-cache)
@@ -54,7 +56,10 @@
    [nil "--strict" "Strict validation mode"]
    [nil "--explain" "Explain results in detail"]
    [nil "--out DIR" "Output directory"
-    :default "target/report"]])
+    :default "target/report"]
+   [nil "--output PATH" "Output path for evidence bundle"]
+   [nil "--protocol PROTOCOL" "Protocol ID (default sew-v1)"]
+   [nil "--key PATH" "Path to private key"]])
 
 ;; ---------------------------------------------------------------------------
 ;; Command path resolution
@@ -72,20 +77,28 @@
     [path-str opts-args]))
 
 (defn resolve-command
-  "Turn a path like 'evidence verify-chain' into a :command/id keyword."
+  "Turn a path like 'evidence verify-chain' into [command-id positional-args].
+   Returns nil if no command matches."
   [path-str]
-  (case path-str
-    "backstop"                 :backstop
-    "commands validate"        :commands-validate
-    "evidence verify-chain"    :evidence-verify-chain
-    "evidence validate"        :evidence-validate
-    "evidence coverage"        :evidence-coverage
-    "evidence backstop"        :evidence-backstop
-    "validate"                 :validate
-    "concepts validate"        :concepts-validate
-    "benchmark validate"       :benchmark-validate
-    "scenario run"             :scenario-run
-    nil))
+  (let [parts (str/split path-str #" ")
+        cmd (first parts)
+        args (rest parts)]
+    (case path-str
+      "backstop"              [:backstop args]
+      "commands validate"     [:commands-validate args]
+      "evidence verify-chain" [:evidence-verify-chain args]
+      "evidence validate"     [:evidence-validate args]
+      "evidence coverage"     [:evidence-coverage args]
+      "evidence backstop"     [:evidence-backstop args]
+      "validate"              [:validate args]
+      "concepts validate"     [:concepts-validate args]
+      "benchmark validate"    [:benchmark-validate args]
+      ;; Single-word commands with optional positional args
+      (case cmd
+        "run-scenario"   [:run-scenario args]
+        "run-invariants" [:run-invariants args]
+        "run-benchmark"  [:run-benchmark args]
+        nil))))
 
 ;; ---------------------------------------------------------------------------
 ;; Help
@@ -130,10 +143,11 @@
 
 (defn- run-command
   "Execute a resolved command handler. Returns exit code."
-  [handler-var opts cmd-path]
+  [handler-var opts cmd-path cmd-args]
   (try
     (let [result (handler-var (assoc opts
-                                     :cmd/path cmd-path))]
+                                     :cmd/path cmd-path
+                                     :cmd/args cmd-args))]
       (or (:exit-code result) 0))
     (catch Exception e
       (println "Error executing command:" (.getMessage e))
@@ -171,10 +185,15 @@
             ;; Re-parse remaining arg tokens as options for the subcommand
             sub-parsed (cli/parse-opts raw-opts cli-options)
             merged-opts (merge options (:options sub-parsed))
-            cmd-id (resolve-command cmd-path)
-            handler-var (get (get-command-handlers) cmd-id)]
-        (if handler-var
-          (run-command handler-var merged-opts cmd-path)
+            resolved (resolve-command cmd-path)]
+        (if resolved
+          (let [[cmd-id cmd-args] resolved
+                handler-var (get (get-command-handlers) cmd-id)]
+            (if handler-var
+              (run-command handler-var merged-opts cmd-path cmd-args)
+              (do (println "Unknown command:" cmd-path)
+                  (println "Run 'java -jar prf.jar help' for available commands.")
+                  2)))
           (do (println "Unknown command:" cmd-path)
               (println "Run 'java -jar prf.jar help' for available commands.")
               2))))))

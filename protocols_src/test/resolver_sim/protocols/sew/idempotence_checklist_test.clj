@@ -34,7 +34,7 @@
         w2 (acct/clear-claimable-v2-kind w1 0 :settlement/principal)]
     (is (nil? (get-in w1 [:claimable-v2 0 :settlement/principal bob])))
     (is (nil? (get-in w2 [:claimable-v2 0 :settlement/principal bob])))
-    (is (nil? (get-in w2 [:claimable-v2 0 :settlement/principal nil]))
+    (is (nil? (get-in w2 [:claimable-v2 0 :settlement/principal]))
         "clear helper must not synthesize nil claimant keys")
     (is (empty? (get-in w2 [:claimable 0] {}))
         "legacy principal mirror remains clear after repeated cleanup")))

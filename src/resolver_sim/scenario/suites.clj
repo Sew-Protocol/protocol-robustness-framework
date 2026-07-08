@@ -99,7 +99,16 @@
    "S-DR-082-stake-capacity-sufficient"
    "S-DR-083-evidence-after-resolution"
    "S-DR-084-evidence-after-settlement-rejected"
-   "S-DR-085-repeated-frivolous-disputes"])
+   "S-DR-085-repeated-frivolous-disputes"
+   "S-DR-086-evidence-after-resolver-rotation"
+   "S-DR-087-evidence-after-governance-fee-update"
+   "S-DR-088-evidence-before-deadline"
+   "S-DR-089-freeze-recovery"
+   "S-DR-090-circuit-breaker-recovery"
+   "S-DR-091-unavailable-resolver-mid-dispute"
+   "S-DR-092-automate-timed-actions"
+   "S-DR-093-evidence-during-freeze"
+   "S-DR-094-evidence-at-capacity"])
 
 (def ^:private sew-reference-scenario-paths
   "Curated reference scenarios for external verifier reproducibility.

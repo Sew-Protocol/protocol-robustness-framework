@@ -1383,7 +1383,9 @@
                      {:id "seller"     :address "0xseller" :strategy "honest"}
                      {:id "governance" :address "0xgov"    :role "governance"}
                      {:id "keeper"     :address "0xkeeper" :role "keeper"}]
-   :protocol-params (assoc appeal :resolver-bond-bps 0 :governance-mode :full)
+   :protocol-params (assoc appeal :resolver-bond-bps 0 :governance-mode :full
+                           :slash-epoch-cap-bps 10000
+                           :max-slash-per-offense-bps 10000)
    :allow-open-disputes? true
    :events
    [{:seq 0 :time 1000 :agent "senior" :action "register_senior_bond"
@@ -1433,7 +1435,9 @@
                      {:id "seller"     :address "0xseller" :strategy "honest"}
                      {:id "governance" :address "0xgov"    :role "governance"}
                      {:id "keeper"     :address "0xkeeper" :role "keeper"}]
-   :protocol-params (assoc appeal :resolver-bond-bps 0 :governance-mode :full)
+   :protocol-params (assoc appeal :resolver-bond-bps 0 :governance-mode :full
+                           :slash-epoch-cap-bps 10000
+                           :max-slash-per-offense-bps 10000)
    :allow-open-disputes? true
    :events
    [{:seq 0 :time 1000 :agent "senior" :action "register_senior_bond"
@@ -1456,5 +1460,226 @@
     {:seq 7 :time 1241 :agent "keeper" :action "execute_pending_settlement"
      :params {:workflow-id 0}}
     ;; Execute slash after appeal window (1250).
+    {:seq 8 :time 1255 :agent "governance" :action "execute_fraud_slash"
+     :params {:workflow-id 0}}]})
+
+;; ---------------------------------------------------------------------------
+;; S110 — Multi-junior delegation to single senior
+;;
+;; Two junior resolvers delegate to one senior, then each is slashed
+;; independently. Coverage is consumed from the shared senior pool.
+;;
+;; Invariants exercised:
+;;   senior-coverage-not-exceeded? — reserved never exceeds coverage-max
+;;   slash-distribution-consistent? — each slash credited to buckets
+;; ---------------------------------------------------------------------------
+
+(def s110
+  {:scenario-id     "s110-multi-junior-coverage"
+   :schema-version  "1.0"
+   :scenario-author "@kilo-research"
+   :initial-block-time 1000
+   :agents          [{:id "senior"     :address "0xsenior" :role "resolver"}
+                     {:id "juniorA"    :address "0xjuniorA" :role "resolver"}
+                     {:id "juniorB"    :address "0xjuniorB" :role "resolver"}
+                     {:id "buyer"      :address "0xbuyer"   :strategy "honest"}
+                     {:id "seller"     :address "0xseller"  :strategy "honest"}
+                     {:id "governance" :address "0xgov"     :role "governance"}
+                     {:id "keeper"     :address "0xkeeper"  :role "keeper"}]
+   :protocol-params (assoc appeal :resolver-bond-bps 0 :governance-mode :full
+                           :slash-epoch-cap-bps 10000
+                           :max-slash-per-offense-bps 10000)
+   :allow-open-disputes? true
+   :events
+   [{:seq 0 :time 1000 :agent "senior" :action "register_senior_bond"
+     :params {:coverage-max 10000}}
+    {:seq 1 :time 1000 :agent "juniorA" :action "register_stake"
+     :params {:amount 10000}}
+    {:seq 2 :time 1000 :agent "juniorB" :action "register_stake"
+     :params {:amount 10000}}
+    {:seq 3 :time 1000 :agent "juniorA" :action "delegate_to_senior"
+     :params {:senior-addr "0xsenior" :resolver-addr "0xjuniorA" :coverage 4000}}
+    {:seq 4 :time 1001 :agent "juniorB" :action "delegate_to_senior"
+     :params {:senior-addr "0xsenior" :resolver-addr "0xjuniorB" :coverage 4000}}
+    ;; Escrow 0: Junior-A handles, gets slashed for 3000 (within 4000 coverage).
+    {:seq 5 :time 1100 :agent "buyer" :action "create_escrow"
+     :params {:token "USDC" :to "0xseller" :amount 5000
+              :custom-resolver "0xjuniorA"}}
+    {:seq 6 :time 1160 :agent "buyer" :action "raise_dispute"
+     :params {:workflow-id 0}}
+    {:seq 7 :time 1220 :agent "juniorA" :action "execute_resolution"
+     :params {:workflow-id 0 :is-release true :resolution-hash "0xhash"}}
+    {:seq 8 :time 1230 :agent "governance" :action "propose_fraud_slash"
+     :params {:workflow-id 0 :resolver-addr "0xjuniorA" :amount 3000}}
+    {:seq 9 :time 1341 :agent "keeper" :action "execute_pending_settlement"
+     :params {:workflow-id 0}}
+    {:seq 10 :time 1355 :agent "governance" :action "execute_fraud_slash"
+     :params {:workflow-id 0}}
+    ;; Escrow 1: Junior-B handles, gets slashed for 2000 (within 4000 coverage).
+    {:seq 11 :time 1400 :agent "buyer" :action "create_escrow"
+     :params {:token "USDC" :to "0xseller" :amount 5000
+              :custom-resolver "0xjuniorB"}}
+    {:seq 12 :time 1460 :agent "buyer" :action "raise_dispute"
+     :params {:workflow-id 1}}
+    {:seq 13 :time 1520 :agent "juniorB" :action "execute_resolution"
+     :params {:workflow-id 1 :is-release true :resolution-hash "0xhash"}}
+    {:seq 14 :time 1530 :agent "governance" :action "propose_fraud_slash"
+     :params {:workflow-id 1 :resolver-addr "0xjuniorB" :amount 2000}}
+    {:seq 15 :time 1641 :agent "keeper" :action "execute_pending_settlement"
+     :params {:workflow-id 1}}
+    {:seq 16 :time 1655 :agent "governance" :action "execute_fraud_slash"
+     :params {:workflow-id 1}}]})
+
+;; ---------------------------------------------------------------------------
+;; S111 — Gradual coverage exhaustion over multiple slashes
+;;
+;; A single junior delegating 5000 coverage is slashed three times.
+;; The first two slashes (2000 each) are fully covered by the senior pool.
+;; The third slash (2000) partially exhausts the remaining 1000 coverage
+;; and the remaining 1000 comes from the junior's own stake.
+;;
+;; Invariants exercised:
+;;   senior-coverage-not-exceeded? — coverage never exceeds max
+;;   slash-distribution-consistent? — each slash accounted
+;; ---------------------------------------------------------------------------
+
+(def s111
+  {:scenario-id     "s111-gradual-coverage-exhaustion"
+   :schema-version  "1.0"
+   :scenario-author "@kilo-research"
+   :initial-block-time 1000
+   :agents          [{:id "senior"     :address "0xsenior" :role "resolver"}
+                     {:id "junior"     :address "0xjunior" :role "resolver"}
+                     {:id "buyer"      :address "0xbuyer"  :strategy "honest"}
+                     {:id "seller"     :address "0xseller" :strategy "honest"}
+                     {:id "governance" :address "0xgov"    :role "governance"}
+                     {:id "keeper"     :address "0xkeeper" :role "keeper"}]
+   :protocol-params (assoc appeal :resolver-bond-bps 0 :governance-mode :full
+                           :slash-epoch-cap-bps 10000
+                           :max-slash-per-offense-bps 10000)
+   :allow-open-disputes? true
+   :events
+   [{:seq 0 :time 1000 :agent "senior" :action "register_senior_bond"
+     :params {:coverage-max 5000}}
+    {:seq 1 :time 1000 :agent "junior" :action "register_stake"
+     :params {:amount 10000}}
+    {:seq 2 :time 1000 :agent "junior" :action "delegate_to_senior"
+     :params {:senior-addr "0xsenior" :resolver-addr "0xjunior" :coverage 5000}}
+    ;; Slash 1: escrow 0, slash 2000 (within coverage).
+    {:seq 3 :time 1000 :agent "buyer" :action "create_escrow"
+     :params {:token "USDC" :to "0xseller" :amount 5000
+              :custom-resolver "0xjunior"}}
+    {:seq 4 :time 1060 :agent "buyer" :action "raise_dispute"
+     :params {:workflow-id 0}}
+    {:seq 5 :time 1120 :agent "junior" :action "execute_resolution"
+     :params {:workflow-id 0 :is-release true :resolution-hash "0xhash"}}
+    {:seq 6 :time 1130 :agent "governance" :action "propose_fraud_slash"
+     :params {:workflow-id 0 :resolver-addr "0xjunior" :amount 2000}}
+    {:seq 7 :time 1241 :agent "keeper" :action "execute_pending_settlement"
+     :params {:workflow-id 0}}
+    {:seq 8 :time 1255 :agent "governance" :action "execute_fraud_slash"
+     :params {:workflow-id 0}}
+    ;; Slash 2: escrow 1, slash 2000 (still within coverage).
+    {:seq 9 :time 1300 :agent "buyer" :action "create_escrow"
+     :params {:token "USDC" :to "0xseller" :amount 5000
+              :custom-resolver "0xjunior"}}
+    {:seq 10 :time 1360 :agent "buyer" :action "raise_dispute"
+     :params {:workflow-id 1}}
+    {:seq 11 :time 1420 :agent "junior" :action "execute_resolution"
+     :params {:workflow-id 1 :is-release true :resolution-hash "0xhash"}}
+    {:seq 12 :time 1430 :agent "governance" :action "propose_fraud_slash"
+     :params {:workflow-id 1 :resolver-addr "0xjunior" :amount 2000}}
+    {:seq 13 :time 1541 :agent "keeper" :action "execute_pending_settlement"
+     :params {:workflow-id 1}}
+    {:seq 14 :time 1555 :agent "governance" :action "execute_fraud_slash"
+     :params {:workflow-id 1}}
+    ;; Slash 3: escrow 2, slash 2000 (exceeds remaining 1000 coverage).
+    {:seq 15 :time 1600 :agent "buyer" :action "create_escrow"
+     :params {:token "USDC" :to "0xseller" :amount 5000
+              :custom-resolver "0xjunior"}}
+    {:seq 16 :time 1660 :agent "buyer" :action "raise_dispute"
+     :params {:workflow-id 2}}
+    {:seq 17 :time 1720 :agent "junior" :action "execute_resolution"
+     :params {:workflow-id 2 :is-release true :resolution-hash "0xhash"}}
+    {:seq 18 :time 1730 :agent "governance" :action "propose_fraud_slash"
+     :params {:workflow-id 2 :resolver-addr "0xjunior" :amount 2000}}
+    {:seq 19 :time 1841 :agent "keeper" :action "execute_pending_settlement"
+     :params {:workflow-id 2}}
+    {:seq 20 :time 1855 :agent "governance" :action "execute_fraud_slash"
+     :params {:workflow-id 2}}]})
+
+;; ---------------------------------------------------------------------------
+;; S112 — Senior-coverage-exceeded error path
+;;
+;; Attempt to delegate more coverage than the senior's coverage-max.
+;; Expected revert: :senior-coverage-exceeded.
+;;
+;; Invariants exercised:
+;;   senior-coverage-not-exceeded? — always holds (delegation rejected)
+;; ---------------------------------------------------------------------------
+
+(def s112
+  {:scenario-id     "s112-coverage-exceeded-error"
+   :schema-version  "1.0"
+   :scenario-author "@kilo-research"
+   :initial-block-time 1000
+   :agents          [{:id "senior" :address "0xsenior" :role "resolver"}
+                     {:id "junior" :address "0xjunior" :role "resolver"}]
+   :protocol-params (assoc dr3 :governance-mode :full)
+   :expected-revert? true
+   :events
+   [{:seq 0 :time 1000 :agent "senior" :action "register_senior_bond"
+     :params {:coverage-max 5000}}
+    {:seq 1 :time 1000 :agent "junior" :action "delegate_to_senior"
+     :params {:senior-addr "0xsenior" :resolver-addr "0xjunior" :coverage 5000}}
+    {:seq 2 :time 1001 :agent "junior" :action "delegate_to_senior"
+     :params {:senior-addr "0xsenior" :resolver-addr "0xjunior" :coverage 1000}}]})
+
+;; ---------------------------------------------------------------------------
+;; S113 — Insurance-cut-bps governance override
+;;
+;; Protocol params override the default slash distribution split to
+;; 80/10/10 (insurance/protocol/retained) instead of 50/30/20.
+;; A slash event occurs and the distribution is verified.
+;;
+;; Invariants exercised:
+;;   slash-distribution-consistent? — custom split holds
+;; ---------------------------------------------------------------------------
+
+(def s113
+  {:scenario-id     "s113-insurance-bps-override"
+   :schema-version  "1.0"
+   :scenario-author "@kilo-research"
+   :initial-block-time 1000
+   :agents          [{:id "senior"     :address "0xsenior" :role "resolver"}
+                     {:id "junior"     :address "0xjunior" :role "resolver"}
+                     {:id "buyer"      :address "0xbuyer"  :strategy "honest"}
+                     {:id "seller"     :address "0xseller" :strategy "honest"}
+                     {:id "governance" :address "0xgov"    :role "governance"}
+                     {:id "keeper"     :address "0xkeeper" :role "keeper"}]
+   :protocol-params (assoc appeal :resolver-bond-bps 0 :governance-mode :full
+                           :slash-epoch-cap-bps 10000
+                           :max-slash-per-offense-bps 10000
+                           :insurance-cut-bps 8000
+                           :protocol-retained-bps 1000)
+   :allow-open-disputes? true
+   :events
+   [{:seq 0 :time 1000 :agent "senior" :action "register_senior_bond"
+     :params {:coverage-max 10000}}
+    {:seq 1 :time 1000 :agent "junior" :action "register_stake"
+     :params {:amount 10000}}
+    {:seq 2 :time 1000 :agent "junior" :action "delegate_to_senior"
+     :params {:senior-addr "0xsenior" :resolver-addr "0xjunior" :coverage 5000}}
+    {:seq 3 :time 1000 :agent "buyer" :action "create_escrow"
+     :params {:token "USDC" :to "0xseller" :amount 5000
+              :custom-resolver "0xjunior"}}
+    {:seq 4 :time 1060 :agent "buyer" :action "raise_dispute"
+     :params {:workflow-id 0}}
+    {:seq 5 :time 1120 :agent "junior" :action "execute_resolution"
+     :params {:workflow-id 0 :is-release true :resolution-hash "0xhash"}}
+    {:seq 6 :time 1130 :agent "governance" :action "propose_fraud_slash"
+     :params {:workflow-id 0 :resolver-addr "0xjunior" :amount 2000}}
+    {:seq 7 :time 1241 :agent "keeper" :action "execute_pending_settlement"
+     :params {:workflow-id 0}}
     {:seq 8 :time 1255 :agent "governance" :action "execute_fraud_slash"
      :params {:workflow-id 0}}]})

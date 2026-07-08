@@ -954,13 +954,13 @@
                     :params {:workflow-id 0}}
                    {:seq 3 :time 1120 :agent "resolver" :action "execute_resolution"
                     :params {:workflow-id 0 :is-release true :resolution-hash "0xhash"}}
-                   {:seq 4 :time 1130 :agent "gov" :action "propose_fraud_slash"
-                    :params {:workflow-id 0 :resolver-addr "0xResolver" :amount 1000}}
-                   {:seq 5 :time 1230 :agent "alice" :action "execute_pending_settlement"
-                    :params {:workflow-id 0}}
-                ;; current=5000, pending-slash=1000, amount=4000 => current-amount=1000 (allowed)
-                   {:seq 6 :time 1231 :agent "resolver" :action "withdraw_stake"
-                    :params {:amount 4000}}]))]
+{:seq 4 :time 1130 :agent "gov" :action "propose_fraud_slash"
+                     :params {:workflow-id 0 :resolver-addr "0xResolver" :amount 500}}
+                    {:seq 5 :time 1230 :agent "alice" :action "execute_pending_settlement"
+                     :params {:workflow-id 0}}
+                 ;; current=5000, pending-slash=500, amount=4000 => current-amount=1000 (allowed)
+                    {:seq 6 :time 1231 :agent "resolver" :action "withdraw_stake"
+                     :params {:amount 4000}}]))]
     (is (= :pass (:outcome r)))
     (is (= :ok (get-in r [:trace 6 :result])))))
 
@@ -1298,32 +1298,32 @@
                          :params {:workflow-id 0 :is-release true :resolution-hash "0xhash"}}
                         {:seq 4 :time 1130 :agent "gov" :action "propose_fraud_slash"
                          :params {:workflow-id 0 :resolver-addr "0xResolver" :amount 500}}
-                        {:seq 5 :time 1140 :agent "resolver" :action "appeal_slash"
-                         :params {:workflow-id 0}}
-                        {:seq 6 :time 1160 :agent "gov" :action "resolve_appeal"
-                         :params {:workflow-id 0 :upheld? true}}
-                        {:seq 7 :time 1255 :agent "gov" :action "execute_fraud_slash"
-                         :params {:workflow-id 0}}])
-                :allow-open-disputes? true))
+{:seq 5 :time 1140 :agent "gov" :action "appeal_slash"
+                          :params {:workflow-id 0}}
+                         {:seq 6 :time 1160 :agent "gov" :action "resolve_appeal"
+                          :params {:workflow-id 0 :upheld? true}}
+                         {:seq 7 :time 1255 :agent "gov" :action "execute_fraud_slash"
+                          :params {:workflow-id 0}}])
+                 :allow-open-disputes? true))
         r-rejected
-        (sew/replay-with-sew-protocol
-         (sb/sc :agents [alice bob resolver gov keeper]
-                :params (assoc default-params
-                               :appeal-window-duration 120
-                               :appeal-bond-amount 80)
-                :events
-                [{:seq 0 :time 1000 :agent "resolver" :action "register_stake"
-                  :params {:amount 10000}}
-                 {:seq 1 :time 1000 :agent "alice" :action "create_escrow"
-                  :params {:token "USDC" :to "0xBob" :amount 8000 :custom-resolver "0xResolver"}}
-                 {:seq 2 :time 1060 :agent "alice" :action "raise_dispute"
-                  :params {:workflow-id 0}}
-                 {:seq 3 :time 1120 :agent "resolver" :action "execute_resolution"
-                  :params {:workflow-id 0 :is-release true :resolution-hash "0xhash"}}
-                 {:seq 4 :time 1130 :agent "gov" :action "propose_fraud_slash"
-                  :params {:workflow-id 0 :resolver-addr "0xResolver" :amount 500}}
-                 {:seq 5 :time 1140 :agent "resolver" :action "appeal_slash"
-                  :params {:workflow-id 0}}
+         (sew/replay-with-sew-protocol
+          (sb/sc :agents [alice bob resolver gov keeper]
+                 :params (assoc default-params
+                                :appeal-window-duration 120
+                                :appeal-bond-amount 80)
+                 :events
+                 [{:seq 0 :time 1000 :agent "resolver" :action "register_stake"
+                   :params {:amount 10000}}
+                  {:seq 1 :time 1000 :agent "alice" :action "create_escrow"
+                   :params {:token "USDC" :to "0xBob" :amount 8000 :custom-resolver "0xResolver"}}
+                  {:seq 2 :time 1060 :agent "alice" :action "raise_dispute"
+                   :params {:workflow-id 0}}
+                  {:seq 3 :time 1120 :agent "resolver" :action "execute_resolution"
+                   :params {:workflow-id 0 :is-release true :resolution-hash "0xhash"}}
+                  {:seq 4 :time 1130 :agent "gov" :action "propose_fraud_slash"
+                   :params {:workflow-id 0 :resolver-addr "0xResolver" :amount 500}}
+                  {:seq 5 :time 1140 :agent "gov" :action "appeal_slash"
+                   :params {:workflow-id 0}}
                  {:seq 6 :time 1160 :agent "gov" :action "resolve_appeal"
                   :params {:workflow-id 0 :upheld? false}}
                  {:seq 7 :time 1241 :agent "keeper" :action "execute_pending_settlement"
@@ -1372,10 +1372,10 @@
                       :params {:workflow-id 0 :is-release true :resolution-hash "0xhash"}}
                      {:seq 4 :time 1130 :agent "gov" :action "propose_fraud_slash"
                       :params {:workflow-id 0 :resolver-addr "0xResolver" :amount 500}}
-                     {:seq 5 :time 1140 :agent "resolver" :action "appeal_slash"
-                      :params {:workflow-id 0}}
-                     {:seq 6 :time 1160 :agent "gov" :action "resolve_appeal"
-                      :params {:workflow-id 0 :upheld? false}}
+{:seq 5 :time 1140 :agent "gov" :action "appeal_slash"
+                       :params {:workflow-id 0}}
+                      {:seq 6 :time 1160 :agent "gov" :action "resolve_appeal"
+                       :params {:workflow-id 0 :upheld? false}}
                      {:seq 7 :time 1241 :agent "keeper" :action "execute_pending_settlement"
                       :params {:workflow-id 0}}
                      {:seq 8 :time 1255 :agent "gov" :action "execute_fraud_slash"

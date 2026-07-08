@@ -2,11 +2,11 @@
   "scenario-id" : "s-dr-013-evidence-at-deadline",
   "schema-version" : "1.0",
   "initial-block-time" : 1000,
-  "scenario-title" : "Evidence at deadline — TODO STUB: model has no evidence deadline",
-  "scenario-purpose" : "TODO STUB: When evidence-window-duration is added, this scenario verifies that evidence submitted exactly at the deadline boundary is accepted (or rejected per protocol rules).",
+  "scenario-title" : "Evidence at deadline boundary — submit_evidence exactly at evidence-window-duration deadline",
+  "scenario-purpose" : "Verify boundary behaviour: evidence submitted exactly when block-time equals dispute-raise-time + evidence-window-duration is accepted (deadline is exclusive: evidence at deadline is still within the window).",
   "purpose" : "theory-falsification",
-  "threat-tags" : ["dispute-resolution", "evidence", "deadline-boundary", "todo-stub"],
-  "tags" : ["suite/dispute-resolution", "coverage/evidence", "status/todo-stub"],
+  "threat-tags" : ["dispute-resolution", "evidence", "deadline-boundary"],
+  "tags" : ["suite/dispute-resolution", "coverage/evidence"],
   "agents" : [ {
     "id" : "buyer", "address" : "0xbuyer", "strategy" : "honest"
   }, {
@@ -16,6 +16,7 @@
   } ],
   "protocol-params" : {
     "resolver-fee-bps" : 150,
+    "evidence-window-duration" : 60,
     "appeal-window-duration" : 60,
     "max-dispute-duration" : 2592000
   },
@@ -26,10 +27,10 @@
     "seq" : 1, "time" : 1060, "agent" : "buyer", "action" : "raise_dispute",
     "params" : { "workflow-id" : 0 }
   }, {
-    "seq" : 2, "time" : 1120, "agent" : "resolver", "action" : "execute_resolution",
-    "params" : { "workflow-id" : 0, "is-release" : true, "resolution-hash" : "0xhash" }
+    "seq" : 2, "time" : 1120, "agent" : "seller", "action" : "submit_evidence",
+    "params" : { "workflow-id" : 0, "evidence-hash" : "0xdeadline-edge" }
   } ],
-  "scenario-notes" : "Once evidence-window-duration is implemented, add a submit_evidence exactly at the deadline boundary. See coverage gap in DISPUTE_RESOLUTION_COVERAGE.md.",
+  "scenario-notes" : "evidence-window-duration=60s. Dispute raised at t=1060, deadline = 1060+60=1120. Evidence at t=1120 equals the deadline exactly. The guard checks (> now deadline), so evidence at t=1120 is NOT past the deadline (1120 is not > 1120), and is accepted. Tests strict-greater-than boundary.",
   "scenario-author" : "@kilo-research",
   "provenance" : { "author-id" : "@kilo-research", "author" : "Kilo Research" }
 }

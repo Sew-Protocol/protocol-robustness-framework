@@ -74,24 +74,6 @@
       (is (= :honest (:ctx/strategy @!observed))
           "Strategy propagated to resolution"))))
 
-(deftest test-legacy-path-attribution-fallback
-  (testing "Legacy path does not set attribution context (relies on outer binding)"
-    (let [!observed (atom ::not-called)
-          orig-exec res/execute-resolution]
-      (binding [attr/*attribution* {:ctx/run-id "outer-binding"
-                                    :ctx/strategy :custom}]
-        (let [probe (fn [world workflow-id caller is-release resolution-hash resolution-module-fn]
-                      (reset! !observed (select-keys (attr/current-attribution) [:ctx/run-id :ctx/strategy]))
-                      (orig-exec world workflow-id caller is-release resolution-hash resolution-module-fn))]
-          (with-redefs [res/execute-resolution probe]
-            (runner/run-trial (seeded-rng 42) (assoc {:escrow-size 10000
-                                                      :resolver-fee-bps 50
-                                                      :strategy :honest}
-                                                     :attributed? false)))))
-      (is (map? @!observed) "Probe was called")
-      (is (= "outer-binding" (:ctx/run-id @!observed))
-          "Legacy path uses outer *attribution* binding"))))
-
 ;; ── Task 3: Async/pmap Attribution Preservation ──────────────────────────────
 ;;
 ;; The monadic path uses AttributedState (plain data), not *attribution* dynamic

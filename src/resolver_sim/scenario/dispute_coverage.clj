@@ -19,9 +19,17 @@
    :evidence           {:label "Evidence robustness"
                         :scenarios ["S-DR-010-missing-evidence"
                                     "S-DR-011-contradictory-evidence"
+                                    "S-DR-012-late-evidence-rejected"
+                                    "S-DR-013-evidence-at-deadline"
                                     "S-DR-056-evidence-non-disputed-rejected"
                                     "S-DR-083-evidence-after-resolution"
-                                    "S-DR-084-evidence-after-settlement-rejected"]}
+                                    "S-DR-084-evidence-after-settlement-rejected"
+                                    "S-DR-086-evidence-after-resolver-rotation"
+                                    "S-DR-087-evidence-after-governance-fee-update"
+                                    "S-DR-088-evidence-before-deadline"
+                                    "S-DR-091-unavailable-resolver-mid-dispute"
+                                    "S-DR-093-evidence-during-freeze"
+                                    "S-DR-094-evidence-at-capacity"]}
    :strategic          {:label "Strategic disputants"
                         :scenarios ["S-DR-020-false-claimant-slashed"
                                     "S-DR-021-griefing-claim-cost"
@@ -45,7 +53,9 @@
                                     "S-DR-076-non-governance-rotate-rejected"
                                     "S-DR-080-stake-capacity-enforced"
                                     "S-DR-081-stake-capacity-bypass"
-                                    "S-DR-082-stake-capacity-sufficient"]}
+                                    "S-DR-082-stake-capacity-sufficient"
+                                    "S-DR-089-freeze-recovery"
+                                    "S-DR-090-circuit-breaker-recovery"]}
    :finality           {:label "Finality and payout correctness"
                         :scenarios ["S-DR-040-finality-blocked-during-appeal"
                                     "S-DR-041-finality-after-appeal-window"
@@ -56,7 +66,8 @@
                                     "S-DR-063-slash-appeal-upheld"
                                     "S-DR-064-slash-appeal-rejected-executed"
                                     "S-DR-073-capacity-exhaustion-permanent-lock"
-                                    "S-DR-075-insufficient-bond-deterrence"]}})
+                                    "S-DR-075-insufficient-bond-deterrence"
+                                    "S-DR-092-automate-timed-actions"]}})
 
 (def coverage-gaps
   "Known research gaps that cannot yet be tested because the model lacks
@@ -67,7 +78,8 @@
     :resolution "evidence-summary.json now surfaces world/before-hash and world/after-hash for every evidence record. See resolver-sim.evidence.summary/write-evidence-summary!"}
    {:coverage :evidence
     :gap :evidence-deadline
-    :reason "protocol-params has no evidence-window-duration; submit-evidence accepted anytime while :disputed"}
+    :status :resolved
+    :resolution "evidence-window-duration added to protocol-params and snapshot. submit-evidence now rejects with :evidence-deadline-exceeded when block-time > dispute-raise-time + evidence-window-duration. See S-DR-012 (late rejection), S-DR-013 (boundary), S-DR-088 (within window)."}
    {:coverage :strategic
     :gap :expected-value-appeal
     :reason "no game-theoretic EV model for appeal decisions; can only test structural behaviour"}

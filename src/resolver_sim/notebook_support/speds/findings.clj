@@ -187,18 +187,38 @@
                       {:narrative "No baseline scenario available in coverage artifact for automatic delta extraction."})
      :available? (boolean baseline)}))
 
-(defn- narrative-artifact-spec [artifacts scenario sid sev st-kind comparator-config]
+(defn- evidence-confidence
+  [artifacts scenario trace-digest-status]
+  (let [metrics (data/narrative-metrics artifacts)
+        replay-pct (:replay-match-pct metrics)
+        golden (data/find-golden-report (:golden-reports artifacts) (:id scenario))
+        trace-ok? (= "computed" trace-digest-status)
+        replay-good? (and (number? replay-pct) (>= replay-pct 100.0))
+        golden-ok? (some? golden)
+        level (cond
+                (and trace-ok? replay-good? golden-ok?) "high"
+                (and (not trace-ok?) (not golden-ok?) (nil? replay-pct)) "low"
+                :else "medium")
+        sources (cond-> ["single-run-artifact-derived"]
+                  trace-ok? (conj "trace-verified")
+                  golden-ok? (conj "golden-report-matched")
+                  replay-good? (conj "deterministic-replay-confirmed"))]
+    {:level level
+     :basis (str/join ", " sources)}))
+
+(defn- narrative-artifact-spec [artifacts scenario sid sev st-kind comparator-config trace-info]
   (let [canon (data/canonical-summary (:summary artifacts))
         classification (classification-for scenario)
-        replay-label (:replay-match-label (data/narrative-metrics artifacts))]
+        replay-label (:replay-match-label (data/narrative-metrics artifacts))
+        confidence (evidence-confidence artifacts scenario (:trace_digest_status trace-info))]
     {:schema_version "speds.story-artifact.v1"
      :scenario_id sid
      :classification classification
-     :confidence {:level "medium"
-                  :basis "single-run-artifact-derived"}
+     :confidence confidence
      :provenance {:run_id (:run-id canon)
                   :git_sha (:git-sha canon)
-                  :trace_digest_status "missing"
+                  :trace_digest_status (:trace_digest_status trace-info)
+                  :trace_digest (:trace_digest trace-info)
                   :definitions/hash (defs/definitions-hash)}
      :claims [{:claim_id "scenario-kind"
                :value st-kind
@@ -237,6 +257,30 @@
     "low" :low
     :low))
 
+(defn- actionability
+  [classification sev]
+  (let [cls-label (:label classification)
+        sev-kw (keyword sev)]
+    {:owner (case cls-label
+              "regression" :engineering
+              "research_finding" :research
+              :triage)
+     :release-gate-impact (case sev-kw
+                            :critical :blocking
+                            :high :blocking
+                            :medium :review-required
+                            :informational)
+     :next-step (str "Owner: " (case cls-label
+                                 "regression" "engineering"
+                                 "research_finding" "research"
+                                 "triage")
+                     ", impact: " (case sev-kw
+                                    :critical "blocking"
+                                    :high "blocking"
+                                    :medium "review required"
+                                    :low "informational"
+                                    "review required"))}))
+
 (defn- canonical-outcome [artifacts scenario sid sev st-kind classification story-spec]
   {:outcome-model/version "v0.1"
    :outcome
@@ -257,9 +301,7 @@
                                         "nearest-baseline-by-id"))
                  :deltas (get-in story-spec [:baseline_comparison :delta_summary])
                  :narrative (get-in story-spec [:baseline_comparison :delta_summary :narrative])}
-    :actionability {:owner :triage
-                    :release-gate-impact :review-required
-                    :next-step "Classify as research finding vs regression before publication."}
+    :actionability (actionability classification sev)
     :visual {:blocks (mapv (fn [b] {:block (keyword (str/replace (or (:block b) "") "_" "-"))
                                     :text (:text b)})
                            (get story-spec :visual_blocks []))}}})
@@ -300,8 +342,26 @@
   (let [v (str (or s ""))]
     (subs v 0 (min n (count v)))))
 
+(defn- trace-digest
+  [trace]
+  (when trace
+    (data/sha256-hex (pr-str (dissoc trace :_filename)))))
+
+(defn- find-trace
+  [artifacts scenario-id]
+  (let [traces (or (:all-traces artifacts) (data/load-all-traces))]
+    (first (filter #(= (:scenario-id %) scenario-id) traces))))
+
+(defn- compute-trace-digest
+  [artifacts scenario-id]
+  (if-let [trace (find-trace artifacts scenario-id)]
+    {:trace_digest (trace-digest trace)
+     :trace_digest_status "computed"}
+    {:trace_digest nil
+     :trace_digest_status "unavailable"}))
+
 (defn- finding-id [run-id scenario-id]
-  (str "FINDING-" run-id "-" (truncate-safe (Math/abs (hash (str scenario-id))) 6)))
+  (str "FINDING-" run-id "-" (subs (data/sha256-hex scenario-id) 0 6)))
 
 (defn scenario->finding [artifacts scenario comparator-config]
   (let [summary (:summary artifacts)
@@ -310,7 +370,9 @@
         sev (severity scenario)
         st-kind (status-kind scenario)
         classif (classification-for scenario)
-        story-spec (narrative-artifact-spec artifacts scenario sid sev st-kind comparator-config)]
+        trace-info (compute-trace-digest artifacts sid)
+        story-spec (narrative-artifact-spec artifacts scenario sid sev st-kind comparator-config trace-info)
+        confidence-level (:level (:confidence story-spec))]
     {:finding_id (finding-id (or (:run-id canon) (:run-id config/protocol-defaults)) sid)
      :scenario_id sid
      :kind (purpose->kind (:purpose scenario))
@@ -318,15 +380,15 @@
      :severity sev
      :status_kind st-kind
      :one_line_description (one-line-description scenario)
-     :confidence "medium"
+     :confidence confidence-level
      :classification classif
      :title (or (:title scenario) sid)
      :summary (one-line-description scenario)
      :metrics {:replay_success_pct (:replay-match-pct (data/narrative-metrics artifacts))}
      :evidence_refs [{:artifact "coverage"
                       :path [:scenarios sid]
-                      :digest nil
-                      :digest_status "missing"}]
+                      :digest (:trace_digest trace-info)
+                      :digest_status (:trace_digest_status trace-info)}]
      :story {:eligible true
              :priority (priority sev)
              :family (purpose->family (:purpose scenario))}
@@ -334,18 +396,18 @@
      :outcome (canonical-outcome artifacts scenario sid sev st-kind classif story-spec)
      :provenance {:run_id (:run-id canon)
                   :git_sha (:git-sha canon)
-                  :trace_digest nil
-                  :trace_digest_status "missing"
+                  :trace_digest (:trace_digest trace-info)
+                  :trace_digest_status (:trace_digest_status trace-info)
                   :definitions/hash (defs/definitions-hash)}}))
 
 (defn- counts [findings]
   (let [by-sev (frequencies (map :severity findings))
         by-kind (frequencies (map :kind findings))]
-    {:critical_findings 0
+    {:critical_findings (get by-sev "critical" 0)
      :high_findings (get by-sev "high" 0)
      :medium_findings (get by-sev "medium" 0)
      :low_findings (get by-sev "low" 0)
-     :missing_evidence (count (filter #(= "missing" (get-in % [:provenance :trace_digest_status])) findings))
+     :missing_evidence (count (filter #(not= "computed" (get-in % [:provenance :trace_digest_status])) findings))
      :inconclusive (get by-kind "inconclusive_result" 0)
      :robustness_confirmations (get by-kind "robustness_confirmation" 0)}))
 
@@ -430,6 +492,17 @@
      (with-open [w (io/writer findings-path)]
        (json/write bundle w :indent true))
      bundle)))
+
+(defn findings-fresh?
+  "Returns true if the on-disk findings file is newer than the summary artifact."
+  []
+  (try
+    (let [f (io/file findings-path)
+          s (io/file (:test-summary config/artifact-paths))]
+      (and (.exists f)
+           (or (not (.exists s))
+               (>= (.lastModified f) (.lastModified s)))))
+    (catch Exception _ false)))
 
 (defn load-findings []
   (common/read-json findings-path))

@@ -8,6 +8,12 @@
             [resolver-sim.notebook-support.common :as common]
             [resolver-sim.notebook-support.speds.config :as config]))
 
+(defn sha256-hex
+  [v]
+  (let [digest (java.security.MessageDigest/getInstance "SHA-256")
+        bytes (.digest digest (.getBytes (str v) "UTF-8"))]
+    (format "%064x" (java.math.BigInteger. 1 bytes))))
+
 ;; ---
 ;; 1. Unified Artifact Ingestion
 
@@ -78,18 +84,24 @@
       {})))
 
 (defn scenario-golden-key
-  "Normalize a coverage/trace scenario id to a golden report trace-id key."
+  "Normalize a coverage/trace scenario id to a golden report trace-id key.
+   Uses lowercasing and strips the scenarios/ prefix.
+   Underscores are preserved (removed from earlier versions to avoid
+   collision between e.g. S01_foo and S01-foo)."
   [scenario-id]
   (-> (str scenario-id)
       str/lower-case
-      (str/replace #"^scenarios/" "")
-      (str/replace #"_" "-")))
+      (str/replace #"^scenarios/" "")))
 
 (defn find-golden-report
-  "Look up a golden replay report for a scenario id."
+  "Look up a golden replay report for a scenario id.
+   Tries exact key first, then falls back to underscore→hyphen conversion
+   for backward compatibility with legacy golden reports."
   [golden-reports scenario-id]
   (when (and golden-reports scenario-id)
-    (get golden-reports (scenario-golden-key scenario-id))))
+    (let [key (scenario-golden-key scenario-id)]
+      (or (get golden-reports key)
+          (get golden-reports (str/replace key #"_" "-"))))))
 
 (defn canonical-summary
   "Normalizes summary variants into stable keys used by notebooks/stories."
@@ -123,6 +135,7 @@
      :coverage coverage
      :equivalence equivalence
      :manifest manifest
+     :all-traces (load-all-traces)
      :golden-reports (load-all-golden-reports)}))
 
 ;; ---
@@ -131,7 +144,10 @@
 (defn find-scenario-by-id
   "Locates scenario metadata in the coverage artifact."
   [coverage id]
-  (first (filter #(= (:id %) id) (:scenarios coverage))))
+  (let [matches (filter #(= (:id %) id) (:scenarios coverage))]
+    (when (> (count matches) 1)
+      (log/warn! "Duplicate scenario IDs in coverage" {:scenario-id id :count (count matches)}))
+    (first matches)))
 
 (defn find-intercept-event
   "Scans a trace for the first event that triggers an invariant-violation
@@ -186,7 +202,7 @@
     {:trace-id    (or (:ipfs-cid manifest) "LOCALLY_SIGNED")
      :git-sha     git7
      :run-id      (or (:run_id summary) (:run-id config/protocol-defaults))
-     :hash        (let [h (str (hash scenario-id))] (str "sha256:" (subs h 0 (min 8 (count h)))))
+     :hash        (str "sha256:" (subs (sha256-hex (str scenario-id)) 0 8))
      :title       (or (:title scenario)
                       (-> scenario-id
                           (str/replace #"^scenarios/" "")

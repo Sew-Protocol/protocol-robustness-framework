@@ -52,6 +52,7 @@
    :bundle-root     "BUNDLE_ROOT_V1"
    :evidence-content "EVIDENCE_CONTENT_V1"
    :state-diff       "STATE_DIFF_V1"
+   :protocol-state   "PROTOCOL_STATE_V1"
    :params-manifest  "PARAMS_MANIFEST_V1"
    :evm-projection   "EVM_PROJECTION_V1"
    :invariant-attestation "INVARIANT_ATTESTATION_V1"
@@ -881,6 +882,15 @@
     :intent/description "Bundle manifest identity for artifact packaging"
     :intent/includes    #{:manifest-metadata :bundle-structure :schema-version}
     :intent/excludes    #{:content-payloads :individual-artifacts}
+    :intent/projection-fn project-identity
+    :intent/version     1}
+
+   :protocol-state
+   {:intent/name        :protocol-state
+    :intent/domain-tag  "PROTOCOL_STATE_V1"
+    :intent/description "Deterministic protocol-state snapshot for reproducibility"
+    :intent/includes    #{:force-authorisations :force-authorisations-consumed}
+    :intent/excludes    #{:world-state :traces :evidence-registry}
     :intent/projection-fn project-identity
     :intent/version     1}
 

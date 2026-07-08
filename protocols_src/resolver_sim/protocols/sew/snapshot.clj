@@ -26,7 +26,7 @@
    AND bps-constrained."
   #{:escrow-fee-bps :appeal-bond-protocol-fee-bps :yield-protocol-fee-bps
     :default-auto-release-delay :default-auto-cancel-delay
-    :max-dispute-duration :appeal-window-duration
+    :max-dispute-duration :appeal-window-duration :evidence-window-duration
     :appeal-bond-bps :resolver-bond-bps :appeal-bond-amount
     :reversal-slash-bps :challenge-window-duration
     :challenge-bond-bps :challenge-bounty-bps})
@@ -66,8 +66,9 @@
            default-auto-release-delay default-auto-cancel-delay
            max-dispute-duration appeal-window-duration dispute-resolver
            appeal-bond-bps resolver-bond-bps appeal-bond-amount
-           reversal-slash-bps reversal-detection-probability
-           challenge-window-duration challenge-bond-bps challenge-bounty-bps]}]
+            reversal-slash-bps reversal-detection-probability
+            challenge-window-duration challenge-bond-bps challenge-bounty-bps
+            evidence-window-duration]}]
   {:resolution-module              resolution-module
    :release-strategy                 release-strategy
    :cancellation-strategy          cancellation-strategy
@@ -89,11 +90,13 @@
    :appeal-bond-bps                  (or appeal-bond-bps 0)
    :resolver-bond-bps                (or resolver-bond-bps 0)
    :appeal-bond-amount               (or appeal-bond-amount 0)
-   :reversal-slash-bps               (or reversal-slash-bps 0)
-   :reversal-detection-probability   (or reversal-detection-probability 0.0)
-   :challenge-window-duration        (or challenge-window-duration 0)
-   :challenge-bond-bps               (or challenge-bond-bps 0)
-   :challenge-bounty-bps             (or challenge-bounty-bps 0)})
+    :reversal-slash-bps               (or reversal-slash-bps 0)
+    :reversal-detection-probability   (or reversal-detection-probability 0.0)
+    :evidence-window-duration         (or evidence-window-duration 0)
+    :challenge-window-duration        (or challenge-window-duration 0)
+    :challenge-bond-bps               (or challenge-bond-bps 0)
+    :challenge-bounty-bps             (or challenge-bounty-bps 0)})
+
 
 (defn- non-negative-int?
   [v]
@@ -239,8 +242,9 @@
                :appeal-bond-amount           (get pp :appeal-bond-amount 0)
                :reversal-slash-bps           (get pp :reversal-slash-bps 0)
                :reversal-detection-probability (get pp :reversal-detection-probability 0.0)
-               :challenge-window-duration    (get pp :challenge-window-duration 0)
-               :challenge-bond-bps           (get pp :challenge-bond-bps 0)
+                :evidence-window-duration     (get pp :evidence-window-duration 0)
+                :challenge-window-duration    (get pp :challenge-window-duration 0)
+                :challenge-bond-bps           (get pp :challenge-bond-bps 0)
                :challenge-bounty-bps         (get pp :challenge-bounty-bps 0)
                :default-auto-release-delay   (get pp :default-auto-release-delay 0)
                :default-auto-cancel-delay    (get pp :default-auto-cancel-delay 0)

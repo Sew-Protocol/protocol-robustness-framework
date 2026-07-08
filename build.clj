@@ -23,8 +23,8 @@
         main-cls (or main (cond
                             is-benchmark "resolver-sim.benchmark.cli"
                             is-cli "resolver-sim.cli.main"
-                            (not is-core) "resolver-sim.minimal-runner"
-                            :else "resolver-sim.replay-core"))
+                            is-core "resolver-sim.replay-core"
+                            :else "resolver-sim.sew-bootstrap"))
         lib (symbol (str "resolver-sim/prf-runner-" vname))
 
         ;; Build deps file for clean classpath
@@ -115,6 +115,21 @@
                           :ns-compile-command ['resolver-sim.benchmark.main]}))
         (io/delete-file bs-deps-path)))
 
+    ;; AOT compile the bootstrapper for sew variant (minimal deps).
+    (when (and (not is-core) (not is-benchmark) (not is-cli))
+      (println "  Compiling AOT for sew bootstrapper...")
+      (let [bs-deps (pr-str '{:deps {org.clojure/clojure {:mvn/version "1.12.0"}}
+                              :paths ["scripts/sew-bootstrap"]})
+            bs-deps-path (str (System/getProperty "java.io.tmpdir")
+                              "/prf-bs-deps-" (System/nanoTime) ".edn")]
+        (spit bs-deps-path bs-deps)
+        (let [bs-basis (b/create-basis {:project bs-deps-path})]
+          (b/compile-clj {:basis bs-basis
+                          :src-dirs ["scripts/sew-bootstrap"]
+                          :class-dir class-dir
+                          :ns-compile-command ['resolver-sim.sew-bootstrap]}))
+        (io/delete-file bs-deps-path)))
+
     ;; Build JAR(s)
     (if is-cli
       ;; CLI variant: AOT compile a minimal bootstrapper (no protocol deps),
@@ -137,7 +152,10 @@
                  :basis basis
                  :main main-sym}))
       ;; Other variants: build both source JAR and uberjar
-      (let [main-sym (if is-benchmark 'resolver-sim.benchmark.main 'clojure.main)]
+      (let [main-sym (cond
+                       is-benchmark 'resolver-sim.benchmark.main
+                       (not is-core) 'resolver-sim.sew-bootstrap
+                       :else 'clojure.main)]
         (println "  Building source JAR (Main-Class:" main-sym ")...")
         (b/jar {:class-dir class-dir
                 :jar-file jar-file
@@ -161,6 +179,8 @@
       (let [jf (java.io.File. f)]
         (when (.exists jf)
           (printf "  %-50s %d KB\n" (.getName jf) (quot (.length jf) 1024)))))
-    (printf "\n  Source-only build (no AOT).\n")
+    (if is-core
+      (printf "\n  Source-only build (no AOT).\n")
+      (printf "\n  AOT bootstrapper compiled for JAR Main-Class.\n"))
     (println "  Done.\n")
     (flush)))

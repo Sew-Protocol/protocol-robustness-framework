@@ -141,7 +141,7 @@
       (is (= :active (:status record))
           "overflow still active (cap not reached)"))))
 
-(deftest force-authorized-resolution-records-forensic-provenance
+(deftest force-authorised-resolution-records-forensic-provenance
   (let [session (ir/start-session
                  (assoc overflow-fixture :agents overflow-agents)
                  [{:seq 0 :time 1000 :agent "buyer" :action "create-escrow"
@@ -164,7 +164,7 @@
            (get-in step [:authorization/provenance :authorization/class])))
     (is (= :exceptional
            (get-in step [:authorization/provenance :authorization/path])))
-    (is (= :force-authorized
+    (is (= :force-authorised
            (get-in step [:authorization/provenance :authorization/check])))
     (is (= :resolver-overcapacity
            (get-in step [:authorization/provenance :authorization/reason])))
@@ -173,7 +173,7 @@
     (is (= :scenario-declared
            (get-in resolution [:authorization/provenance :authorization/basis])))))
 
-(deftest force-authorized-rejects-non-resolution-actions
+(deftest force-authorised-rejects-non-resolution-actions
   (let [session (ir/start-session
                  (assoc overflow-fixture :agents overflow-agents)
                  [{:seq 0 :time 1000 :agent "buyer" :action "create-escrow"
@@ -182,7 +182,7 @@
                    :params {:workflow-id 0}}])
         original-steps (:steps session)
         original-world (:world session)
-        forced (ir/force-authorized session
+        forced (ir/force-authorised session
                                     {:action "set-paused"
                                      :params {:paused? true}
                                      :agent "buyer"}

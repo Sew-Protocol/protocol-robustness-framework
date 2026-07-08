@@ -92,7 +92,7 @@
      :authorization/limitation
      "Governance authority is scenario-declared in replay context; not registry-verified."}))
 
-(def ^:private forced-authorization-policy
+(def ^:private forced-authorisation-policy
   {   "execute-resolution"
    {:reasons #{:missing-resolver
                :resolver-overcapacity
@@ -102,7 +102,7 @@
                :manual-override}
     :authorization/class :interactive-override
     :authorization/path :exceptional
-    :checks #{:force-authorized :force-authorisation-record}
+     :checks #{:force-authorised :force-authorisation-record}
     :sources #{:repl-interactive-session :force-authorisation-record}
     :capacity-context-required? true}
 
@@ -130,7 +130,7 @@
     :sources #{:replay-context/agent-index}
     :capacity-context-required? true}})
 
-(defn build-force-authorization-provenance
+(defn build-force-authorisation-provenance
   "Build the canonical forced-authorization envelope for a narrow allowlisted
    exceptional path. Rejects unknown actions, reasons, checks, and sources so
    `:authorization/class :forced` cannot silently spread to ordinary flows."
@@ -140,33 +140,33 @@
                             limitation "Forced authorization is scenario-declared in replay context; not registry-verified."}}]
   (let [action-name (.replace (name (:action event)) "_" "-")
         {:keys [authorization/class authorization/path] :as policy}
-        (get forced-authorization-policy action-name)]
+        (get forced-authorisation-policy action-name)]
     (when-not policy
-      (throw (ex-info "forced authorization is not allowed for this action"
-                      {:type :invalid-force-authorization
+      (throw (ex-info "forced authorisation is not allowed for this action"
+                      {:type :invalid-force-authorisation
                        :action action-name})))
     (when-not (contains? (:reasons policy) reason)
-      (throw (ex-info "forced authorization reason is not allowed for this action"
-                      {:type :invalid-force-authorization
+      (throw (ex-info "forced authorisation reason is not allowed for this action"
+                      {:type :invalid-force-authorisation
                        :action action-name
                        :reason reason
                        :allowed-reasons (:reasons policy)})))
     (when-not (contains? (:checks policy) check)
-      (throw (ex-info "forced authorization check is not allowed for this action"
-                      {:type :invalid-force-authorization
+      (throw (ex-info "forced authorisation check is not allowed for this action"
+                      {:type :invalid-force-authorisation
                        :action action-name
                        :check check
                        :allowed-checks (:checks policy)})))
     (when-not (contains? (:sources policy) source)
-      (throw (ex-info "forced authorization source is not allowed for this action"
-                      {:type :invalid-force-authorization
+      (throw (ex-info "forced authorisation source is not allowed for this action"
+                      {:type :invalid-force-authorisation
                        :action action-name
                        :source source
                        :allowed-sources (:sources policy)})))
     (when (and (:capacity-context-required? policy)
                (nil? capacity-context))
-      (throw (ex-info "forced authorization requires capacity context"
-                      {:type :invalid-force-authorization
+      (throw (ex-info "forced authorisation requires capacity context"
+                      {:type :invalid-force-authorisation
                        :action action-name
                        :reason reason})))
     (cond-> (governance-authorization-provenance context event addr)
@@ -240,8 +240,8 @@
     "resolve-appeal"
     "set-yield-risk"
     "force-reversal-slash"
-    "grant-force-authorization"
-    "revoke-force-authorization"})
+    "grant-force-authorisation"
+    "revoke-force-authorisation"})
 
 (def replay-sensitive-actions
   "Actions that should be replay-idempotent when a logical event-id is provided."
@@ -253,6 +253,10 @@
     "propose-fraud-slash"
     "resolve-appeal"
     "execute-fraud-slash"
+    "grant-force-authorisation"
+    "revoke-force-authorisation"
+    "execute-force-authorised-action"
+    ;; backward compatibility: old action names
     "grant-force-authorization"
     "revoke-force-authorization"
     "execute-force-authorized-action"})
@@ -518,7 +522,7 @@
                                     :reason reason
                                     :current-active (get cap :current-active 0)
                                     :max-concurrent (get cap :max-concurrent 0)}
-                  provenance (build-force-authorization-provenance
+                  provenance (build-force-authorisation-provenance
                               context event addr
                               {:reason reason
                                :capacity-context capacity-context})
@@ -544,25 +548,33 @@
                              (update :next-overflow-id inc))]
               (assoc (t/ok world') :extra {:overflow-id overflow-id}))))))))
 
-(defmethod apply-action "grant-force-authorization"
+(defmethod apply-action "grant-force-authorisation"
   [context world event]
   (run-governance-action context world event
     (fn [addr _agent _provenance]
-      (let [pp              (:params event)
-            now             (time-ctx/block-ts world)
-            workflow-id     (:workflow-id pp)
-            reason          (:reason pp)
-            starts-at       (or (:starts-at pp) now)
-            duration        (:duration pp)
+      (let [pp               (:params event)
+            fa-policy        (:force-authorisation-policy context)
+            now              (time-ctx/block-ts world)
+            workflow-id      (:workflow-id pp)
+            reason           (:reason pp)
+            allowed          (:allowed-reasons fa-policy)
+            _ (when (and allowed reason
+                          (not (contains? allowed reason)))
+                (t/fail :force-authorisation-reason-not-allowed))
+            starts-at        (or (:starts-at pp) now)
+            duration         (:duration pp)
             expires-at-param (:expires-at pp)
             _ (when (and expires-at-param duration)
-                (throw (ex-info "grant-force-authorization: cannot provide both :expires-at and :duration"
-                                {:type :invalid-force-authorisation
-                                 :expires-at expires-at-param
-                                 :duration duration})))
-            expires-at      (or expires-at-param
-                                (when duration (+ starts-at duration))
-                                nil)
+                (t/fail :force-authorisation-conflicting-timing))
+            def-dur          (:default-duration fa-policy)
+            expires-at       (or expires-at-param
+                                 (when duration (+ starts-at duration))
+                                 (when def-dur (+ starts-at def-dur))
+                                 nil)
+            max-dur          (:max-duration fa-policy)
+            _ (when (and expires-at max-dur
+                         (> (- expires-at starts-at) max-dur))
+                (t/fail :force-authorisation-duration-exceeds-max))
             allowed-action  (:allowed-action pp "execute-resolution")
             auth-id         (str "fa-" (get world :next-force-authorisation-id 0))
             grant-prov      (merge (governance-authorization-provenance context event addr)
@@ -586,9 +598,9 @@
              :consumed? false
              :authorization/provenance grant-prov
              :authorization/last-provenance grant-prov
-             :authorization/last-action "grant-force-authorization"
+             :authorization/last-action "grant-force-authorisation"
              :authorization/history
-             [{:authorization/action "grant-force-authorization"
+             [{:authorization/action "grant-force-authorisation"
                :authorization/provenance grant-prov}]}
             world' (-> world
                        (assoc-in [:force-authorisations auth-id] record)
@@ -618,7 +630,11 @@
             :world-after world'}))
         (assoc (t/ok world') :extra {:authorization/id auth-id})))))
 
-(defmethod apply-action "revoke-force-authorization"
+(defmethod apply-action "grant-force-authorization"
+  [context world event]
+  ((get-method apply-action "grant-force-authorisation") context world event))
+
+(defmethod apply-action "revoke-force-authorisation"
   [context world event]
   (run-governance-action context world event
     (fn [addr _agent _provenance]
@@ -633,14 +649,14 @@
                                     :authorization/id auth-id
                                     :authorization/source :governance
                                     :authorization/check :with-governance-actor
-                                    :authorization/action "revoke-force-authorization"})
+                                    :authorization/action "revoke-force-authorisation"})
                 world' (-> world
                            (assoc-in [:force-authorisations auth-id :authorization/status] :revoked)
                            (assoc-in [:force-authorisations auth-id :authorization/last-provenance] revoke-prov)
-                           (assoc-in [:force-authorisations auth-id :authorization/last-action] "revoke-force-authorization")
+                           (assoc-in [:force-authorisations auth-id :authorization/last-action] "revoke-force-authorisation")
                            (update-in [:force-authorisations auth-id :authorization/history]
                                       (fnil conj [])
-                                      {:authorization/action "revoke-force-authorization"
+                                      {:authorization/action "revoke-force-authorisation"
                                        :authorization/provenance revoke-prov}))]
             (attr/with-attribution {:subject/type :force-authorisation
                                     :subject/id auth-id
@@ -659,7 +675,11 @@
                 :world-after world'}))
             (assoc (t/ok world') :extra {:authorization/id auth-id})))))))
 
-(defmethod apply-action "execute-force-authorized-action"
+(defmethod apply-action "revoke-force-authorization"
+  [context world event]
+  ((get-method apply-action "revoke-force-authorisation") context world event))
+
+(defmethod apply-action "execute-force-authorised-action"
   [{:keys [agent-index]} world event]
   (actx/with-resolved-actor
     agent-index event
@@ -713,7 +733,7 @@
                            :owner/address recipient
                            :held/reason fa-reason
                            :held/workflow-id workflow-id}
-                scope-hash (hash/domain-hash "force-authorisation-scope" scope-map)
+                scope-hash (hash/domain-hash acct/force-authorisation-scope-domain scope-map)
                 execution-prov
                 {:authorization/schema-version "force-authorisation.v1"
                  :authorization/type :force-authorisation
@@ -729,7 +749,7 @@
                  (:authorization/provenance record)}
                 result (res/apply-resolution-transition
                         world workflow-id addr is-release resolution-hash nil
-                        :resolution-source :force-authorized
+                        :resolution-source :force-authorised
                         :authorization-provenance execution-prov)]
             (if (:ok result)
               (let [world' (-> (:world result)
@@ -740,11 +760,11 @@
                                (assoc-in [:force-authorisations auth-id :execution/is-release] is-release)
                                (assoc-in [:force-authorisations auth-id :execution/provenance] execution-prov)
                                (assoc-in [:force-authorisations auth-id :execution/last-provenance] execution-prov)
-                               (assoc-in [:force-authorisations auth-id :execution/last-action] "execute-force-authorized-action")
-                               (update-in [:force-authorisations auth-id :execution/history]
-                                          (fnil conj [])
-                                          {:execution/action "execute-force-authorized-action"
-                                           :execution/provenance execution-prov}))]
+                                (assoc-in [:force-authorisations auth-id :execution/last-action] "execute-force-authorised-action")
+                                (update-in [:force-authorisations auth-id :execution/history]
+                                           (fnil conj [])
+                                           {:execution/action "execute-force-authorised-action"
+                                            :execution/provenance execution-prov}))]
                 (attr/with-attribution {:subject/type :force-authorisation
                                         :subject/id auth-id
                                         :action/type :force-authorisation/execute
@@ -775,7 +795,11 @@
                     (assoc :extra
                            {:authorization/id auth-id
                             :authorization/provenance execution-prov})))
-              result)))))))
+               result)))))))
+
+(defmethod apply-action "execute-force-authorized-action"
+  [{:keys [agent-index]} world event]
+  ((get-method apply-action "execute-force-authorised-action") {:agent-index agent-index} world event))
 
 (defmethod apply-action "execute-overflow-resolution"
   [{:keys [agent-index]} world event]
@@ -845,6 +869,13 @@
         (attr/log-with-attr :debug "set-resolver-capacity"
                             {:resolver addr :max-concurrent max-concurrent})
         (t/ok (t/set-resolver-capacity world addr max-concurrent))))))
+
+(defmethod apply-action "set-resolver-unavailable"
+  [_ctx world event]
+  (let [p (:params event)
+        resolver (:resolver p)
+        unavailable? (:unavailable? p true)]
+    (t/ok (res/update-unavailability world resolver unavailable?))))
 
 (defmethod apply-action "register-stake"
   [{:keys [agent-index]} world event]
@@ -1111,7 +1142,7 @@
                             slash-id))
             slash-entry (get-in world [:pending-fraud-slashes slash-id'])
             resolver-caller (or (:resolver slash-entry) addr)
-            provenance (build-force-authorization-provenance
+            provenance (build-force-authorisation-provenance
                         context event addr
                         {:reason :appeal-bond-custody
                          :capacity-context {:workflow-id workflow-id
@@ -1178,7 +1209,7 @@
     (fn [addr _agent _provenance]
       (let [wf   (event-workflow-id event)
             bps  (event-slash-bps event)
-            provenance (build-force-authorization-provenance
+            provenance (build-force-authorisation-provenance
                         context event addr
                         {:reason :governance-force-reversal-slash
                          :capacity-context {:workflow-id wf
@@ -1320,7 +1351,8 @@
     :timelock-not-expired
     :workflow-not-slashable
     :missing-caller-context
-    :invalid-new-resolver})
+    :invalid-new-resolver
+    :evidence-deadline-exceeded})
 
 (def ^:private adversarial-capable-actions
   "Actions that can constitute an attack when performed by a
@@ -1382,7 +1414,17 @@
                           :default-max-workflows 100
                           :max-workflows       500
                           :failover-resolvers  #{}
-                          :allowed-reasons     #{:resolver-overcapacity}}]
+                          :allowed-reasons     #{:resolver-overcapacity}}
+              fa-policy  (get pp :force-authorisation-policy {})
+              def-fa-policy {:enabled?         true
+                             :default-duration 3600
+                             :max-duration     86400
+                             :allowed-reasons  #{:missing-resolver
+                                                  :resolver-overcapacity
+                                                  :resolver-frozen
+                                                  :circuit-breaker-active
+                                                  :resolver-unavailable
+                                                  :manual-override}}]
           {:agent-index          (into {} (map (juxt :id identity) agents))
            :snapshot             snapshot
            :escalation-fn        esc-fn
@@ -1390,7 +1432,8 @@
            :resolution-level-map level-map
            :temporal-rules       (sew-temporal-rules)
            :governance-mode      (get pp :governance-mode :restricted)
-           :resolver-overflow-policy (merge def-policy of-policy)})))
+           :resolver-overflow-policy (merge def-policy of-policy)
+           :force-authorisation-policy (merge def-fa-policy fa-policy)})))
 
   (dispatch-action [_ context world event]
     (let [flags       (:replay-flags context {})

@@ -2,7 +2,8 @@
   "Centralized configuration for SEW protocol parameters.
 
    All hardcoded numerical parameters should be defined here
-   rather than duplicated across source, simulation, and test files.")
+   rather than duplicated across source, simulation, and test files."
+  (:require [resolver-sim.time.context :as time-ctx]))
 
 (def DEFAULT_ESCALATION_CONFIG
   "Default configuration for appeal bonds and resolver stakes."
@@ -22,8 +23,8 @@
 
 (def DEFAULT_TIMEOUT_CONFIG
   "Default timeout configuration for disputes and appeals."
-  {:max-dispute-duration 86400
-   :appeal-window-duration 172800
+   {:max-dispute-duration time-ctx/seconds-per-day
+    :appeal-window-duration (* 2 time-ctx/seconds-per-day)
    :default-auto-release-delay 0
    :default-auto-cancel-delay 0})
 

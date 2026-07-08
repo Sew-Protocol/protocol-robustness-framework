@@ -45,12 +45,20 @@ def test_source_tree_hash_includes_files_beyond_one_thousand(tmp_path: Path):
     assert before != after
 
 
-def test_reproduce_classifies_legacy_source_algorithms():
+def test_reproduce_classifies_mismatched_algorithm():
     status = reproduce.classify_source_precheck(
         "abc123",
         "source-tree-hash.v0.shell-sha256sum",
-        ["src", "protocols_src"],
         "abc123",
         sut.SOURCE_TREE_HASH_ALGORITHM,
     )
-    assert status == {"match": None, "reason": "unknown/legacy-algorithm"}
+    assert status["reason"] == "algorithm-mismatch"
+
+def test_reproduce_classifies_missing_algorithm():
+    status = reproduce.classify_source_precheck(
+        "abc123",
+        None,
+        "abc123",
+        sut.SOURCE_TREE_HASH_ALGORITHM,
+    )
+    assert status["reason"] == "missing/algorithm-field"

@@ -40,7 +40,8 @@
             [resolver-sim.util.attribution :as attr]
             [resolver-sim.time.context :as time-ctx]
             [resolver-sim.protocols.sew.economics :as sew-econ]
-            [resolver-sim.protocols.sew.registry :as reg]))
+            [resolver-sim.protocols.sew.registry :as reg]
+            [resolver-sim.protocols.sew.related-claims :as rc]))
 
 (defn cancellation-mutex? [world] (escrow/cancellation-mutex? world))
 
@@ -105,7 +106,13 @@
     :evidence-deadline-enforced
     :finality-blocked-during-appeal
     :challenge-bond-proportional
-    :resolver-stake-proportional})
+    :resolver-stake-proportional
+    ;; Related-claims invariants
+    :related-claims-members-exist
+    :related-claims-no-duplicate-members
+    :related-claims-hash-matches-members
+    :related-claims-do-not-block-finality
+    :related-claims-authorisation-scope-closed})
 
 (def transition-invariant-ids
   "Cross-world invariants run by `check-transition` after each successful step."
@@ -162,6 +169,13 @@
     (if (= token :USDC)
       (+ (t/safe-parse-long (:insurance bd 0)) (t/safe-parse-long (:protocol bd 0)) retained bond-fees appeal-bond-dist)
       (+ bond-fees appeal-bond-dist))))
+
+(defn- get-resolver-slash-sum
+  "Sum of all resolver stake slashed across all resolvers.
+   Slash debits reduce resolver-stakes (not total-held); this sum
+   represents new funds entering the accounting system from stake."
+  [world]
+  (reduce + 0 (vals (:resolver-slash-total world {}))))
 
 ;; ---------------------------------------------------------------------------
 ;; Invariant 1: Solvency
@@ -788,21 +802,28 @@
 
 (defn conservation-of-funds?
   "True when every unit of inflow is accounted for in one of the state partitions.
-   Inflow = [Principal Deposited] + [Yield Generated] + [Bonds Posted] - [Recognized Losses]
+   Inflow = [Principal Deposited] + [Yield Generated] + [Bonds Posted] - [Recognized Losses] + [Resolver Stake Slashed]
    Accounted = [Physical Held] + [Actual Withdrawn] + [Claimable Entitlements] + [Distributed Slashes]
+
+   Resolver stake slashes are added to inflow because the debit comes from
+   resolver-stakes (not total-held), so the distribution creates accounted
+   funds without a corresponding held reduction.  When slash is backed by
+   total-held (sub-held? true), both held and distributed move in opposite
+   directions and the net effect on the equation is zero.
 
    These partitions are mutually exclusive."
   [world]
   (let [all-tokens (-> #{}
                        (into (keys (:total-held world)))
                        (into (keys (:total-principal-deposited world))))
+        slash-total (get-resolver-slash-sum world)
         violations
         (for [token all-tokens
               :let [principal   (t/safe-parse-long (get (:total-principal-deposited world) token 0))
                     yield       (t/safe-parse-long (get (:total-yield-generated world) token 0))
                     bonds       (t/safe-parse-long (get (:total-bonds-posted world) token 0))
                     losses      (yield-evi/sum-recognized-losses world token)
-                    inflow      (- (+ principal yield bonds) losses)
+                    inflow      (- (+ principal yield bonds slash-total) losses)
 
                     held        (t/safe-parse-long (get (:total-held world) token 0))
                     fees        (t/safe-parse-long (get (:total-fees world) token 0))
@@ -810,7 +831,6 @@
                     claimable   (t/safe-parse-long (get-token-claimable-sum world token))
                     distributed (t/safe-parse-long (get-distributed-sum world token))
                     fot-fees    (t/safe-parse-long (get-in world [:total-fot-fees token] 0))
-                    ;; slash-appeal-bonds are part of HELD if they exist
                     accounted   (+ held fees withdrawn claimable distributed fot-fees)]
               :when (not= accounted inflow)]
           {:token token :accounted accounted :inflow inflow
@@ -1038,10 +1058,17 @@
 (defn held-delta-accounted?
   "True when the change in physically held funds is fully explained by
    principal deposits, bond movements, yield-generation, recognized losses,
-   and actual withdrawals."
+   and actual withdrawals.
+
+   Resolver stake slashes that bypass total-held (sub-held? false) are
+   excluded from the expected-delta by adding the delta-slash-sum back,
+   because the distribution comes from resolver-stakes, not from held."
   [world-before world-after]
   (let [all-tokens (into #{} (concat (keys (:total-held world-before))
                                      (keys (:total-held world-after))))
+        slash-before (get-resolver-slash-sum world-before)
+        slash-after  (get-resolver-slash-sum world-after)
+        delta-slash  (- slash-after slash-before)
         violations
         (for [token all-tokens
               :let [held-before      (get (:total-held world-before) token 0)
@@ -1072,8 +1099,6 @@
                     delta-dist       (- dist-after dist-before)
 
                     fot-bps          (get-in world-after [:token-fot-bps token] 0)
-                    ;; Net delta-claimable after tax
-                    delta-claimable-net (- delta-claimable (t/compute-fee delta-claimable fot-bps))
 
                     fees-before      (get (:total-fees world-before) token 0)
                     fees-after       (get (:total-fees world-after) token 0)
@@ -1083,8 +1108,9 @@
                     fot-fees-after   (get (:total-fot-fees world-after) token 0)
                     delta-fot-fees   (- fot-fees-after fot-fees-before)
 
-                    ;; Change in held must equal (Inflow - Net_Outflow_to_claimable - Physical_Withdrawals - Distributed - Accum_Fees - FoT_Fees)
-                    expected-delta   (- delta-inflow delta-claimable delta-withdrawn delta-dist delta-fees delta-fot-fees)]
+                    expected-delta   (- delta-inflow delta-claimable delta-withdrawn
+                                         (- delta-dist delta-slash)
+                                         delta-fees delta-fot-fees)]
               :when (not= delta-held expected-delta)]
           {:token token :delta-held delta-held :expected expected-delta})]
     {:holds? (empty? violations) :violations (vec violations)}))
@@ -1674,6 +1700,125 @@
       {:holds? false :violations (vec violations)})))
 
 ;; ---------------------------------------------------------------------------
+;; Related-claims invariants
+;; ---------------------------------------------------------------------------
+
+(defn related-claims-members-exist?
+  "Every workflow-id in every active relationship must have a matching
+   escrow-transfer entry."
+  [world]
+  (let [violations
+        (for [[rel-id rel] (:related-claims world {})
+              :when (= :active (:relationship/status rel))
+              :let [missing (vec (for [m (:relationship/members rel)
+                                      :when (= :sew/workflow (:claim/kind m))
+                                      :when (not (t/valid-workflow-id? world (:workflow/id m)))]
+                                  {:workflow/id (:workflow/id m)}))]
+              :when (seq missing)]
+          {:relationship/id rel-id
+           :missing-members missing})]
+    {:holds? (empty? violations)
+     :violations (vec violations)}))
+
+(defn related-claims-no-duplicate-members?
+  "No workflow-id appears in two active relationships of the same type."
+  [world]
+  (let [index (reduce (fn [acc [rel-id rel]]
+                        (if (= :active (:relationship/status rel))
+                          (reduce (fn [a m]
+                                    (when (= :sew/workflow (:claim/kind m))
+                                      (let [wf-id (:workflow/id m)
+                                            type (:relationship/type rel)]
+                                        (update-in a [wf-id type] (fnil conj #{}) rel-id)))
+                                    a)
+                                  acc
+                                  (:relationship/members rel))
+                          acc))
+                      {}
+                      (:related-claims world {}))
+        violations
+        (for [[wf-id type-map] index
+              [type rel-ids] type-map
+              :when (> (count rel-ids) 1)]
+          {:workflow/id wf-id
+           :relationship/type type
+           :relationship/ids (vec rel-ids)})]
+    {:holds? (empty? violations)
+     :violations (vec violations)}))
+
+(defn related-claims-hash-matches-members?
+  "Every active relationship's stored hash must match re-derivation from
+   its current members. Detects data corruption or mutation."
+  [world]
+  (let [violations
+        (for [[rel-id rel] (:related-claims world {})
+              :when (= :active (:relationship/status rel))
+              :let [expected (rc/related-claims-hash (:relationship/members rel))
+                    actual (:relationship/hash rel)]
+              :when (not= expected actual)]
+          {:relationship/id rel-id
+           :expected hash expected
+           :actual hash actual
+           :members (:relationship/members rel)})]
+    {:holds? (empty? violations)
+     :violations (vec violations)}))
+
+(defn related-claims-do-not-block-finality?
+  "A claim being related to another claim must not prevent release, refund,
+   appeal expiry, resolver overflow, force-authorised settlement, or
+   cancellation unless a specific future semantic says so.
+   v1 semantics (#{:audit-only}) never block finality."
+  [world]
+  (let [violations
+        (for [[rel-id rel] (:related-claims world {})
+              :when (= :active (:relationship/status rel))
+              :let [semantics (:relationship/semantics rel)
+                    blocks-finality? (contains? semantics :cross-claim-guarantee)]
+              :when blocks-finality?]
+          {:relationship/id rel-id
+           :semantics semantics
+           :note "only :cross-claim-guarantee blocks finality; not implemented in v1"})]
+    {:holds? (empty? violations)
+     :violations (vec violations)}))
+
+(defn related-claims-authorisation-scope-closed?
+  "True when every consumed related-claims force-authorisation references a
+   relationship that exists, is active, and whose member count matches the
+   auth's authorized member-set size.
+   Prevents scope drift: an auth created for a 2-member relationship cannot
+   be used against a 3-member version of the same relationship (impossible
+   since relationships are immutable, but this checks the invariant anyway)."
+  [world]
+  (let [consumed-auths (get-in world [:force-authorisations/consumed] {})]
+    (if (empty? consumed-auths)
+      {:holds? true :violations []}
+      (let [violations
+            (for [[auth-id consumed] consumed-auths
+                  :when (= :related-claims (:authorization/scope-kind consumed))
+                  :let [rel-id (:relationship/id consumed)
+                        rel (when rel-id (get-in world [:related-claims rel-id]))
+                        rel-hash (:relationship/hash consumed)
+                        rel-hash-mismatch? (and rel rel-hash
+                                                (not= rel-hash (:relationship/hash rel)))
+                        member-count (:member-count consumed 0)
+                        rel-member-count (count (:relationship/members rel []))
+                        count-over? (and rel (> member-count rel-member-count))
+                        missing-rel? (and rel-id (nil? rel))
+                        inactive? (and rel (not= :active (:relationship/status rel)))
+                        has-violation? (or missing-rel? inactive? rel-hash-mismatch? count-over?)]
+                  :when has-violation?]
+              {:authorization/id auth-id
+               :relationship/id rel-id
+               :relationship-exists? (some? rel)
+               :relationship-active? (if rel (= :active (:relationship/status rel)) nil)
+               :hash-mismatch? rel-hash-mismatch?
+               :consumed-member-count member-count
+               :relationship-member-count rel-member-count
+               :count-exceeds? count-over?})]
+        {:holds? (empty? violations)
+         :violations (vec violations)}))))
+
+;; ---------------------------------------------------------------------------
 ;; Composite: check all world-level invariants
 ;; ---------------------------------------------------------------------------
 
@@ -1741,8 +1886,13 @@
                  :evidence-deadline-enforced          (dispute/evidence-deadline-enforced? world)
                  :finality-blocked-during-appeal      (dispute/finality-blocked-during-appeal? world)
                  :challenge-bond-proportional         (challenge-bond-proportional? world)
-                 :resolver-stake-proportional         (resolver-stake-proportional-to-escrow? world)
-                 :yield-position-consistency          (generic-yield-inv/check-position-consistency world)
+                  :resolver-stake-proportional         (resolver-stake-proportional-to-escrow? world)
+                  :related-claims-members-exist        (related-claims-members-exist? world)
+                  :related-claims-no-duplicate-members (related-claims-no-duplicate-members? world)
+                  :related-claims-hash-matches-members (related-claims-hash-matches-members? world)
+                  :related-claims-do-not-block-finality (related-claims-do-not-block-finality? world)
+                  :related-claims-authorisation-scope-closed (related-claims-authorisation-scope-closed? world)
+                  :yield-position-consistency          (generic-yield-inv/check-position-consistency world)
                  :yield-exposure                      (let [r (sew-yield-inv/check-sew-yield-exposure world)]
                                                         (if (map? r) r {:holds? r :violations nil}))}
           ;; Process results
