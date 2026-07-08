@@ -736,15 +736,15 @@
              :settlement/position-id (:owner/id position)}]
     (attr/with-attribution ctx
       (let [world' (apply-partial-fill world position decision)]
-         (evidence/capture-event-evidence!
-          :settlement-fill
-          {:settlement/before (select-keys world [:total-held :yield/positions])}
-          {:settlement/after (select-keys world' [:total-held :yield/positions])}
-          {:settlement/decision decision}
-          nil
-          {:world-before world
-           :world-after world'})
-         world'))))
+        (evidence/capture-event-evidence!
+         :settlement-fill
+         {:settlement/before (select-keys world [:total-held :yield/positions])}
+         {:settlement/after (select-keys world' [:total-held :yield/positions])}
+         {:settlement/decision decision}
+         nil
+         {:world-before world
+          :world-after world'})
+        world'))))
 
 (defn batch-partial-fill
   "Process multiple partial-fill settlements in parallel compute, serial apply.
@@ -772,8 +772,8 @@
         decisions (util-evidence/contextual-pmap
                    (fn [{:keys [available-liquidity position policy opts]}]
                      (let [policy' (if (some? policy)
-                                    (merge default-partial-fill-policy policy)
-                                    default-partial-fill-policy)]
+                                     (merge default-partial-fill-policy policy)
+                                     default-partial-fill-policy)]
                        (calculate-fulfillment available-liquidity position policy' opts)))
                    inputs)
         ;; 3-4: collect deterministic ordered, serial apply to world

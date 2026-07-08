@@ -448,36 +448,36 @@
                                  :append true)))))
         progress-atom (when parallel? (atom 0))
         do-run   (fn [entry]
-                    (let [sid (or (when (map? entry) (get-in entry [:scenario :scenario-id]))
-                                  (when (vector? entry) (name (first entry)))
-                                  "unknown")]
-                      (binding [*current-scenario* sid]
-                        (let [result
-                              (try
-                                (run-entry entry (assoc opts :replay-fn (:replay-fn collection)
-                                                        :type-meta-fn (:type-meta-fn collection)))
-                                (catch Exception e
-                                  (let [err-entry (make-error-entry entry e)]
-                                    (when log-writer
-                                      (log-writer {:event "entry-error" :scenario-id sid
-                                                   :error (.getMessage e)
-                                                   :current (if parallel? (swap! progress-atom inc)
+                   (let [sid (or (when (map? entry) (get-in entry [:scenario :scenario-id]))
+                                 (when (vector? entry) (name (first entry)))
+                                 "unknown")]
+                     (binding [*current-scenario* sid]
+                       (let [result
+                             (try
+                               (run-entry entry (assoc opts :replay-fn (:replay-fn collection)
+                                                       :type-meta-fn (:type-meta-fn collection)))
+                               (catch Exception e
+                                 (let [err-entry (make-error-entry entry e)]
+                                   (when log-writer
+                                     (log-writer {:event "entry-error" :scenario-id sid
+                                                  :error (.getMessage e)
+                                                  :current (if parallel? (swap! progress-atom inc)
                                                                0)}))
-                                    err-entry)))
-                              entry-name (:name result (str sid))]
-                          (when log-writer
-                            (log-writer {:event "entry-complete" :scenario-id sid
-                                         :outcome (name (:outcome result))
-                                         :pass? (:pass? result)
-                                         :current (if parallel? (swap! progress-atom inc) 0)
-                                         :total total}))
-                          (when *progress-callback*
-                            (*progress-callback* {:current (if parallel? @progress-atom 0)
-                                                   :total total
-                                                   :entry-name entry-name
-                                                   :result result
-                                                   :error? (= :error (:outcome result))}))
-                          result))))
+                                   err-entry)))
+                             entry-name (:name result (str sid))]
+                         (when log-writer
+                           (log-writer {:event "entry-complete" :scenario-id sid
+                                        :outcome (name (:outcome result))
+                                        :pass? (:pass? result)
+                                        :current (if parallel? (swap! progress-atom inc) 0)
+                                        :total total}))
+                         (when *progress-callback*
+                           (*progress-callback* {:current (if parallel? @progress-atom 0)
+                                                 :total total
+                                                 :entry-name entry-name
+                                                 :result result
+                                                 :error? (= :error (:outcome result))}))
+                         result))))
         results   (if parallel?
                     (vec (pmap do-run entries))
                     (mapv do-run entries))

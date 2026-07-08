@@ -357,14 +357,12 @@
 ;; Properties 9–14: multi-step / sequence / adversarial
 ;; ============================================================================
 
-(defn check-full-escalation-chain
-  "Property body: full escalation chain invariants."
+(defn- run-full-escalation-chain
   [amount fee-bps appeal-dur]
-  (let [snap-params {:escrow-fee-bps         fee-bps
-                     :max-dispute-duration   3600
-                     :appeal-window-duration appeal-dur}]
-    (if-let [res (make-disputed-world-for-escalation amount snap-params "0xRes0")]
-      (let [{:keys [world]} res
+  (let [snap-params {:escrow-fee-bps fee-bps :max-dispute-duration 3600 :appeal-window-duration appeal-dur}
+        res (make-disputed-world-for-escalation amount snap-params "0xRes0")]
+    (when res
+      (let [world (:world res)
             rr0 (res/execute-resolution world 0 "0xRes0" false "0xhash" nil)
             er1 (when (:ok rr0) (res/escalate-dispute (:world rr0) 0 "0xAlice" (fn [_ _ _ _] {:ok true :new-resolver "0xRes1"})))
             rr1 (when (:ok er1) (res/execute-resolution (:world er1) 0 "0xRes1" false "0xhash" nil))
@@ -377,25 +375,27 @@
             w-exp (when deadline (time-ctx/advance-time w-pend {:to (inc deadline)}))
             ep (when deadline (res/execute-pending-settlement w-exp 0))
             w-final (cond (:ok ep) (:world ep) (:ok rr) w-pend :else w2)]
-        (if (and (:ok rr0) (:ok er1) (:ok rr1) (:ok er2) er3 (:ok rr))
-          (and
-           (= 1 (t/dispute-level (:world er1) 0))
-           (= 2 (t/dispute-level w2 0))
-           (true? (t/final-round? w2 0))
-           (false? (:ok er3))
-           (= :escalation-not-allowed (:error er3))
-           (= :released (t/escrow-state w-final 0))
-           (not (:exists (t/get-pending w-final 0)))
-           (:all-hold? (inv/check-all (:world er1)))
-           (:all-hold? (inv/check-all w2))
-           (:all-hold? (inv/check-all w-final))
-           (:all-hold? (inv/check-transition world (:world rr0)))
-           (:all-hold? (inv/check-transition (:world rr0) (:world er1)))
-           (:all-hold? (inv/check-transition (:world er1) (:world rr1)))
-           (:all-hold? (inv/check-transition (:world rr1) w2))
-           (:all-hold? (inv/check-transition w2 w-final)))
-          true))
-      true)))
+        (and (:ok rr0) (:ok er1) (:ok rr1) (:ok er2) er3 (:ok rr)
+             (= 1 (t/dispute-level (:world er1) 0))
+             (= 2 (t/dispute-level w2 0))
+             (true? (t/final-round? w2 0))
+             (false? (:ok er3))
+             (= :escalation-not-allowed (:error er3))
+             (= :released (t/escrow-state w-final 0))
+             (not (:exists (t/get-pending w-final 0)))
+             (:all-hold? (inv/check-all (:world er1)))
+             (:all-hold? (inv/check-all w2))
+             (:all-hold? (inv/check-all w-final))
+             (:all-hold? (inv/check-transition world (:world rr0)))
+             (:all-hold? (inv/check-transition (:world rr0) (:world er1)))
+             (:all-hold? (inv/check-transition (:world er1) (:world rr1)))
+             (:all-hold? (inv/check-transition (:world rr1) w2))
+             (:all-hold? (inv/check-transition w2 w-final)))))))
+
+(defn check-full-escalation-chain
+  "Property body: full escalation chain invariants."
+  [amount fee-bps appeal-dur]
+  (or (run-full-escalation-chain amount fee-bps appeal-dur) true))
 
 (def prop-full-escalation-chain
   (prop/for-all

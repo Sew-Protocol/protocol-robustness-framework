@@ -252,19 +252,21 @@
         (if-not (and (some? prev-decision)
                      (not= (:is-release prev-decision) current-is-release))
           world
-          (let [slash-id (str workflow-id "-reversal-" (dec level))]
+          (let [slash-id      (str workflow-id "-reversal-" (dec level))
+                prev-resolver (:resolver prev-decision)]
             ;; Idempotency: if a reversal entry already exists for this level, skip.
-            ;; Also skip if a manual fraud slash is pending for the same workflow
-            ;; (cross-type collision guard — prevents double-penalty from the same dispute).
-            ;; Scan uses :workflow-id from each entry, not the slash-id key, to catch
-            ;; cross-type collisions where keys differ (integer workflow-id vs string).
+            ;; Also skip if a pending/appealed slash targets the same resolver on this
+            ;; workflow (cross-type collision guard — prevents double-penalty from the
+            ;; same dispute).  Different levels target different resolvers (L0 vs L1),
+            ;; so the scan checks resolver + workflow-id, not just workflow-id alone.
             (if (or (get-in world [:pending-fraud-slashes slash-id])
                     (some (fn [[_id entry]]
                             (and (= (:workflow-id entry) workflow-id)
+                                 (= (:resolver entry) prev-resolver)
                                  (#{:pending :appealed} (:status entry))))
                           (get world :pending-fraud-slashes {})))
               world
-              (let [prev-resolver   (:resolver prev-decision)
+              (let [snap            (t/get-snapshot world workflow-id)
                     snap            (t/get-snapshot world workflow-id)
                     et              (t/get-transfer world workflow-id)
                     token           (:token et "USDC")
@@ -1337,11 +1339,6 @@
               resolver    (or (:resolver custody) (:resolver pending))
               wf-id       (or (:workflow-id custody) (:workflow-id pending) _workflow-id)
                bond-token  (or (:token custody) (:token pending) "USDC")
-                              (throw (ex-info "resolve-appeal: cannot determine bond token"
-                                              {:type :missing-bond-token
-                                               :slash-id slash-id
-                                               :pending pending
-                                               :custody custody})))
               world-base  (-> world
                               (assoc-in [:pending-fraud-slashes slash-id :appeal-bond-held] 0)
                               (update :appeal-bond-custody dissoc slash-id))

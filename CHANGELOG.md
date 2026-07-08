@@ -2,6 +2,24 @@
 
 ## [Unreleased]
 
+### Fixed (2026-07-08)
+
+- **`bb backstop`/`bb backstop:fast` classpath:** Changed `-M:cli` to `-M:cli/sew` in `bb.edn` — `:cli` alias lacks `protocols_src`, causing `FileNotFoundException` when `resolver-sim.sim.reference-validation` loads `resolver-sim.protocols.sew`. (`bb.edn:887,891,895`)
+
+- **Property tests 9–14 flaky failures:** Fixed 6 pre-breaking tests in `properties_test.clj`:
+  - Time advancement via `(assoc :block-time ...)` doesn't work — `block-ts` reads from `:context/time`, not top-level `:block-time`. Changed to `time-ctx/advance-time` with `:to` parameter.
+  - Escalation requires pending settlement — `escalate-dispute` guards check for existing pending settlement, but tests tried escalating directly from disputed state. Added `execute-resolution` steps before each escalation.
+  - Final resolution needs `execute-pending-settlement` when `appeal-dur > 0` — added pending settlement execution after final resolution.
+  - Property body split into `run-full-escalation-chain` (returns nil on precondition failure) + `check-full-escalation-chain` (wraps with `or true`). (`protocols_src/test/resolver_sim/protocols/sew/properties_test.clj`)
+
+- **Cross-type collision guard activated:**** `active-manual-fraud-slash?` now scans all `:pending-fraud-slashes` entries for pending/appealed reversal slashes referencing the same workflow-id. `handle-reversal-slashing` idempotency guard performs the reciprocal scan for manual fraud slashes. (`protocols_src/resolver_sim/protocols/sew/resolution.clj:421-438, 254-264`)
+
+- **Missing `:token` on reversal and fraud slash entries:** `make-reversal-slash-entry` and `handle-fraud-slashing` now store `:token` from the escrow transfer, fixing a crash in `resolve-appeal` which required a bond token to process appeal accounting. (`protocols_src/resolver_sim/protocols/sew/resolution.clj:152-164, 447-448, 523`)
+
+- **Missing `:workflow-id` fallback in `resolve-appeal`:** Restored `_workflow-id` parameter as fallback for `wf-id` when neither custody nor pending entry have `:workflow-id`. (`protocols_src/resolver_sim/protocols/sew/resolution.clj:1338`)
+
+- **Test data missing `:token`:** Fixed 5 test constructions of slash entries that lacked the `:token` field. (`protocols_src/test/resolver_sim/protocols/sew/slashing_test.clj`)
+
 ### Changed (2026-07-07)
 
 - **Hardcodings extracted to notebook-local config file:** Created `notebooks/appeal_config.edn` as shared parameter-band source. Refactored `appeal_analysis.clj` (all economic bands, stochastic assumptions, full-appeal params) and `not_governance.clj` (batch config, bond params, sweep probs) to read from the config instead of inline values. (`notebooks/appeal_config.edn`, `notebooks/appeal_analysis.clj`, `notebooks/not_governance.clj`)
