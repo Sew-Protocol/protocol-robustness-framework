@@ -11,6 +11,7 @@
             [resolver-sim.stochastic.decision-quality :as dq]
             [resolver-sim.protocols.sew.research-models.information-cascade :as ic]
             [resolver-sim.protocols.sew.research-models.escalation-economics :as ee]
+            [resolver-sim.protocols.sew.config :as config]
             [resolver-sim.sim.engine :as proto]
             [resolver-sim.util.evidence :as ev]))
 
@@ -63,7 +64,7 @@
   [seed time-pressure reputation-weight evidence-quality appeal-probability num-trials]
 
   (let [rng (rng/make-rng seed)
-        config ee/DEFAULT_ESCALATION_CONFIG
+        config config/DEFAULT_ESCALATION_CONFIG
 
         ; Run multiple disputes
         results (for [trial-idx (range num-trials)]

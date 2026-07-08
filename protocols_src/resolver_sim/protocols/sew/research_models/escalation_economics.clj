@@ -14,25 +14,9 @@
 ;; ============ Bond and Stake Configuration ============
 
 (def DEFAULT_ESCALATION_CONFIG
-  "Default configuration for appeal bonds and resolver stakes."
-  {:resolver-stake-base 10000  ; Base stake in wei (example)
-   :appeal-bond-base 1000      ; Base appeal bond in wei
-   :bond-multiplier 1.5        ; Each level costs more: bond * multiplier
-
-   :slashing-rate 0.5          ; Lose 50% of stake if wrong
-
-   :round-configs {0 {:stake-multiplier 1.0
-                      :bond-multiplier 1.0
-                      :time-to-appeal-hours 48}
-
-                   1 {:stake-multiplier 2.0   ; Senior stakes more
-                      :bond-multiplier 1.5    ; Appeal costs more
-                      :time-to-appeal-hours 72}
-
-                   2 {:stake-multiplier 3.0   ; External (Kleros) highest
-                      :bond-multiplier 2.0    ; Most expensive appeal
-                      :time-to-appeal-hours 0}}  ; Final, no appeal
-   })
+  "Default configuration for appeal bonds and resolver stakes.
+   Centralized in resolver-sim.protocols.sew.config."
+  resolver-sim.protocols.sew.config/DEFAULT_ESCALATION_CONFIG)
 
 ;; ============ Cost Calculations ============
 

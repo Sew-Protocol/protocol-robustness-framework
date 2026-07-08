@@ -55,7 +55,8 @@ def load_json(path: Path) -> dict | None:
 def current_code_hash(repo_root: Path) -> tuple[str, str, list[str]]:
     try:
         ch, included_roots = compute_source_tree_hash(repo_root, PRF_SOURCE_ROOTS)
-    except Exception:
+    except Exception as exc:
+        print(f"  ⚠ Failed to compute source tree hash: {exc}", file=sys.stderr)
         ch = "unknown"
         included_roots = []
     return ch, SOURCE_TREE_HASH_ALGORITHM, included_roots
@@ -63,15 +64,14 @@ def current_code_hash(repo_root: Path) -> tuple[str, str, list[str]]:
 
 def classify_source_precheck(bundle_hash: str | None,
                              bundle_algorithm: str | None,
-                             _bundle_roots: list[str] | None,
                              current_hash: str,
                              current_algorithm: str) -> dict[str, Any]:
     if not bundle_hash:
         return {"match": None, "reason": "missing/original-field"}
     if not bundle_algorithm:
-        return {"match": None, "reason": "unknown/legacy-algorithm"}
+        return {"match": None, "reason": "missing/algorithm-field"}
     if bundle_algorithm != current_algorithm:
-        return {"match": None, "reason": "unknown/legacy-algorithm"}
+        return {"match": None, "reason": "algorithm-mismatch"}
     return {
         "match": current_hash == bundle_hash,
         "reason": "matched" if current_hash == bundle_hash else "expected-drift/source-changed",
@@ -93,16 +93,16 @@ def classify_mismatch(label: str, orig: Any, new: Any,
         return "missing/reproduced-field"
     # Values differ — classify the reason
     if label == "source/tree-hash":
-        if source_reason == "unknown/legacy-algorithm":
-            return "unknown/legacy-algorithm"
+        if source_reason in ("missing/algorithm-field", "algorithm-mismatch"):
+            return "legacy-algorithm"
         if source_matches is False:
             return "expected-drift/source-changed"
         if source_matches is True:
             return "mismatch/non-deterministic"
         return "mismatch/unexplained"
     if label == "source/tree-hash-algorithm":
-        if source_reason == "unknown/legacy-algorithm":
-            return "unknown/legacy-algorithm"
+        if source_reason in ("missing/algorithm-field", "algorithm-mismatch"):
+            return "legacy-algorithm"
         return "mismatch/unexplained"
     # Registry snapshot or execution summary — unexpected divergence
     if source_matches is False:
@@ -160,8 +160,7 @@ def compare_bundle_fields(orig: dict, new: dict,
 
 
 def compute_verdict(checks: list[dict],
-                    bundle_a_ok: bool, bundle_b_ok: bool,
-                    _source_status: dict[str, Any] | None) -> tuple[str, list[str]]:
+                    bundle_a_ok: bool, bundle_b_ok: bool) -> tuple[str, list[str]]:
     """Compute top-level reproduction verdict."""
     notes: list[str] = []
 
@@ -188,10 +187,10 @@ def compute_verdict(checks: list[dict],
     expected_mismatches = [c for c in core_mismatch
                            if c.get("reason", "").startswith("expected-drift/")]
     legacy_mismatches = [c for c in core_mismatch
-                         if c.get("reason") == "unknown/legacy-algorithm"]
+                         if c.get("reason") == "legacy-algorithm"]
     unexpected_mismatches = [c for c in core_mismatch
                              if not c.get("reason", "").startswith("expected-drift/")
-                             and c.get("reason") != "unknown/legacy-algorithm"]
+                             and c.get("reason") != "legacy-algorithm"]
 
     if len(core_checks) == 0:
         return "inconclusive", ["No core fields available for comparison"]
@@ -205,7 +204,7 @@ def compute_verdict(checks: list[dict],
         reason = expected_mismatches[0].get("reason", "unknown")
         notes.append(f"Core divergence explained: {fields} ({reason})")
 
-    if legacy_mismatches:
+    if legacy_mismatches and not expected_mismatches:
         fields = ", ".join(c["field"] for c in legacy_mismatches)
         notes.append(f"Core comparison limited by legacy source hash algorithm: {fields}")
         return "reproduced-with-legacy-gaps", notes
@@ -240,27 +239,32 @@ def reproduce_run(run_dir: str | Path,
     print("--- Source Pre-check ---", file=sys.stderr)
     orig_overview = load_json(run_dir / "run-overview.json")
     orig_src = (orig_overview or {}).get("source", {})
-    bundle_code_hash = orig_src.get("source-hash") or orig_src.get("code-hash", "")
-    bundle_code_hash_algorithm = orig_src.get("source-hash-algorithm") or orig_src.get("code-hash-algorithm")
-    bundle_code_hash_roots = orig_src.get("source-hash-roots") or orig_src.get("included-roots")
+    bundle_hash = orig_src.get("source-hash")
+    if not bundle_hash:
+        bundle_hash = orig_src.get("code-hash")
+    bundle_hash_algorithm = orig_src.get("source-hash-algorithm")
+    if not bundle_hash_algorithm:
+        bundle_hash_algorithm = orig_src.get("code-hash-algorithm")
+    bundle_hash_roots = orig_src.get("source-hash-roots")
+    if not bundle_hash_roots:
+        bundle_hash_roots = orig_src.get("included-roots")
     current_ch, current_algo, current_roots = current_code_hash(Path.cwd())
-    source_status = classify_source_precheck(bundle_code_hash,
-                                             bundle_code_hash_algorithm,
-                                             bundle_code_hash_roots,
+    source_status = classify_source_precheck(bundle_hash,
+                                             bundle_hash_algorithm,
                                              current_ch,
                                              current_algo)
 
-    print(f"  Bundle source-hash: {bundle_code_hash[:24] if bundle_code_hash else 'N/A'}...",
+    print(f"  Bundle source-hash: {bundle_hash[:24] if bundle_hash else 'N/A'}...",
           file=sys.stderr)
-    print(f"  Bundle algorithm: {bundle_code_hash_algorithm or 'N/A'}", file=sys.stderr)
-    print(f"  Bundle roots: {', '.join(bundle_code_hash_roots or []) or 'N/A'}", file=sys.stderr)
+    print(f"  Bundle algorithm: {bundle_hash_algorithm or 'N/A'}", file=sys.stderr)
+    print(f"  Bundle roots: {', '.join(bundle_hash_roots or []) or 'N/A'}", file=sys.stderr)
     print(f"  Current source-hash: {current_ch[:24]}...", file=sys.stderr)
     print(f"  Current algorithm: {current_algo}", file=sys.stderr)
     print(f"  Current roots: {', '.join(current_roots) or 'N/A'}", file=sys.stderr)
     if source_status["reason"] == "missing/original-field":
         print(f"  ⚠ No source-hash in original bundle (older run format)", file=sys.stderr)
-    elif source_status["reason"] == "unknown/legacy-algorithm":
-        print(f"  ⚠ Source hash algorithm is missing or legacy; comparison is limited",
+    elif source_status["reason"] in ("missing/algorithm-field", "algorithm-mismatch"):
+        print(f"  ⚠ Source hash algorithm unmatched; comparison is limited ({source_status['reason']})",
               file=sys.stderr)
     elif source_status["match"]:
         print(f"  ✅ Source code matches bundle", file=sys.stderr)
@@ -348,7 +352,7 @@ def reproduce_run(run_dir: str | Path,
 
     # Step 6: Compute verdict
     verdict, verdict_notes = compute_verdict(
-        checks, True, bundle_b_ok, source_status)
+        checks, True, bundle_b_ok)
 
     # Step 7: Write report
     repro_summary = {
@@ -360,18 +364,12 @@ def reproduce_run(run_dir: str | Path,
         "reproduce/elapsed-ms": elapsed_ms,
         "reproduce/exit-code": r.returncode if bundle_b_ok else None,
         "reproduce/source-pre-check": {
-            "bundle-source-hash": bundle_code_hash or None,
-            "bundle-source-hash-algorithm": bundle_code_hash_algorithm,
-            "bundle-source-hash-roots": bundle_code_hash_roots,
+            "bundle-source-hash": bundle_hash or None,
+            "bundle-source-hash-algorithm": bundle_hash_algorithm,
+            "bundle-source-hash-roots": bundle_hash_roots,
             "current-source-hash": current_ch,
             "current-source-hash-algorithm": current_algo,
             "current-source-hash-roots": current_roots,
-            "bundle-code-hash": bundle_code_hash or None,
-            "bundle-code-hash-algorithm": bundle_code_hash_algorithm,
-            "bundle-code-hash-roots": bundle_code_hash_roots,
-            "current-code-hash": current_ch,
-            "current-code-hash-algorithm": current_algo,
-            "included-roots": current_roots,
             "match": source_status["match"],
             "reason": source_status["reason"],
         },

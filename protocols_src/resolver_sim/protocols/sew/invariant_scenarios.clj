@@ -142,8 +142,10 @@
    ["S104 executed-reversal-slash-not-appealable"      reversal/s104]
    ["S105 escalate-challenger-on-reversal"             reversal/s105]
    ["S106 reversal-track2-evidence-appeal"             reversal/s106]
-   ["S107 reversal-track2-appeal-rejected-executes"    reversal/s107]
-   ["S43k dr3-kleros-reversal-slash"                    reversal/s43-kleros-reversal-slash]
+    ["S107 reversal-track2-appeal-rejected-executes"    reversal/s107]
+    ["S108 senior-coverage-consumed-by-slash"           adversarial/s108]
+    ["S109 senior-coverage-exhausted-by-slash"          adversarial/s109]
+    ["S43k dr3-kleros-reversal-slash"                    reversal/s43-kleros-reversal-slash]
    ["S66  cooldown-boundary-reorg"                      adversarial/s66]
    ["S67  reentrancy-callback"                          adversarial/s67]
    ["EXT-unilateral-cancel"                             cancellation-ext/s-extortion-unilateral-cancel]
@@ -297,6 +299,16 @@
    {:scenario/type    :adversarial
     :adversary/type   :colluder
     :adversary/traits #{:multi-agent :bribery}}
+
+   "s108-coverage-consumed-by-slash"
+   {:scenario/type :stress
+    :adversary/type :coverage-economics
+    :adversary/traits #{:senior-bond :coverage-consumption}}
+
+   "s109-coverage-exhausted-by-slash"
+   {:scenario/type :stress
+    :adversary/type :coverage-economics
+    :adversary/traits #{:senior-bond :coverage-exhaustion}}
 
    "s43-auth-rejected-then-authorized-recovery"
    {:scenario/type :edge-case

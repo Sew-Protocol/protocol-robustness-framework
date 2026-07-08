@@ -24,6 +24,7 @@
             [resolver-sim.db.temporal                    :as temporal]
             [resolver-sim.protocols.sew.yield.policy     :as yield-policy]
             [resolver-sim.util.attribution            :as attr]
+            [resolver-sim.evidence.capture             :as cap]
             [resolver-sim.contract-model.replay          :as replay]
             [resolver-sim.contract-model.idempotency     :as idem]
             [resolver-sim.protocols.sew.snapshot         :as sew-snapshot]
@@ -34,7 +35,8 @@
             [resolver-sim.protocols.sew.action-context   :as actx]
             [resolver-sim.yield.expectations             :as yield-exp]
             [resolver-sim.yield.evidence                 :as yield-evi]
-            [resolver-sim.time.context                   :as time-ctx]))
+            [resolver-sim.time.context                   :as time-ctx]
+            [resolver-sim.hash.canonical                 :as hash]))
 
 ;; ---------------------------------------------------------------------------
 ;; Constants
@@ -91,7 +93,7 @@
      "Governance authority is scenario-declared in replay context; not registry-verified."}))
 
 (def ^:private forced-authorization-policy
-  {"execute-resolution"
+  {   "execute-resolution"
    {:reasons #{:missing-resolver
                :resolver-overcapacity
                :resolver-frozen
@@ -100,8 +102,8 @@
                :manual-override}
     :authorization/class :interactive-override
     :authorization/path :exceptional
-    :checks #{:force-authorized}
-    :sources #{:repl-interactive-session}
+    :checks #{:force-authorized :force-authorisation-record}
+    :sources #{:repl-interactive-session :force-authorisation-record}
     :capacity-context-required? true}
 
    "activate-resolver-overflow"
@@ -237,7 +239,9 @@
     "appeal-slash"
     "resolve-appeal"
     "set-yield-risk"
-    "force-reversal-slash"})
+    "force-reversal-slash"
+    "grant-force-authorization"
+    "revoke-force-authorization"})
 
 (def replay-sensitive-actions
   "Actions that should be replay-idempotent when a logical event-id is provided."
@@ -248,7 +252,10 @@
     "rotate-dispute-resolver"
     "propose-fraud-slash"
     "resolve-appeal"
-    "execute-fraud-slash"})
+    "execute-fraud-slash"
+    "grant-force-authorization"
+    "revoke-force-authorization"
+    "execute-force-authorized-action"})
 
 (defn replay-sensitive-action?
   "True when `event` is subject to replay-boundary dedupe when event-id is present."
@@ -537,6 +544,239 @@
                              (update :next-overflow-id inc))]
               (assoc (t/ok world') :extra {:overflow-id overflow-id}))))))))
 
+(defmethod apply-action "grant-force-authorization"
+  [context world event]
+  (run-governance-action context world event
+    (fn [addr _agent _provenance]
+      (let [pp              (:params event)
+            now             (time-ctx/block-ts world)
+            workflow-id     (:workflow-id pp)
+            reason          (:reason pp)
+            starts-at       (or (:starts-at pp) now)
+            duration        (:duration pp)
+            expires-at-param (:expires-at pp)
+            _ (when (and expires-at-param duration)
+                (throw (ex-info "grant-force-authorization: cannot provide both :expires-at and :duration"
+                                {:type :invalid-force-authorisation
+                                 :expires-at expires-at-param
+                                 :duration duration})))
+            expires-at      (or expires-at-param
+                                (when duration (+ starts-at duration))
+                                nil)
+            allowed-action  (:allowed-action pp "execute-resolution")
+            auth-id         (str "fa-" (get world :next-force-authorisation-id 0))
+            grant-prov      (merge (governance-authorization-provenance context event addr)
+                                   {:authorization/type :force-authorisation
+                                    :authorization/id auth-id
+                                    :authorization/source :governance
+                                    :authorization/check :with-governance-actor})
+            record
+            {:authorization/id auth-id
+             :authorization/type :force-authorisation
+             :authorization/source :governance
+             :authorization/status :active
+             :workflow-id workflow-id
+             :allowed-action allowed-action
+             :nonce auth-id
+             :starts-at starts-at
+             :expires-at expires-at
+             :created-at now
+             :created-by addr
+             :reason reason
+             :consumed? false
+             :authorization/provenance grant-prov
+             :authorization/last-provenance grant-prov
+             :authorization/last-action "grant-force-authorization"
+             :authorization/history
+             [{:authorization/action "grant-force-authorization"
+               :authorization/provenance grant-prov}]}
+            world' (-> world
+                       (assoc-in [:force-authorisations auth-id] record)
+                       (update :next-force-authorisation-id inc))]
+        (attr/with-attribution {:subject/type :force-authorisation
+                                :subject/id auth-id
+                                :action/type :force-authorisation/grant
+                                :evidence/reason :force-authorisation-granted}
+          (cap/capture-event-evidence!
+           :force-authorisation-granted
+           {:force-auth/before {:next-force-authorisation-id (:next-force-authorisation-id world)}}
+           {:force-auth/after {:next-force-authorisation-id (:next-force-authorisation-id world')
+                               :created-auth-id auth-id
+                               :status :active
+                               :starts-at starts-at
+                               :expires-at expires-at}}
+           {:force-auth/auth-id auth-id
+            :force-auth/workflow-id workflow-id
+            :force-auth/allowed-action allowed-action
+            :force-auth/reason reason
+            :force-auth/created-by addr
+            :force-auth/starts-at starts-at
+            :force-auth/expires-at expires-at
+            :force-auth/nonce auth-id}
+           nil
+           {:world-before world
+            :world-after world'}))
+        (assoc (t/ok world') :extra {:authorization/id auth-id})))))
+
+(defmethod apply-action "revoke-force-authorization"
+  [context world event]
+  (run-governance-action context world event
+    (fn [addr _agent _provenance]
+      (let [pp      (:params event)
+            auth-id (:authorization-id pp)
+            record  (get-in world [:force-authorisations auth-id])]
+        (if (nil? record)
+          (t/fail :force-authorisation-not-found)
+          (let [now (time-ctx/block-ts world)
+                revoke-prov (merge (governance-authorization-provenance context event addr)
+                                   {:authorization/type :force-authorisation
+                                    :authorization/id auth-id
+                                    :authorization/source :governance
+                                    :authorization/check :with-governance-actor
+                                    :authorization/action "revoke-force-authorization"})
+                world' (-> world
+                           (assoc-in [:force-authorisations auth-id :authorization/status] :revoked)
+                           (assoc-in [:force-authorisations auth-id :authorization/last-provenance] revoke-prov)
+                           (assoc-in [:force-authorisations auth-id :authorization/last-action] "revoke-force-authorization")
+                           (update-in [:force-authorisations auth-id :authorization/history]
+                                      (fnil conj [])
+                                      {:authorization/action "revoke-force-authorization"
+                                       :authorization/provenance revoke-prov}))]
+            (attr/with-attribution {:subject/type :force-authorisation
+                                    :subject/id auth-id
+                                    :action/type :force-authorisation/revoke
+                                    :evidence/reason :force-authorisation-revoked}
+              (cap/capture-event-evidence!
+               :force-authorisation-revoked
+               {:force-auth/before {:status (:authorization/status record)}}
+               {:force-auth/after {:status :revoked}}
+               {:force-auth/auth-id auth-id
+                :force-auth/workflow-id (:workflow-id record)
+                :force-auth/revoked-by addr
+                :force-auth/revoked-at now}
+               nil
+               {:world-before world
+                :world-after world'}))
+            (assoc (t/ok world') :extra {:authorization/id auth-id})))))))
+
+(defmethod apply-action "execute-force-authorized-action"
+  [{:keys [agent-index]} world event]
+  (actx/with-resolved-actor
+    agent-index event
+    (fn [addr]
+      (let [pp              (:params event)
+            workflow-id     (:workflow-id pp)
+            auth-id         (:authorization-id pp)
+            is-release      (get pp :is-release true)
+            resolution-hash (get pp :resolution-hash "0xf-authorized")
+            record          (get-in world [:force-authorisations auth-id])
+            now             (time-ctx/block-ts world)]
+        (cond
+          (nil? record)
+          (t/fail :force-authorisation-not-found)
+
+          (not= :active (:authorization/status record))
+          (t/fail :force-authorisation-not-active)
+
+          (:consumed? record)
+          (t/fail :force-authorisation-already-consumed)
+
+          (not= workflow-id (:workflow-id record))
+          (t/fail :force-authorisation-workflow-mismatch)
+
+          (not= "execute-resolution" (:allowed-action record))
+          (t/fail :force-authorisation-action-mismatch)
+
+          (< now (:starts-at record))
+          (t/fail :force-authorisation-not-yet-started)
+
+          (and (:expires-at record)
+               (>= now (:expires-at record)))
+          (t/fail :force-authorisation-expired)
+
+          (get-in world [:force-authorisations/consumed auth-id])
+          (t/fail :force-authorisation-already-consumed)
+
+          :else
+          (let [et        (t/get-transfer world workflow-id)
+                token     (:token et)
+                amount    (:amount-after-fee et)
+                recipient (if is-release (:to et) (:from et))
+                direction :out
+                fa-reason (if is-release :force-authorised-release :force-authorised-refund)
+                scope-map {:authorization/id auth-id
+                           :authorization/type :force-authorisation
+                           :held/direction direction
+                           :token token
+                           :amount amount
+                           :held/account :escrow-principal
+                           :owner/address recipient
+                           :held/reason fa-reason
+                           :held/workflow-id workflow-id}
+                scope-hash (hash/domain-hash "force-authorisation-scope" scope-map)
+                execution-prov
+                {:authorization/schema-version "force-authorisation.v1"
+                 :authorization/type :force-authorisation
+                 :authorization/id auth-id
+                 :authorization/scope-hash scope-hash
+                 :authorization/source :governance
+                 :authorization/check :force-authorisation-record
+                 :authorization/workflow-id workflow-id
+                 :authorization/allowed-action "execute-resolution"
+                 :authorization/executed-by addr
+                 :authorization/executed-at now
+                 :authorization/governance-provenance
+                 (:authorization/provenance record)}
+                result (res/apply-resolution-transition
+                        world workflow-id addr is-release resolution-hash nil
+                        :resolution-source :force-authorized
+                        :authorization-provenance execution-prov)]
+            (if (:ok result)
+              (let [world' (-> (:world result)
+                               (assoc-in [:force-authorisations auth-id :consumed?] true)
+                               (assoc-in [:force-authorisations auth-id :authorization/status] :consumed)
+                               (assoc-in [:force-authorisations auth-id :executed-by] addr)
+                               (assoc-in [:force-authorisations auth-id :executed-at] now)
+                               (assoc-in [:force-authorisations auth-id :execution/is-release] is-release)
+                               (assoc-in [:force-authorisations auth-id :execution/provenance] execution-prov)
+                               (assoc-in [:force-authorisations auth-id :execution/last-provenance] execution-prov)
+                               (assoc-in [:force-authorisations auth-id :execution/last-action] "execute-force-authorized-action")
+                               (update-in [:force-authorisations auth-id :execution/history]
+                                          (fnil conj [])
+                                          {:execution/action "execute-force-authorized-action"
+                                           :execution/provenance execution-prov}))]
+                (attr/with-attribution {:subject/type :force-authorisation
+                                        :subject/id auth-id
+                                        :action/type :force-authorisation/execute
+                                        :evidence/reason :force-authorisation-executed}
+                  (cap/capture-event-evidence!
+                   :force-authorisation-executed
+                   {:force-auth/before {:status (:authorization/status record)
+                                        :consumed? (:consumed? record)}}
+                   {:force-auth/after {:status :consumed
+                                       :consumed? true
+                                       :executed-by addr
+                                       :executed-at now
+                                       :is-release is-release}}
+                   {:force-auth/auth-id auth-id
+                    :force-auth/workflow-id workflow-id
+                    :force-auth/executed-by addr
+                    :force-auth/executed-at now
+                    :force-auth/is-release is-release
+                    :force-auth/token token
+                    :force-auth/amount amount
+                    :force-auth/recipient recipient
+                    :force-auth/scope-hash scope-hash}
+                   nil
+                   {:world-before world
+                    :world-after world'}))
+                (-> result
+                    (assoc :world world')
+                    (assoc :extra
+                           {:authorization/id auth-id
+                            :authorization/provenance execution-prov})))
+              result)))))))
+
 (defmethod apply-action "execute-overflow-resolution"
   [{:keys [agent-index]} world event]
   (actx/with-resolved-actor
@@ -813,18 +1053,22 @@
   [{:keys [agent-index] :as context} world event]
   (run-governance-action context world event
     (fn [_addr _agent _provenance]
-      (let [p           (:params event)
-            senior-addr (:senior-addr p)
-            coverage    (:coverage p 0)
-            senior-bond (get-in world [:senior-bonds senior-addr])]
+      (let [p            (:params event)
+            senior-addr  (:senior-addr p)
+            resolver-addr (:resolver-addr p)
+            coverage     (:coverage p 0)
+            senior-bond  (get-in world [:senior-bonds senior-addr])]
         (if (nil? senior-bond)
           (t/fail :senior-not-registered)
-          (let [new-reserved (+ (:reserved-coverage senior-bond) coverage)
-                max-coverage (:coverage-max senior-bond)]
-            (if (> new-reserved max-coverage)
-              (t/fail :senior-coverage-exceeded)
-              (t/ok (assoc-in world [:senior-bonds senior-addr :reserved-coverage]
-                              new-reserved)))))))))
+          (if (nil? resolver-addr)
+            (t/fail :invalid-resolver-addr)
+            (let [new-reserved (+ (:reserved-coverage senior-bond) coverage)
+                  max-coverage (:coverage-max senior-bond)]
+              (if (> new-reserved max-coverage)
+                (t/fail :senior-coverage-exceeded)
+                (let [w (assoc-in world [:senior-bonds senior-addr :reserved-coverage]
+                                  new-reserved)]
+                  (t/ok (assoc-in w [:resolver-senior resolver-addr] senior-addr)))))))))))
 
 (defmethod apply-action "propose-fraud-slash"
   [{:keys [agent-index] :as context} world event]

@@ -174,14 +174,25 @@
                    (keyword (or (:token (t/get-transfer world workflow-id)) "USDC"))
                    :USDC)
          held-available (get-in world [:total-held token] 0)
+          ;; Consume from senior coverage first (if resolver has delegated to a senior).
+         senior-addr (get-in world [:resolver-senior resolver-addr])
+         coverage-remaining (when senior-addr
+                              (get-in world [:senior-bonds senior-addr :reserved-coverage] 0))
+         from-coverage (if coverage-remaining
+                         (min actual (long coverage-remaining))
+                         0)
+         from-stake (- actual from-coverage)
           ;; Reduce held only when slash amount is backed by on-hand custody (avoids underflow
           ;; after settlement has already drained :total-held for this token).
          sub-held?      (and (pos? actual)
                              (>= held-available actual))
          world'  (-> world
-                     (update-in [:resolver-stakes resolver-addr] (fnil - 0) actual)
+                     (cond-> (and senior-addr (pos? from-coverage))
+                       (update-in [:senior-bonds senior-addr :reserved-coverage]
+                                  (fnil - 0) from-coverage))
+                     (update-in [:resolver-stakes resolver-addr] (fnil - 0) from-stake)
                      (acct/distribute-slashed-funds actual challenger bounty-bps workflow-id)
-                     (update-in [:resolver-slash-total resolver-addr] (fnil + 0) actual)
+                     (update-in [:resolver-slash-total resolver-addr] (fnil + 0) from-stake)
                        (cond-> sub-held?
                          (acct/sub-held token
                                         actual
@@ -206,5 +217,7 @@
                                           nil
                                           {:world-before world
                                            :world-after world'}))]
-       (assoc (t/ok world') :slashed-from-stake actual
+       (assoc (t/ok world') :slashed-from-stake from-stake
+              :slashed-from-coverage from-coverage
+              :total-slashed actual
               :stake-evidence-hash (:evidence/hash stake-evidence))))))

@@ -17,6 +17,7 @@
      - conservation-of-funds invariant throughout"
   (:require [resolver-sim.time.model :as tm]
             [resolver-sim.protocols.sew.snapshot :as snapshot]
+            [resolver-sim.protocols.sew.config :as config]
             [resolver-sim.protocols.sew.types      :as t]
             [resolver-sim.protocols.sew.lifecycle  :as lc]
             [resolver-sim.protocols.sew.resolution :as res]
@@ -35,11 +36,12 @@
 
 (def base-snapshot
   (snapshot/make-escrow-snapshot
-   {:escrow-fee-bps            0
-    :default-auto-release-delay 0
-    :default-auto-cancel-delay  0
-    :max-dispute-duration       86400
-    :appeal-window-duration     172800}))
+   (merge {:escrow-fee-bps 0}
+          (select-keys config/DEFAULT_TIMEOUT_CONFIG
+                       [:default-auto-release-delay
+                        :default-auto-cancel-delay
+                        :max-dispute-duration
+                        :appeal-window-duration]))))
 
 (def base-settings (t/make-escrow-settings {}))
 

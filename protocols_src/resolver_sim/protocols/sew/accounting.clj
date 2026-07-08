@@ -331,6 +331,7 @@
                               :authorization/type :force-authorisation
                               :held/direction direction
                               :token token
+                              :amount amount
                               :held/account (:held/account components)
                               :owner/address (:owner/address components)
                               :held/reason reason}

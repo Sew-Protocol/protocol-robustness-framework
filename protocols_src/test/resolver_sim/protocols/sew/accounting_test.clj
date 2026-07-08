@@ -237,20 +237,21 @@
   (let [auth-id "fa-test-release-a1b2c3d4"
         held 100
         sub-amt 40
-        scope-map {:authorization/id auth-id
-                   :authorization/type :force-authorisation
-                   :held/direction :out
-                   :token usdc
-                   :held/account :escrow-principal
-                   :owner/address bob
-                   :held/reason :force-authorised-release
-                   :held/workflow-id 42}
-        scope-hash (hash/domain-hash "force-authorisation-scope" scope-map)
-        auth-prov {:authorization/type :force-authorisation
-                   :authorization/id auth-id
-                   :authorization/scope-hash scope-hash}
-        world (ac/sub-held {:total-held {usdc held}}
-                           usdc sub-amt
+         scope-map {:authorization/id auth-id
+                    :authorization/type :force-authorisation
+                    :held/direction :out
+                    :token usdc
+                    :amount sub-amt
+                    :held/account :escrow-principal
+                    :owner/address bob
+                    :held/reason :force-authorised-release
+                    :held/workflow-id 42}
+         scope-hash (hash/domain-hash "force-authorisation-scope" scope-map)
+         auth-prov {:authorization/type :force-authorisation
+                    :authorization/id auth-id
+                    :authorization/scope-hash scope-hash}
+         world (ac/sub-held {:total-held {usdc held}}
+                            usdc sub-amt
                            {:action "finalize-released"
                             :reason :force-authorised-release
                             :authorization-provenance auth-prov
@@ -270,25 +271,26 @@
 
 (deftest force-authorised-sub-held-rejects-reuse
   (let [auth-id "fa-test-reuse-a1b2c3d4"
-        scope-map {:authorization/id auth-id
-                   :authorization/type :force-authorisation
-                   :held/direction :out
-                   :token usdc
-                   :held/account :escrow-principal
-                   :owner/address bob
-                   :held/reason :force-authorised-release
-                   :held/workflow-id 42}
-        scope-hash (hash/domain-hash "force-authorisation-scope" scope-map)
-        auth-prov {:authorization/type :force-authorisation
-                   :authorization/id auth-id
-                   :authorization/scope-hash scope-hash}
-        world (ac/sub-held {:total-held {usdc 100}}
-                           usdc 40
-                           {:action "finalize-released"
-                            :reason :force-authorised-release
-                            :authorization-provenance auth-prov
-                            :extra {:held/workflow-id 42
-                                    :owner/address bob}})]
+         scope-map {:authorization/id auth-id
+                    :authorization/type :force-authorisation
+                    :held/direction :out
+                    :token usdc
+                    :amount 40
+                    :held/account :escrow-principal
+                    :owner/address bob
+                    :held/reason :force-authorised-release
+                    :held/workflow-id 42}
+         scope-hash (hash/domain-hash "force-authorisation-scope" scope-map)
+         auth-prov {:authorization/type :force-authorisation
+                    :authorization/id auth-id
+                    :authorization/scope-hash scope-hash}
+         world (ac/sub-held {:total-held {usdc 100}}
+                            usdc 40
+                            {:action "finalize-released"
+                             :reason :force-authorised-release
+                             :authorization-provenance auth-prov
+                             :extra {:held/workflow-id 42
+                                     :owner/address bob}})]
     (is (thrown-with-msg? clojure.lang.ExceptionInfo
                           #"already consumed"
                           (ac/sub-held world usdc 40
@@ -300,19 +302,20 @@
 
 (deftest force-authorised-sub-held-rejects-scope-mismatch
   (let [auth-id "fa-test-mismatch-a1b2c3d4"
-        ;; Scope hash computed with :force-authorised-refund
-        scope-map {:authorization/id auth-id
-                   :authorization/type :force-authorisation
-                   :held/direction :out
-                   :token usdc
-                   :held/account :escrow-principal
-                   :owner/address bob
-                   :held/reason :force-authorised-refund
-                   :held/workflow-id 42}
-        scope-hash (hash/domain-hash "force-authorisation-scope" scope-map)
-        auth-prov {:authorization/type :force-authorisation
-                   :authorization/id auth-id
-                   :authorization/scope-hash scope-hash}]
+         ;; Scope hash computed with :force-authorised-refund
+         scope-map {:authorization/id auth-id
+                    :authorization/type :force-authorisation
+                    :held/direction :out
+                    :token usdc
+                    :amount 40
+                    :held/account :escrow-principal
+                    :owner/address bob
+                    :held/reason :force-authorised-refund
+                    :held/workflow-id 42}
+         scope-hash (hash/domain-hash "force-authorisation-scope" scope-map)
+         auth-prov {:authorization/type :force-authorisation
+                    :authorization/id auth-id
+                    :authorization/scope-hash scope-hash}]
     (is (thrown-with-msg? clojure.lang.ExceptionInfo
                           #"scope mismatch"
                           (ac/sub-held {:total-held {usdc 100}} usdc 40
@@ -387,14 +390,15 @@
 
 (deftest partial-fill-principal-loss-with-auth-succeeds
   (let [auth-id "fa-pl-test"
-        scope-map {:authorization/id auth-id
-                   :authorization/type :force-authorisation
-                   :held/direction :out
-                   :token usdc
-                   :held/account :escrow-principal
-                   :owner/address bob
-                   :held/reason :partial-fill-principal-loss
-                   :held/workflow-id 42}
+         scope-map {:authorization/id auth-id
+                    :authorization/type :force-authorisation
+                    :held/direction :out
+                    :token usdc
+                    :amount 40
+                    :held/account :escrow-principal
+                    :owner/address bob
+                    :held/reason :partial-fill-principal-loss
+                    :held/workflow-id 42}
         scope-hash (hash/domain-hash "force-authorisation-scope" scope-map)
         auth-prov {:authorization/type :force-authorisation
                    :authorization/id auth-id

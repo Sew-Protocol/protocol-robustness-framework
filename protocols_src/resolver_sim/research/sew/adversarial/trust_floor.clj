@@ -32,7 +32,8 @@
      This sweep tests that prediction empirically by sweeping (n-resolvers ×
      resolver-capacity) and finding the actual phase-transition multiplier."
   (:require [resolver-sim.stochastic.rng :as rng]
-            [resolver-sim.sim.engine      :as proto]))
+            [resolver-sim.sim.engine      :as proto]
+            [resolver-sim.protocols.sew.config :as config]))
 
 ;; ---------------------------------------------------------------------------
 ;; Trust and legitimacy model
@@ -359,10 +360,7 @@
 ;; three seeds, so each cell reports "fraction of seeds that pass".
 ;; ---------------------------------------------------------------------------
 
-    (def ^:private effort-levels
-      [{:label :baseline :fee 50  :emer 2 :trust 0.2}
-       {:label :medium   :fee 100 :emer 4 :trust 0.5}
-       {:label :best     :fee 150 :emer 8 :trust 0.8}])
+    (def ^:private effort-levels config/EFFORT_LEVELS)
 
     (defn- test-capacity-config
       "Run one (n-resolvers × resolver-capacity) cell at three effort levels and

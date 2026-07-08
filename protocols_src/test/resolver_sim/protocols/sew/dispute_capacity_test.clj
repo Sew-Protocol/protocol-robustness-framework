@@ -12,6 +12,7 @@
      - all-resolvers-full system liveness scenario"
   (:require [resolver-sim.protocols.sew.snapshot-fixtures :as snap-fix]
             [clojure.test :refer [deftest is testing]]
+            [resolver-sim.protocols.sew.config :as config]
             [resolver-sim.protocols.sew.types      :as t]
             [resolver-sim.protocols.sew.lifecycle  :as lc]
             [resolver-sim.protocols.sew.resolution :as res]
@@ -29,11 +30,12 @@
 
 (def base-snapshot
   (snap-fix/escrow-snapshot
-   {:escrow-fee-bps            0
-    :default-auto-release-delay 0
-    :default-auto-cancel-delay  0
-    :max-dispute-duration       86400
-    :appeal-window-duration     172800}))
+   (merge {:escrow-fee-bps 0}
+          (select-keys config/DEFAULT_TIMEOUT_CONFIG
+                       [:default-auto-release-delay
+                        :default-auto-cancel-delay
+                        :max-dispute-duration
+                        :appeal-window-duration]))))
 
 (def base-settings (t/make-escrow-settings {}))
 

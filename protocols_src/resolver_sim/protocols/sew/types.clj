@@ -262,15 +262,19 @@
      :total-bonds-posted  {}   ; {token amount} — cumulative bonds ever posted
      :bond-slashed        {}   ; {workflow-id amount}
      :bond-distribution   {:insurance 0 :protocol 0 :burned 0} ; 50/30/20 split
-     :retained-slash-reserves 0 ; explicit accounting for retained slash residue
+      :retained-slash-reserves 0 ; explicit accounting for retained slash residue
+      :slash-credit-liabilities {} ; {addr nat-int} — protocol obligation to restore resolver stake when slash is reversed-with-credit
      :resolver-bonds      {}   ; {addr {:stable nat-int :sew nat-int}} — DR3 80/20 mix invariant
-     :senior-bonds        {}   ; {addr {:coverage-max nat-int :reserved-coverage nat-int}}
+      :senior-bonds        {}   ; {addr {:coverage-max nat-int :reserved-coverage nat-int}}
+      :resolver-senior     {}   ; {addr senior-addr} — reverse mapping from each junior resolver to their delegated senior
      :resolver-frozen-until {} ; {addr nat-int} — resolver freeze expiry (0 = not frozen)
      :resolver-epoch-slashed {} ; {addr {:epoch-start nat-int :amount nat-int}} — per-epoch slash cap
      :resolver-capacities   {} ; {addr {:max-concurrent nat-int :current-active nat-int}} — mirrors DRM.resolverCapacity
      :resolver-unavailable #{} ; #{resolver-addr} currently marked unavailable
-     :resolver-overflows   {} ; {overflow-id -> overflow-record} — scoped resolver overflow failover
-     :next-overflow-id     0 ; counter for resolver-overflow records
+      :resolver-overflows   {} ; {overflow-id -> overflow-record} — scoped resolver overflow failover
+      :next-overflow-id     0 ; counter for resolver-overflow records
+      :force-authorisations {} ; {auth-id -> force-authorisation-record} — explicit auth for exceptional actions
+      :next-force-authorisation-id 0 ; counter for force-authorisation records
      :unavailability-stats {:total-resolvers 0 :unavailable-count 0 :last-update block-time}
      :circuit-breaker {:active? false :last-trigger 0 :cooldown 3600 :threshold-bps 3000}
      :token-fot-bps          {} ; {token-addr nat-int} — Fee-on-Transfer BPS per token (0 = normal ERC20)

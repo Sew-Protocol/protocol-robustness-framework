@@ -1233,24 +1233,29 @@
 ;; The three buckets
 (defn slash-distribution-consistent?
   ;; must sum to the total of all bond-slashed amounts.
+  ;; slash-credit-liabilities represent protocol obligations from resolved
+  ;; reversal-slashes where stake was credited but distributed funds were
+  ;; not clawed back — they are accounted as a deduction from net distributable.
   ;; ---------------------------------------------------------------------------
-  "True when (insurance + protocol + retained-slash-reserves) equals
-   the sum of all bond-slashed amounts.
+  "True when (insurance + protocol + retained-slash-reserves +
+   slash-credit-liabilities) equals the sum of all bond-slashed amounts.
 
    Enforces that every slashed bond was distributed/accounted somewhere
-   (insurance, protocol, or retained reserves)
+   (insurance, protocol, retained reserves, or credit liability)
    rather than disappearing."
   [world]
   (let [bd          (:bond-distribution world {:insurance 0 :protocol 0})
         retained    (:retained-slash-reserves world 0)
-        dist-total  (+ (:insurance bd 0) (:protocol bd 0) retained)
+        credit-liabilities (reduce + 0 (vals (:slash-credit-liabilities world {})))
+        dist-total  (+ (:insurance bd 0) (:protocol bd 0) retained credit-liabilities)
         slash-total (reduce + 0 (vals (:bond-slashed world {})))]
     (if (zero? slash-total)
       {:holds? true :violations []}
       (if (= dist-total slash-total)
         {:holds? true :violations []}
         {:holds?     false
-         :violations [{:dist-total dist-total :slash-total slash-total}]}))))
+         :violations [{:dist-total dist-total :slash-total slash-total
+                       :slash-credit-liabilities credit-liabilities}]}))))
 
 ;; ---------------------------------------------------------------------------
 ;; Invariant 25: Resolver bond mix valid (80/20 stable/Sew)

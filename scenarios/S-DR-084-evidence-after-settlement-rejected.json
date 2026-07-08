@@ -21,7 +21,7 @@
   } ],
   "protocol-params" : {
     "resolver-fee-bps" : 150,
-    "appeal-window-duration" : 0,
+    "appeal-window-duration" : 60,
     "max-dispute-duration" : 2592000
   },
   "events" : [ {

@@ -382,6 +382,7 @@
                             (-> w
                                 (update-in [:resolver-stakes resolver] (fnil + 0) amount)
                                 (update-in [:resolver-slash-total resolver] (fnil - 0) amount)
+                                (update-in [:slash-credit-liabilities resolver] (fnil + 0) amount)
                                 (assoc-in [:pending-fraud-slashes slash-id :status] :reversed-with-credit)
                                 (assoc-in [:pending-fraud-slashes slash-id :reversed-by-level] current-level)
                                 (assoc-in [:pending-fraud-slashes slash-id :reversed-at] now)))
@@ -403,7 +404,8 @@
 
     :else
     (let [world' (cond-> (assoc-in world [:evidence-updated? workflow-id] true)
-                   evidence-hash (assoc-in [:evidence-hashes workflow-id] evidence-hash))]
+                   evidence-hash (update-in [:evidence-hashes workflow-id]
+                                            (fnil conj []) evidence-hash))]
       (attr/with-attribution {:subject/type :dispute
                               :subject/id workflow-id
                               :action/type :dispute/submit-evidence
@@ -605,6 +607,8 @@
           (assoc-in [:pending-settlements workflow-id] t/empty-pending-settlement))
       world)))
 
+(declare archive-pending-on-escalation)
+
 (defn apply-resolution-transition
   "Core resolution state transition once authorization is confirmed.
    Skips the authorized-resolver? check — caller must gate it separately.
@@ -623,7 +627,10 @@
                   :workflow-id workflow-id)
 
       :else
-      (let [world          (clear-pending-settlement world workflow-id)
+      (let [world          (if (:exists (t/get-pending world workflow-id))
+                              (archive-pending-on-escalation world workflow-id)
+                              world)
+            world          (clear-pending-settlement world workflow-id)
             world          (lc/accrue-yield world workflow-id)
             snap           (t/get-snapshot world workflow-id)
             window-dur     (max (:appeal-window-duration snap 0)
@@ -750,10 +757,17 @@
 ;; pendingSettlements[workflowId] before escalation proceeds.
 ;; ---------------------------------------------------------------------------
 
+(def ^:private max-superseded-pending-per-workflow
+  "Maximum number of superseded pending entries retained per workflow.
+   Older entries beyond this cap are discarded to prevent unbounded growth
+   in repeated escalation/challenge cycles."
+  5)
+
 (defn- archive-pending-on-escalation
   "Archive the current pending settlement as superseded and clear active pending.
    This preserves a fallback execution path for edge-cases where escalation/challenge
-   clears pending near the deadline but no replacement decision is produced in time."
+   clears pending near the deadline but no replacement decision is produced in time.
+   Caps retained entries to max-superseded-pending-per-workflow."
   [world workflow-id]
   (let [pending (t/get-pending world workflow-id)]
     (if (:exists pending)
@@ -764,6 +778,8 @@
                      {:pending pending
                       :superseded-at (time-ctx/block-ts world)
                       :level (t/dispute-level world workflow-id)})
+          (update-in [:superseded-pending-settlements workflow-id]
+                     (fn [v] (take-last max-superseded-pending-per-workflow v)))
           (update :pending-settlements dissoc workflow-id))
       world)))
 
