@@ -4,7 +4,6 @@
             [clojure.test.check :as tc]
             [clojure.test.check.generators :as gen]
             [clojure.test.check.properties :as prop]
-            [resolver-sim.contract-model.replay :as replay]
             [resolver-sim.generators.scenario :as scenario]
             [resolver-sim.generators.stateful :as stateful]
             [resolver-sim.protocols.protocol :as proto]

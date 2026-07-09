@@ -1,4 +1,4 @@
-(ns scripts.generate-fixtures
+(ns scripts.scenarios.generate-fixtures
   "One-shot fixture generation for the new S114 and S115 scenarios.
    Creates .trace.json and .report.edn files in data/fixtures/traces/ and /golden/."
   (:require [clojure.data.json :as json]

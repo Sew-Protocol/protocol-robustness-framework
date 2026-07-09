@@ -1,4 +1,4 @@
-(ns scripts.sync-invariant-trace-fixtures
+(ns scripts.scenarios.sync-invariant-trace-fixtures
   (:require [resolver-sim.io.scenario-fixture-sync :as sync]))
 
 (defn -main [& args]

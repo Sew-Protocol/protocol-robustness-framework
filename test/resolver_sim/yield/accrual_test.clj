@@ -4,8 +4,7 @@
             [resolver-sim.yield.accrual :as accrual]
             [resolver-sim.yield.exact-math :as m]
             [resolver-sim.yield.position :as pos]
-            [resolver-sim.yield.risk-monitor :as risk]
-            [resolver-sim.util.attribution :as attr]))
+            [resolver-sim.yield.risk-monitor :as risk]))
 
 (def base-world
   {:yield/indices {:test-mod {"USDC" 1}}

@@ -5,8 +5,6 @@
    and that the replay engine's deterministic-batch mode correctly accepts
    non-conflicting events and rejects conflicting ones."
   (:require [clojure.test :refer [deftest is testing]]
-            [resolver-sim.contract-model.replay :as replay]
-            [resolver-sim.protocols.protocol :as proto]
             [resolver-sim.protocols.sew :as sew]))
 
 (def ^:private alice0   {:id "alice0"   :type "honest"   :address "0xA0"})

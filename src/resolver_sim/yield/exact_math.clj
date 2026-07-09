@@ -24,7 +24,9 @@
   "Canonical: resolver-sim.time.context/seconds-per-year"
   31536000)
 
-(def scaling-factor 10000)
+(def scaling-factor
+  "Canonical BPS denominator. Also defined as resolver-sim.economics.payoffs/basis-point-denominator (same value)."
+  10000)
 
 (defn bps->ratio
   "Convert basis points to an exact ratio. 10% = 1000 bps = 1000/10000 = 1/10."

@@ -255,7 +255,7 @@ run_framework() {
                 'resolver-sim.sim.strategy-adaptation-test
                 'resolver-sim.sim.waterfall-test)]
               (when (pos? (+ (:error results) (:fail results)))
-                (System/exit 1)))))"
+                (System/exit 1)))"
   return $?
 }
 
@@ -409,9 +409,9 @@ run_yield() {
                'resolver-sim.protocols.sew.yield.finalize-parity-test
                'resolver-sim.protocols.sew.resolver-yield-accrual-test
                'resolver-sim.scenario.yield-expectations-test
-               'resolver-sim.scenario.yield-scenario-lint-test)]
-             (when (pos? (+ (:error results) (:fail results)))
-               (System/exit 1)))))"
+                'resolver-sim.scenario.yield-scenario-lint-test)]
+              (when (pos? (+ (:error results) (:fail results)))
+                (System/exit 1)))"
   return $?
 }
 
@@ -436,7 +436,7 @@ run_dispute_resolution() {
 (binding [resolver-sim.evidence.chain/*allow-dirty* true]
   (let [results (t/run-tests 'resolver-sim.protocols.sew.dispute-resolution-coverage-test)]
   (when (pos? (+ (:error results) (:fail results)))
-    (System/exit 1))))"
+    (System/exit 1)))"
   local dr_exit=$?
   # CI Gate: validate artifact registry
   if [[ -f "scripts/validate/ci_gate_validation.py" ]]; then

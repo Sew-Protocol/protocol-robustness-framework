@@ -1,11 +1,8 @@
 (ns resolver-sim.commands.backstop
   "Backstop orchestration: runs registered review-gate commands in-process.
    Port of scripts/backstop.clj — no ProcessBuilder, no bb shelling out."
-  (:require [clojure.edn :as edn]
-            [clojure.java.io :as io]
-            [clojure.string :as str]
-            [resolver-sim.cli.registry :as reg])
-  (:import [clojure.lang ExceptionInfo]))
+  (:require [clojure.string :as str]
+            [resolver-sim.cli.registry :as reg]))
 
 (def tier-rank {:fast 0 :default 1 :full 2 :manual 3 :deprecated 4})
 

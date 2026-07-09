@@ -62,5 +62,6 @@
     "5. CHALLENGE RESOLUTION (DR-H-001): Third-party challenge with bond posting works correctly."
     "6. SUPERSEDED SETTLEMENT SAFETY (DR-I-001): Archived pending settlements from escalation are NOT auto-executable."
     "7. CRITICAL FINDING: Session 1 scenarios (DR-B-002, DR-B-003, DR-D-001) that call escalate-dispute with custom-resolver set on the escrow never actually escalated. The :custom-resolver creates exclusive Priority 1 authorization, and the escalation-fn is nil when :escalation-resolvers is not configured in protocol-params. These scenarios need redesign to properly test reversal slashing."
-    "8. KEY LESSON: EDN scenario keys for escalation-resolvers must be keywords."}]}
+      "8. KEY LESSON: EDN scenario keys for escalation-resolvers must be keywords."]}]}
+
 

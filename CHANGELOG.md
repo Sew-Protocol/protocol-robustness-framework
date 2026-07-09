@@ -2,6 +2,20 @@
 
 ## [Unreleased]
 
+### Fixed (2026-07-09)
+
+- **Namespace name mismatches in scripts/:** Fixed 14 script files under `scripts/scenarios/` that had namespace declarations not matching their file paths (e.g., `scripts.generate-core-docs` → `scripts.scenarios.generate-core-docs`). Updated corresponding `deps.edn` aliases. (`scripts/scenarios/*.clj`, `deps.edn`)
+
+- **Namespace name mismatches in notebooks/archive/:** Fixed 3 archived notebooks whose namespace declarations referenced `notebooks.*` instead of `notebooks.archive.*`. Fixed `shortfall_fairness.clj` namespace from `resolver-sim.notebook-support.shortfall-fairness` to `notebooks.archive.shortfall-fairness`. (`notebooks/archive/*.clj`)
+
+- **Malformed EDN researcher-log files:** Fixed 3 bracket-imbalance errors in `docs/researcher-log/dispute-resolution-research-log-*-session*.edn` files: extra closing delimiter in session3, stray bracket in session4, and missing entries-vector/top-map close in the main session file. All 3 now parse correctly.
+
+- **Stale TODO in `.ai/project.md`:** Updated out-of-date note claiming `:build-clerk` alias doesn't exist in `deps.edn` (it does, lines 209-211).
+
+- **Unused namespace requires removed (48 files):** Cleaned up `required but never used` namespace declarations in 11 source and 37 test files.
+
+- **Unused requires restored in `forensic/deps_hash.clj`:** Re-added `clojure.string :as str` which was incorrectly removed; file uses `str/split`.
+
 ### Fixed (2026-07-08)
 
 - **Force-authorisation naming standardised:** Renamed all `force-authorization` (American 'z') to `force-authorisation` (British 's') across protocol code, REPL, and tests. Action dispatch strings keep old names as backward-compatible aliases via `get-method` delegation. (`protocols_src/resolver_sim/protocols/sew.clj`, `src/resolver_sim/repl/interactive_resolution.clj`, tests)

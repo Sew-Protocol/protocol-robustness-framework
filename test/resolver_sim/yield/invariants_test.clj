@@ -2,13 +2,11 @@
   (:require [clojure.test :refer :all]
             [resolver-sim.contract-model.replay :as replay]
             [resolver-sim.io.scenarios :as io-sc]
-            [resolver-sim.protocols.yield :as yp]
             [resolver-sim.scenario.expectations :as expectations]
             [resolver-sim.scenario.normalize :as normalize]
             [resolver-sim.yield.accrual-properties :as accrual-props]
             [resolver-sim.yield.invariant-catalog :as cat]
-            [resolver-sim.yield.invariants :as inv]
-            [resolver-sim.yield.invariants-transition :as inv-trans]))
+            [resolver-sim.yield.invariants :as inv]))
 
 (deftest default-runtime-ids-are-registered
   (let [registered (set (inv/registered-ids))]

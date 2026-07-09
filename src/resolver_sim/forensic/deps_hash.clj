@@ -2,8 +2,7 @@
   "Dependency classpath hashing for forensic integrity.
    Resolves the full classpath, hashes each JAR, and produces a deps root hash.
    Used by bb hash:deps and by pre-run commitment generation."
-  (:require [clojure.java.io :as io]
-            [clojure.string :as str])
+  (:require [clojure.string :as str])
   (:import [java.security MessageDigest]))
 
 (defn- sha256-file

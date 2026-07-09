@@ -1,5 +1,5 @@
 ^{:nextjournal.clerk/visibility {:code :show :result :show}}
-(ns resolver-sim.notebook-support.shortfall-fairness
+(ns notebooks.archive.shortfall-fairness
   "Interactive notebook: shortfall lifecycle, fairness, and classification.
    Demonstrates Phase 1-5: projection fields, configurable reclaim threshold,
    principal/yield split ratios, conservation invariant, and lifecycle events."

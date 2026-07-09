@@ -6,8 +6,7 @@
    tested in replay_test.clj; these tests focus on session lifecycle and
    thread-safety contracts."
   (:require [clojure.test                    :refer [deftest is testing run-tests]]
-            [resolver-sim.server.session     :as session]
-            [resolver-sim.protocols.sew.types :as t])
+            [resolver-sim.server.session     :as session])
   (:import [java.util.concurrent Executors CountDownLatch]))
 
 ;; ---------------------------------------------------------------------------

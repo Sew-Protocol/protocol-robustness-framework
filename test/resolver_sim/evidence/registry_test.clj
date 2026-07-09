@@ -9,9 +9,6 @@
   (:require [clojure.data.json :as json]
             [clojure.java.io :as io]
             [clojure.test :refer [deftest is testing use-fixtures]]
-            [resolver-sim.evidence.capture :as cap]
-            [resolver-sim.evidence.chain :as chain]
-            [resolver-sim.evidence.config :as evcfg]
             [resolver-sim.evidence.registry :as reg]
             [resolver-sim.evidence.registry-validation :as reg-val]
             [resolver-sim.io.event-evidence :as evidence]))

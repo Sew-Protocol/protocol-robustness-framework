@@ -1,4 +1,4 @@
-(ns scripts.regenerate-goldens
+(ns scripts.scenarios.regenerate-goldens
   (:require [clojure.edn :as edn]
             [resolver-sim.scenario.outcome-semantics :as ose]
             [resolver-sim.scenario.theory-result :as theory-result]

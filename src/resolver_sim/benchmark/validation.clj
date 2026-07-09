@@ -2,12 +2,8 @@
   "Static validation of all built-in benchmark resources.
    All checks use explicit resource: URIs — no CWD-relative filesystem access.
    Each check returns {:check <keyword> :passed? <bool> :details <string>}."
-  (:require [clojure.edn :as edn]
-            [clojure.set :as set]
-            [clojure.string :as str]
-            [resolver-sim.concepts.registry :as concepts]
-            [resolver-sim.io.resource-path :as rp]
-            [resolver-sim.logging :as log]))
+  (:require [resolver-sim.concepts.registry :as concepts]
+            [resolver-sim.io.resource-path :as rp]))
 
 ;; ── Helpers ─────────────────────────────────────────────────────────────────
 

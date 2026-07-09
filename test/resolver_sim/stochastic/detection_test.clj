@@ -5,10 +5,8 @@
   (:require [clojure.test :refer :all]
             [resolver-sim.stochastic.detection :as detection]
             [resolver-sim.stochastic.rng :as rng]
-            [resolver-sim.stochastic.types :as st-types]
             [resolver-sim.io.params :as io-params]
-            [malli.core :as m]
-            [malli.error :as me]))
+            [malli.core :as m]))
 
 (deftest reversal-pending-live?-zero-threshold-disabled
   (is (false? (detection/reversal-pending-live?

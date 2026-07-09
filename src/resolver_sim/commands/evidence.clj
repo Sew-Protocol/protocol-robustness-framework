@@ -4,7 +4,6 @@
   (:require [clojure.data.json :as json]
             [clojure.java.io :as io]
             [clojure.set :as set]
-            [clojure.string :as str]
             [resolver-sim.evidence.chain :as chain]
             [resolver-sim.evidence.registry :as reg]
             [resolver-sim.evidence.registry-validation :as rv]

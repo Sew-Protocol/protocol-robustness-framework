@@ -1,10 +1,7 @@
 (ns resolver-sim.validation.adapters.artifact-registry-test
   (:require [clojure.test :refer [deftest is testing]]
             [resolver-sim.validation.adapters.artifact-registry :as adapter]
-            [resolver-sim.validation.state :as vs]
-            [resolver-sim.validation.root :as root]
-            [clojure.java.io :as io]
-            [clojure.string :as str]))
+            [clojure.java.io :as io]))
 
 ;; ── no direct state-monad dependency ─────────────────────────────────────────
 

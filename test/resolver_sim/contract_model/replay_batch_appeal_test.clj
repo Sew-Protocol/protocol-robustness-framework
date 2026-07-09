@@ -9,8 +9,6 @@
    the BATCH CONFLICT DOMAIN behavior (shared [:resolver r] domain vectors)
    which is what the batch engine actually checks."
   (:require [clojure.test :refer [deftest is testing]]
-            [resolver-sim.contract-model.replay :as replay]
-            [resolver-sim.protocols.protocol :as proto]
             [resolver-sim.protocols.sew :as sew]))
 
 (def ^:private buyer     {:id "buyer"    :type "honest"    :address "0xB"})

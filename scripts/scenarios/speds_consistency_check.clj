@@ -1,4 +1,4 @@
-(ns scripts.speds-consistency-check
+(ns scripts.scenarios.speds-consistency-check
   (:require [resolver-sim.notebook-support.speds.data :as data]
             [resolver-sim.notebook-support.speds.findings :as findings]
             [resolver-sim.notebook-support.speds.issues :as issues]

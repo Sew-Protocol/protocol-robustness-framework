@@ -18,7 +18,6 @@
             [resolver-sim.evidence.chain :as chain]
             [resolver-sim.evidence.config :as evcfg]
             [resolver-sim.hash.canonical :as hc]
-            [resolver-sim.io.scenarios :as sc]
             [resolver-sim.util.attribution :as attr]
             [resolver-sim.logging :as log]))
 

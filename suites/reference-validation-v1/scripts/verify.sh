@@ -28,7 +28,7 @@ PY
 report_json_diff() {
   local expected_file="$1"
   local actual_file="$2"
-  python3 "$REPO_ROOT/python/json_diff_report.py" "$expected_file" "$actual_file" || true
+  python3 "$REPO_ROOT/integration/python/json_diff_report.py" "$expected_file" "$actual_file" || true
 }
 
 # ── Pass count check ────────────────────────────────────────────────────

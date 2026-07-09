@@ -3,7 +3,6 @@
    Port of scripts/concepts_validate.clj."
   (:require [clojure.edn :as edn]
             [clojure.java.io :as io]
-            [clojure.set :as set]
             [resolver-sim.concepts.registry :as concepts-registry]))
 
 (defn- validate-concepts

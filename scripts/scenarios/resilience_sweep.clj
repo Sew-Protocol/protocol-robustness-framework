@@ -1,4 +1,4 @@
-(ns resilience-sweep
+(ns scripts.scenarios.resilience-sweep
   (:require [clojure.data.json :as json]
             [clojure.java.shell :as shell]
             [clojure.java.io :as io]))

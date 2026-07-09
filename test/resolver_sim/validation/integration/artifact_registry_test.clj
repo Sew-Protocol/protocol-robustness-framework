@@ -1,10 +1,8 @@
 (ns resolver-sim.validation.integration.artifact-registry-test
   (:require [clojure.data.json :as json]
-            [clojure.java.io :as io]
             [clojure.java.shell :as sh]
             [clojure.test :refer [deftest is testing]]
-            [resolver-sim.validation.integration.artifact-registry :as integ]
-            [resolver-sim.validation.adapters.artifact-registry :as adapter]))
+            [resolver-sim.validation.integration.artifact-registry :as integ]))
 
 ;; ── fixtures ─────────────────────────────────────────────────────────────────
 

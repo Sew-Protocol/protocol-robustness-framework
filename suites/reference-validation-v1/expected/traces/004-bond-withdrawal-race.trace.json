@@ -13,7 +13,7 @@
    "expected":
    {"escrow_state":0,
     "escrow_amount_after_fee":0,
-    "global_total_held":5000,
+    "global_total_held":0,
     "global_total_fees":0,
     "pending_settlement_exists":false,
     "dispute_level":0,
@@ -35,7 +35,7 @@
    "expected":
    {"escrow_state":1,
     "escrow_amount_after_fee":4000,
-    "global_total_held":9000,
+    "global_total_held":4000,
     "global_total_fees":0,
     "pending_settlement_exists":false,
     "dispute_level":0,
@@ -60,7 +60,7 @@
    "expected":
    {"escrow_state":1,
     "escrow_amount_after_fee":4000,
-    "global_total_held":7000,
+    "global_total_held":4000,
     "global_total_fees":0,
     "pending_settlement_exists":false,
     "dispute_level":0,
@@ -82,7 +82,7 @@
    "expected":
    {"escrow_state":4,
     "escrow_amount_after_fee":4000,
-    "global_total_held":7000,
+    "global_total_held":4000,
     "global_total_fees":0,
     "pending_settlement_exists":false,
     "dispute_level":0,

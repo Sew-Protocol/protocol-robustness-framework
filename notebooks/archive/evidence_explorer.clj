@@ -1,4 +1,4 @@
-(ns notebooks.evidence-explorer
+(ns notebooks.archive.evidence-explorer
   (:require [nextjournal.clerk :as clerk]
             [clojure.string :as str]
             [resolver-sim.notebook-support.common :as common]

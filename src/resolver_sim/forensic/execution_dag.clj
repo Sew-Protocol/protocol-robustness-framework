@@ -3,8 +3,7 @@
    Plan DAG is created before execution; Evidence DAG is populated during run.
    Written to results/runs/<run-id>/execution-dag.json"
   (:require [clojure.java.io :as io]
-            [clojure.data.json :as json]
-            [clojure.string :as str])
+            [clojure.data.json :as json])
   (:import [java.security MessageDigest]
            [java.time Instant]))
 

@@ -1,5 +1,5 @@
 {"description":"Generated trace: ",
- "fee_bps":150,
+ "fee_bps":100,
  "schema_version":"2",
  "resolutions":
  {"wf0":
@@ -12,9 +12,9 @@
    "cdrs_version":"0.2",
    "expected":
    {"escrow_state":1,
-    "escrow_amount_after_fee":4925,
-    "global_total_held":4925,
-    "global_total_fees":75,
+    "escrow_amount_after_fee":4950,
+    "global_total_held":4950,
+    "global_total_fees":50,
     "pending_settlement_exists":false,
     "dispute_level":0,
     "accepted":true,
@@ -37,9 +37,9 @@
    "cdrs_version":"0.2",
    "expected":
    {"escrow_state":4,
-    "escrow_amount_after_fee":4925,
-    "global_total_held":4925,
-    "global_total_fees":75,
+    "escrow_amount_after_fee":4950,
+    "global_total_held":4950,
+    "global_total_fees":50,
     "pending_settlement_exists":false,
     "dispute_level":0,
     "accepted":true,

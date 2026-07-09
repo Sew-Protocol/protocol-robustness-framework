@@ -1,4 +1,4 @@
-(ns notebooks.challenge-drilldown
+(ns notebooks.archive.challenge-drilldown
   (:require [nextjournal.clerk :as clerk]
             [clojure.string :as str]
             [resolver-sim.notebook-support.common :as common]

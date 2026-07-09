@@ -233,9 +233,8 @@ Command discrepancy to preserve:
 - `bb validate` is documented in `bb.edn` as "Structural validation pipeline:
   lint (fmt skipped due to env artifact issues)" and runs `clj -M:lint`; it does
   not run `bb fmt`.
-- `bb clerk-build` exists but calls `clojure -M:build-clerk`; no
-  `:build-clerk` alias was found in `deps.edn`. TODO(agent): confirm or repair
-  the notebook static build command before relying on it.
+- `bb clerk-build` exists and calls `clojure -M:build-clerk`; the
+  `:build-clerk` alias is defined in `deps.edn` using `:exec-fn nextjournal.clerk/build!`.
 
 ## Do Not Break
 
@@ -317,8 +316,7 @@ bb notebook:ci
 bb clerk-build
 ```
 
-TODO(agent): `bb clerk-build` may be misconfigured because `deps.edn` currently
-does not define `:build-clerk`.
+Note: `:build-clerk` is now defined in `deps.edn` (resolved in Jul 2026 cleanup).
 
 For docs-only work:
 

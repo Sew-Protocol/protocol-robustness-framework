@@ -17,7 +17,7 @@
     "DR-J-002: Same-block concurrent escalation — two escalate, first wins"    
     "DR-K-001: Fraud slash pending — proposal blocked by existing pending slash"]
    :critical-vulnerability
-   "automate-timed-actions missed dispute-timeout-exceeded? check. FIXED in this session."]
+    "automate-timed-actions missed dispute-timeout-exceeded? check. FIXED in this session."}
   
   {:timestamp "2026-06-30T15:00Z"
    :activity "Fix applied: Priority 3 dispute-timeout in automate-timed-actions"

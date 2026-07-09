@@ -17,8 +17,8 @@
    ["1. Add :escalation-resolvers to all 5 broken EDN scenarios"
     "2. Remove :custom-resolver from create_escrow params (let Priority 3 handle auth)"
     "3. Verify each scenario replays correctly"
-    "4. Verify reverse-reversal-slash-on-vindication fix now fires (DR-D-001 + DR-G-002)"}]}
+    "4. Verify reverse-reversal-slash-on-vindication fix now fires (DR-D-001 + DR-G-002)"]}
 
   {:timestamp "2026-06-30T10:30Z"
-   :activity "Fixing broken scenarios"
-   :status "in-progress"}]}
+    :activity "Fixing broken scenarios"
+    :status "in-progress"}]}

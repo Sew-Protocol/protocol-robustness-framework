@@ -4,7 +4,6 @@
             [clojure.test :refer [deftest is testing]]
             [resolver-sim.io.scenario-export :as export]
             [resolver-sim.io.scenario-fixture-sync :as sync]
-            [resolver-sim.protocols.sew.invariant-scenarios :as scenarios]
             [resolver-sim.protocols.sew.invariant-scenarios.doc-summaries :as doc]))
 
 (defn- baseline-s01-s23-ids

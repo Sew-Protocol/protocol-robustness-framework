@@ -48,6 +48,13 @@
 ;; ── Test grid ────────────────────────────────────────────────────────────────
 ;; Representative escrow amounts (wei) and fee/bond/slash bps values drawn
 ;; from actual parameter files in data/params/.
+;;
+;; Values are hand-selected for boundary and typical-range coverage:
+;;   amounts       — 0, near-zero (1, 999, 9999), typical (10000), large (100000, 1000000)
+;;   fee-bps       — 1%, 1.5%, 2%, 5%
+;;   bond-bps      — 5%, 7%, 10%
+;;   slash-bps     — 2% (timeout), 25% (reversal), 50% (fraud)
+;; These should be reviewed and extended if the numeric domain changes.
 
 (def ^:private amounts [0 1 999 1000 9999 10000 100000 1000000])
 (def ^:private fee-bps-values [100 150 200 500])
@@ -329,6 +336,7 @@
 ;; ── 10. Convergence regression (MC-7) ────────────────────────────────────────
 ;; Pinned-seed tests: MC mean profit should converge near analytical expectation.
 ;; Tolerance is ±15% to account for RNG variance at n=500 trials.
+;; Increase n for tighter tolerance; decrease for faster CI feedback.
 
 (defn- run-mc-mean
   [n seed escrow fee-bps bond-bps slash-mult strategy detection-prob opts]

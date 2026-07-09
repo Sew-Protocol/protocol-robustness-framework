@@ -1,7 +1,6 @@
 (ns resolver-sim.stochastic.params-test
   (:require [clojure.test :refer :all]
-            [resolver-sim.stochastic.params :as params]
-            [resolver-sim.stochastic.types :as types]))
+            [resolver-sim.stochastic.params :as params]))
 
 ;; ── from-snap tests (unchanged) ──────────────────────────────────────────────
 

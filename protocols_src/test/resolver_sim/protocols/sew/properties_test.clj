@@ -33,7 +33,11 @@
             [resolver-sim.protocols.sew.invariants :as inv]
             [resolver-sim.time.context             :as time-ctx]))
 
-(def ^:private num-trials 200)
+(def ^:private num-trials
+  "Default number of property-based test trials. Override via JVM property:
+   clojure -M:test -Dsew.properties.num-trials=500 ...
+   Falls back to 200 for fast CI runs."
+  (Long/getLong "sew.properties.num-trials" 200))
 
 ;; ---------------------------------------------------------------------------
 ;; Generators

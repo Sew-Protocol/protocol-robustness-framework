@@ -5,7 +5,6 @@
             [resolver-sim.contract-model.replay :as replay]
             [resolver-sim.generators.yield.core :as ycore]
             [resolver-sim.generators.yield.scenario :as ysc]
-            [resolver-sim.protocols.yield :as yp]
             [resolver-sim.yield.registry :as yreg]))
 
 (deftest generators-produce-valid-scenario-maps

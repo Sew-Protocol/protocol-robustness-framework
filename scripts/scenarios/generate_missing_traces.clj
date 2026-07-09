@@ -1,4 +1,4 @@
-(ns scripts.generate-missing-traces
+(ns scripts.scenarios.generate-missing-traces
   (:require [clojure.java.io :as io]
             [clojure.string :as str]
             [clojure.data.json :as json]

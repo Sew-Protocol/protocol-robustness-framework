@@ -1,7 +1,6 @@
 (ns resolver-sim.commands.validate
   "Structural validation: lint, fmt check, notebook checks.
-   Port of bb validate."
-  (:require [clojure.java.io :as io]))
+   Port of bb validate.")
 
 (defn run
   "Run the structural validation pipeline."

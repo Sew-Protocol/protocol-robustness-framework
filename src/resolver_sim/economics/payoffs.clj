@@ -10,6 +10,7 @@
             [resolver-sim.hash.canonical :as hc]))
 
 ;; Basis point denominator used by generic integer accounting helpers.
+;; Also defined as resolver-sim.yield.exact-math/scaling-factor (same value).
 (def basis-point-denominator 10000)
 
 (defn calculate-bps-amount

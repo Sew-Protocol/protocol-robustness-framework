@@ -17,8 +17,7 @@
             [resolver-sim.sim.multi-epoch :as me]
             [resolver-sim.sim.audit       :as audit]
             [resolver-sim.io.audit-outputs :as audit-out]
-            [resolver-sim.stochastic.rng  :as rng]
-            [resolver-sim.io.params       :as params]))
+            [resolver-sim.stochastic.rng  :as rng]))
 
 ;; ---------------------------------------------------------------------------
 ;; Shared helpers

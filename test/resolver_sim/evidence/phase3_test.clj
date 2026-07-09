@@ -11,13 +11,7 @@
             [resolver-sim.evidence.chain :as chain]
             [resolver-sim.hash.canonical :as hc]
             [resolver-sim.io.event-evidence :as evidence]
-            [resolver-sim.util.attribution :as attr]
-            [resolver-sim.util.evidence :as ev]
-            [resolver-sim.protocols.sew.runner :as runner]
-            [resolver-sim.protocols.sew.registry :as reg]
-            [resolver-sim.protocols.sew.types :as t]
-            [resolver-sim.protocols.sew.snapshot-fixtures :as snap-fix]
-            [resolver-sim.protocols.sew.resolution :as res]))
+            [resolver-sim.protocols.sew.runner :as runner]))
 
 ;; ── Helpers ──────────────────────────────────────────────────────────────────
 

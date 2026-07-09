@@ -130,15 +130,15 @@
 
   :regenerate-goldens
   {:extra-paths ["scripts"]
-   :main-opts ["-m" "scripts.regenerate-goldens"]}
+   :main-opts ["-m" "scripts.scenarios.regenerate-goldens"]}
 
   :sync-trace-fixtures
   {:extra-paths ["scripts"]
-   :main-opts ["-m" "scripts.sync-invariant-trace-fixtures"]}
+   :main-opts ["-m" "scripts.scenarios.sync-invariant-trace-fixtures"]}
 
   :generate-missing-traces
   {:extra-paths ["scripts"]
-   :main-opts ["-m" "scripts.generate-missing-traces"]}
+   :main-opts ["-m" "scripts.scenarios.generate-missing-traces"]}
 
   :generate-scenario-docs
   {:extra-paths ["scripts"]
@@ -206,6 +206,10 @@
    :exec-args {:browse true
                :watch-paths ["src" "notebooks"]}}
 
+  :build-clerk
+  {:exec-fn nextjournal.clerk/build!
+   :exec-args {:paths ["notebooks/report.clj"]}}
+
   :observability
   {:git/url "https://github.com/nextjournal/clerk"
    :git/sha "8772a0889218274384a30e79165b4c194b59560f"
@@ -238,7 +242,7 @@
 
   :speds-comparator-shadow
   {:extra-paths ["scripts"]
-   :main-opts ["-m" "speds-generate-comparator-shadow"]}
+   :main-opts ["-m" "scripts.scenarios.speds-generate-comparator-shadow"]}
 
   :notebooks
   {:extra-paths ["."]}

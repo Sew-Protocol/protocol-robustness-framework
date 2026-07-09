@@ -155,14 +155,23 @@
    "actor":"buyer"}],
  "expected_semantics":
  {"resolution":
-  {"outcome":"release",
-   "finality":"final",
-   "integrity":"fully-reconciled",
+  {"settlement_executed":false,
    "beneficiary":"seller",
-   "resolver":"resolver",
    "authorized_resolver":true,
    "pending_settlement_created":false,
-   "settlement_executed":false},
+   "outcome":"release",
+   "finality":"final",
+   "resolver":"resolver",
+   "trace_decision":
+   {"decision-id":"resolve-0-0",
+    "step":1180,
+    "alternatives":["release", "refund"],
+    "selected":"release",
+    "reasoning":"Resolver 0xresolver releases escrow 0",
+    "caller":"0xresolver",
+    "decision-evidence-hash":
+    "4367ed2c8919d6b9f40c7d1c2b8e7842afe4591a30c346ab55c86868ff7ccd8e"},
+   "integrity":"fully-reconciled"},
   "participation":
   {"dispute_initiator":"buyer",
    "resolution_actor":"resolver",

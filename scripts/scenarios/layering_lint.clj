@@ -1,4 +1,4 @@
-(ns layering-lint
+(ns scripts.scenarios.layering-lint
   "Static layering checker for resolver-sim namespaces.
 
    Enforces cross-layer import rules from CLAUDE.md (sim/io/db boundaries).

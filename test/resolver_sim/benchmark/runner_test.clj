@@ -9,11 +9,8 @@
             [resolver-sim.protocols.sew :as sew]
             [resolver-sim.protocols.sew.invariants :as sew-inv]
             [resolver-sim.scenario.suites :as suites]
-            [clojure.java.io :as io]
             [clojure.edn :as edn]
-            [clojure.string :as str]
-            [buddy.core.keys :as keys]
-            [buddy.core.codecs :as codecs]))
+            [clojure.string :as str]))
 
 (deftest test-hashing-determinism
   (testing "Identical data produces identical hashes"

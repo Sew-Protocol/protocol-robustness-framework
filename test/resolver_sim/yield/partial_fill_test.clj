@@ -195,6 +195,22 @@
       (is (= :fail (:status fairness)))
       (is (seq (get-in fairness [:details :violations]))))))
 
+(deftest test-partial-fill-closed-form-checks-per-claim-conservation-violation
+  (testing "per-claim-conservation catches filled+deferred != requested"
+    (let [decision {:settlement-mode :partial-fill
+                    :requested {:a 40 :b 60}
+                    :filled {:a 20 :b 25}
+                    :deferred {:a 15 :b 35}
+                    :haircut {}
+                    :policy {:mode :pro-rata}
+                    :evidence {:available-liquidity 50}}
+          checks (pf/partial-fill-closed-form-checks decision)
+          per-claim (first (filter #(= :partial-fill/per-claim-conservation
+                                       (:check/id %))
+                                   checks))]
+      (is (= :fail (:status per-claim)))
+      (is (seq (get-in per-claim [:details :violations]))))))
+
 (deftest test-partial-fill-closed-form-checks-waterfall-not-applicable
   (testing "pro-rata fairness is explicitly not-applicable outside pro-rata mode"
     (let [decision {:settlement-mode :partial-fill

@@ -9,7 +9,6 @@
             [resolver-sim.protocols.sew.resolution :as res]
             [resolver-sim.protocols.sew.accounting :as ac]
             [resolver-sim.protocols.sew.related-claims :as rc]
-            [resolver-sim.protocols.sew.state-machine :as sm]
             [resolver-sim.hash.canonical :as hash]
             [resolver-sim.time.context :as time-ctx]
             [resolver-sim.time.deadlines :as dl]))

@@ -1,4 +1,4 @@
-(ns scripts.add-key
+(ns scripts.scenarios.add-key
   "CLI utility to add/update researchers in keys/owners.json"
   (:require [clojure.data.json :as json]
             [clojure.java.io :as io]

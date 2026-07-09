@@ -1,4 +1,4 @@
-(ns scripts.generate-core-docs
+(ns scripts.scenarios.generate-core-docs
   (:require [clojure.data.json :as json]
             [clojure.java.io :as io]
             [clojure.string :as str]

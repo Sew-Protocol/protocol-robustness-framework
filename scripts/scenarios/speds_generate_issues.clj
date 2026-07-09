@@ -1,4 +1,4 @@
-(ns scripts.speds-generate-issues
+(ns scripts.scenarios.speds-generate-issues
   (:require [resolver-sim.notebook-support.speds.data :as data]
             [resolver-sim.notebook-support.speds.findings :as findings]
             [resolver-sim.notebook-support.speds.issues :as issues]))

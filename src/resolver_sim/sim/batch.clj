@@ -1,7 +1,6 @@
 (ns resolver-sim.sim.batch
   "Batch runner: aggregate N trials into summary statistics."
-  (:require [resolver-sim.stochastic.rng :as rng]
-            [resolver-sim.stochastic.detection :as detection]
+  (:require [resolver-sim.stochastic.detection :as detection]
             [resolver-sim.stochastic.dispute :as dispute]
             [resolver-sim.protocols.sew.research-models.resolver-ring :as ring]
             [resolver-sim.sim.batch-integration :as integration]

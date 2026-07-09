@@ -1,4 +1,4 @@
-(ns speds-generate-comparator-shadow
+(ns scripts.scenarios.speds-generate-comparator-shadow
   (:require [clojure.string :as str]
             [resolver-sim.notebook-support.speds.data :as data]
             [resolver-sim.notebook-support.speds.issues :as issues]))

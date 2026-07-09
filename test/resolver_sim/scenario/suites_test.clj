@@ -1,7 +1,6 @@
 (ns resolver-sim.scenario.suites-test
   (:require [clojure.data.json]
             [clojure.edn]
-            [clojure.java.io :as io]
             [clojure.string :as str]
             [clojure.test :refer [deftest is testing]]
             [resolver-sim.io.resource-path :as rp]

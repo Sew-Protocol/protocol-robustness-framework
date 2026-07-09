@@ -555,6 +555,7 @@
    - :partial-fill/conservation
    - :partial-fill/capacity-bound
    - :partial-fill/per-claim-bound
+   - :partial-fill/per-claim-conservation
    - :partial-fill/pro-rata-cross-product
    - :partial-fill/rounding-residual-bounded
 
@@ -584,6 +585,22 @@
                      (let [f (long (get filled k 0))]
                        (when (> f (long claim))
                          {:claim k :claim-amount (long claim) :filled f}))))
+             vec)
+        per-claim-conservation-violations
+        (->> (set (concat (keys requested) (keys filled) (keys deferred) (keys haircut)))
+             (keep (fn [k]
+                     (let [r (long (get requested k 0))
+                           f (long (get filled k 0))
+                           d (long (get deferred k 0))
+                           h (long (get haircut k 0))
+                           total (+ f d h)]
+                       (when (not= r total)
+                         {:claim k
+                          :requested r
+                          :filled f
+                          :deferred d
+                          :haircut h
+                          :recovered-sum total}))))
              vec)
         pro-rata-pairs
         (when (= :pro-rata mode)
@@ -638,14 +655,18 @@
                                (check-result :partial-fill/pro-rata-cross-product
                                              :not-applicable
                                              {:mode mode})))
-          residual-ch (future
-                        (check-result :partial-fill/rounding-residual-bounded
-                                      (if residual-ok? :pass :fail)
-                                      {:available-liquidity available
-                                       :total-filled total-filled
-                                       :residual residual
-                                       :eligible-claim-count eligible-claim-count}))]
-      (mapv deref [conservation-ch capacity-ch per-claim-ch cross-product-ch residual-ch]))))
+           residual-ch (future
+                         (check-result :partial-fill/rounding-residual-bounded
+                                       (if residual-ok? :pass :fail)
+                                       {:available-liquidity available
+                                        :total-filled total-filled
+                                        :residual residual
+                                        :eligible-claim-count eligible-claim-count}))
+           per-claim-conservation-ch (future
+                                       (check-result :partial-fill/per-claim-conservation
+                                                     (if (empty? per-claim-conservation-violations) :pass :fail)
+                                                     {:violations per-claim-conservation-violations}))]
+      (mapv deref [conservation-ch capacity-ch per-claim-ch cross-product-ch residual-ch per-claim-conservation-ch]))))
 
 (defn post-partial-fill-position
   "Update a position after a partial-fill settlement decision has been applied.

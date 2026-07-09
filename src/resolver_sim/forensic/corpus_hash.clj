@@ -2,8 +2,6 @@
   "Scenario corpus hashing.
    Given a suite keyword, resolves all scenario file paths and produces
    a corpus root hash.  Used by bb hash:corpus and pre-run commitment."
-  (:require [clojure.java.io :as io]
-            [clojure.string :as str])
   (:import [java.security MessageDigest]))
 
 (defn- sha256-file

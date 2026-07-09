@@ -1,4 +1,4 @@
-(ns scripts.gen-yield
+(ns scripts.scenarios.gen-yield
   "Generalized yield scenario generator.
    Creates yield scenarios based on structural templates and parameters."
   (:require [clojure.data.json :as json]))

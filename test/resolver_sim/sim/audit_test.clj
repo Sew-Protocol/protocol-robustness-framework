@@ -7,7 +7,6 @@
             [resolver-sim.sim.multi-epoch :as me]
             [resolver-sim.sim.audit       :as audit]
             [resolver-sim.sim.stochastic-equilibrium :as stoch-eq]
-            [resolver-sim.sim.trajectory  :as trajectory]
             [resolver-sim.stochastic.rng  :as rng]))
 
 (def ^:private base-params
