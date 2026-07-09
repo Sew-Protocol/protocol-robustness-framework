@@ -19,8 +19,8 @@
   :nextjournal.clerk/visibility {:code :fold :result :show}}
 (ns notebooks.ef-demo-dispute-refund
   (:require [nextjournal.clerk :as clerk]
-            [clojure.string :as str]
             [clojure.java.io :as io]
+            [clojure.data.json :as json]
             [resolver-sim.protocols.sew.types :as t]
             [resolver-sim.io.scenarios :as io-sc]
             [resolver-sim.hash.canonical :as hc]))
@@ -158,7 +158,7 @@
 ^{:nextjournal.clerk/visibility {:code :hide :result :hide}}
 (defn load-json [path]
   (try
-    (-> path slurp (clojure.data.json/read-str :key-fn keyword))
+    (-> path slurp (json/read-str :key-fn keyword))
     (catch java.io.FileNotFoundException _ nil)
     (catch Exception _ nil)))
 

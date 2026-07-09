@@ -24,9 +24,11 @@
 ;; ---------------------------------------------------------------------------
 
 (defn- read-evidence-file
+  "Read an event-evidence JSON file, converting string keys to keywords
+   to match the writing format (event_evidence.clj uses qualified-key)."
   [f]
   (try (with-open [r (io/reader f)]
-         (json/read r))
+         (json/read r :key-fn keyword))
        (catch Exception e
          (log/warn! "Failed to read evidence file" {:path (str f) :error (.getMessage e)})
          nil)))
@@ -90,26 +92,26 @@
       (let [files (evidence-files evidence-dir)
             records (vec (keep read-evidence-file files))
             enriched (mapv (fn [r]
-                             (let [ctx (get r "evidence/context" {})]
-                               {:evidence/chain-seq (or (get r "evidence/chain-seq") 0)
-                                :evidence/type (safe-str (or (get r "evidence/type") ""))
-                                :evidence/hash (safe-str (or (get r "evidence/hash") ""))
-                                :evidence/importance (safe-str (or (get r "evidence/importance") "core"))
-                                :scenario/id (safe-str (or (get r "scenario/id") ""))
-                                :run/id (safe-str (or (get r "run/id") ""))
-                                :world/before-hash (safe-str (or (get r "world/before-hash")
-                                                                 (get r "world/before-full-hash")
+                             (let [ctx (or (:evidence/context r) {})]
+                               {:evidence/chain-seq (or (:evidence/chain-seq r) 0)
+                                :evidence/type (safe-str (or (:evidence/type r) ""))
+                                :evidence/hash (safe-str (or (:evidence/hash r) ""))
+                                :evidence/importance (safe-str (or (:evidence/importance r) "core"))
+                                :scenario/id (safe-str (or (:scenario/id r) ""))
+                                :run/id (safe-str (or (:run/id r) ""))
+                                :world/before-hash (safe-str (or (:world/before-hash r)
+                                                                 (:world/before-full-hash r)
                                                                  ""))
-                                :world/after-hash (safe-str (or (get r "world/after-hash")
-                                                                (get r "world/after-full-hash")
+                                :world/after-hash (safe-str (or (:world/after-hash r)
+                                                                (:world/after-full-hash r)
                                                                 ""))
-                                :world/before-full-hash (safe-str (or (get r "world/before-full-hash") ""))
-                                :world/after-full-hash (safe-str (or (get r "world/after-full-hash") ""))
-                                :evidence/subject-type (safe-str (or (get ctx "subject/type") ""))
-                                :evidence/action-type (safe-str (or (get ctx "action/type") ""))
-                                :evidence/reason (safe-str (or (get ctx "evidence/reason") ""))
-                                :evidence/group-id (or (get r "evidence/group-id")
-                                                       (get-in r ["inputs" "group-id"])
+                                :world/before-full-hash (safe-str (or (:world/before-full-hash r) ""))
+                                :world/after-full-hash (safe-str (or (:world/after-full-hash r) ""))
+                                :evidence/subject-type (safe-str (or (:subject/type ctx) ""))
+                                :evidence/action-type (safe-str (or (:action/type ctx) ""))
+                                :evidence/reason (safe-str (or (:evidence/reason ctx) ""))
+                                :evidence/group-id (or (:evidence/group-id r)
+                                                       (get-in r [:inputs :group-id])
                                                        nil)}))
                            records)
             by-group (group-by :evidence/group-id enriched)

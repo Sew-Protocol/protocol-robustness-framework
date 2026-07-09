@@ -169,14 +169,27 @@
       (catch Exception e
         {:error (.getMessage e) :tsa tsa-url :hash hash}))))
 
+(defn- verify-tsa-digest
+  "Verify that a TSA response's message imprint matches the original hash.
+   Returns true if the digest matches, false otherwise."
+  [resp-bytes expected-hash]
+  (try
+    (let [resp (TimeStampResponse. resp-bytes)
+          token (.getTimeStampToken resp)
+          ts-info (.getTimeStampInfo token)
+          imprint (.getMessageImprintDigest ts-info)
+          expected (sha-256-digest (.getBytes expected-hash "UTF-8"))]
+      (java.util.Arrays/equals imprint expected))
+    (catch Exception _ false)))
+
 (defn write-tsa-timestamp!
   "Request an RFC 3161 timestamp for the registry hash and persist as sidecar
-   artifacts alongside the registry (avoids circular registry dependency).
+   artifacts in a time-stamping-authority/ subdirectory.
 
    Stores:
-     registry.tsr         — raw DER TimeStampResp token
-     registry.tsq         — raw DER TimeStampReq (for independent verification)
-     registry.tsa.json    — metadata envelope with verification result
+     time-stamping-authority/tsa-response.tsr  — raw DER TimeStampResp token
+     time-stamping-authority/tsa-request.tsq   — raw DER TimeStampReq (for independent verification)
+     time-stamping-authority/tsa.json          — metadata envelope with verification result
 
    The registry hash commits to all artifact entries, so the TSA token
    anchors the entire run. The sidecar pattern avoids circularity: the
@@ -217,24 +230,27 @@
                       gen-time (.getGenTime ts-info)
                       serial (.getSerialNumber ts-info)
                       out-dir (or dir (str (evcfg/artifact-dir)))
-                      tsr-path (str out-dir "/registry.tsr")
-                      tsq-path (str out-dir "/registry.tsq")
+                      tsa-dir (io/file out-dir "time-stamping-authority")
+                      tsr-path (str (.getPath tsa-dir) "/tsa-response.tsr")
+                      tsq-path (str (.getPath tsa-dir) "/tsa-request.tsq")
+                      verified? (verify-tsa-digest resp-bytes registry-hash)
                       envelope {:tsa/input-kind :registry/hash
                                 :registry/hash registry-hash
                                 :timestamp/provider (name provider-name)
                                 :timestamp/provider-url url
                                 :timestamp/gen-time (str gen-time)
                                 :timestamp/serial (str serial)
-                                :timestamp/token-path "registry.tsr"
-                                :timestamp/request-path "registry.tsq"
+                                :timestamp/token-path "tsa-response.tsr"
+                                :timestamp/request-path "tsa-request.tsq"
                                 :timestamp/token-hash (bytes->hex (sha-256-digest resp-bytes))
-                                :timestamp/verified? nil}
-                      tsa-path (str out-dir "/registry.tsa.json")]
-                  (.mkdirs (io/file out-dir))
+                                :timestamp/verified? verified?}
+                      tsa-path (str (.getPath tsa-dir) "/tsa.json")]
+                  (.mkdirs tsa-dir)
                   (io/copy resp-bytes (io/file tsr-path))
                   (io/copy req-bytes (io/file tsq-path))
                   (spit (io/file tsa-path) (json/write-str envelope {:indent true}))
-                  (println (str "TSA timestamp obtained: " registry-hash " @ " gen-time))
+                  (println (str "TSA timestamp obtained: " registry-hash " @ " gen-time
+                                " [verified: " verified? "]"))
                   {:tsa-envelope envelope
                    :tsr-path tsr-path
                    :tsq-path tsq-path
@@ -258,14 +274,15 @@
 
 (defn verify-tsa-token-from-file
   "Verify a TSA token file against a registry hash.
-   Reads registry.tsr and registry.tsa.json from dir.
+   Reads time-stamping-authority/tsa-response.tsr and tsa.json from dir.
    Returns the updated envelope with :timestamp/verified? set."
   [registry-hash & {:keys [dir]
                     :or {dir (str (evcfg/artifact-dir))}}]
-  (let [tsr-file (io/file dir "registry.tsr")
-        tsa-file (io/file dir "registry.tsa.json")]
+  (let [tsa-dir (io/file dir "time-stamping-authority")
+        tsr-file (io/file tsa-dir "tsa-response.tsr")
+        tsa-file (io/file tsa-dir "tsa.json")]
     (if-not (.exists tsr-file)
-      {:error "registry.tsr not found" :dir dir}
+      {:error "tsa-response.tsr not found" :dir (str tsa-dir)}
       (try
         (let [resp-bytes (java.nio.file.Files/readAllBytes (.toPath tsr-file))
               resp (TimeStampResponse. resp-bytes)

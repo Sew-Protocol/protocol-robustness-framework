@@ -176,7 +176,7 @@
                     :policy {:mode :pro-rata}
                     :evidence {:available-liquidity 50}}
           checks (pf/partial-fill-closed-form-checks decision)]
-      (is (= #{:pass}
+      (is (= #{:pass :not-applicable}
              (set (map :status checks)))))))
 
 (deftest test-partial-fill-closed-form-checks-detect-fairness-failure
@@ -210,6 +210,116 @@
                                    checks))]
       (is (= :fail (:status per-claim)))
       (is (seq (get-in per-claim [:details :violations]))))))
+
+(deftest test-partial-fill-closed-form-checks-claim-key-consistency-violation
+  (testing "claim-key-consistency catches phantom keys in filled/deferred/haircut"
+    (let [decision {:settlement-mode :partial-fill
+                    :requested {:a 40 :b 60}
+                    :filled {:a 20 :b 30}
+                    :deferred {:a 20 :b 30 :c 10}
+                    :haircut {}
+                    :policy {:mode :pro-rata}
+                    :evidence {:available-liquidity 50}}
+          checks (pf/partial-fill-closed-form-checks decision)
+          integrity (first (filter #(= :partial-fill/claim-key-consistency
+                                       (:check/id %))
+                                   checks))]
+      (is (= :fail (:status integrity)))
+      (is (seq (get-in integrity [:details :violations]))))))
+
+(deftest test-partial-fill-closed-form-checks-principal-first-priority-pass
+  (testing "principal-first priority passes when correctly ordered"
+    (let [decision {:settlement-mode :partial-fill
+                    :requested {:principal 100 :realized-yield 50}
+                    :filled {:principal 100 :realized-yield 30}
+                    :deferred {:realized-yield 20}
+                    :haircut {}
+                    :policy {:mode :principal-first}
+                    :evidence {:available-liquidity 130}}
+          checks (pf/partial-fill-closed-form-checks decision)
+          priority (first (filter #(= :partial-fill/principal-first-priority
+                                      (:check/id %))
+                                  checks))]
+      (is (= :pass (:status priority))))))
+
+(deftest test-partial-fill-closed-form-checks-principal-first-priority-violation
+  (testing "principal-first catches yield filled before principal fully satisfied"
+    (let [decision {:settlement-mode :partial-fill
+                    :requested {:principal 100 :realized-yield 50}
+                    :filled {:principal 80 :realized-yield 20}
+                    :deferred {:principal 20 :realized-yield 30}
+                    :haircut {}
+                    :policy {:mode :principal-first}
+                    :evidence {:available-liquidity 100}}
+          checks (pf/partial-fill-closed-form-checks decision)
+          priority (first (filter #(= :partial-fill/principal-first-priority
+                                      (:check/id %))
+                                  checks))]
+      (is (= :fail (:status priority)))
+      (is (seq (get-in priority [:details :violations]))))))
+
+(deftest test-partial-fill-closed-form-checks-principal-first-not-applicable
+  (testing "principal-first priority is not-applicable outside principal-first mode"
+    (let [decision {:settlement-mode :partial-fill
+                    :requested {:principal 100 :realized-yield 50}
+                    :filled {:principal 80 :realized-yield 20}
+                    :deferred {:principal 20 :realized-yield 30}
+                    :haircut {}
+                    :policy {:mode :pro-rata}
+                    :evidence {:available-liquidity 100}}
+          checks (pf/partial-fill-closed-form-checks decision)
+          priority (first (filter #(= :partial-fill/principal-first-priority
+                                      (:check/id %))
+                                  checks))]
+      (is (= :not-applicable (:status priority))))))
+
+(deftest test-partial-fill-closed-form-checks-waterfall-priority-pass
+  (testing "waterfall priority passes when fill-order is respected"
+    (let [decision {:settlement-mode :partial-fill
+                    :requested {:principal 100 :realized-yield 50 :deferred-yield 30}
+                    :filled {:principal 100 :realized-yield 50}
+                    :deferred {:deferred-yield 30}
+                    :haircut {}
+                    :policy {:mode :waterfall
+                             :fill-order [:principal :realized-yield :deferred-yield]}
+                    :evidence {:available-liquidity 150}}
+          checks (pf/partial-fill-closed-form-checks decision)
+          priority (first (filter #(= :partial-fill/waterfall-priority
+                                      (:check/id %))
+                                  checks))]
+      (is (= :pass (:status priority))))))
+
+(deftest test-partial-fill-closed-form-checks-waterfall-priority-violation
+  (testing "waterfall catches lower bucket filled before higher is fully satisfied"
+    (let [decision {:settlement-mode :partial-fill
+                    :requested {:principal 100 :realized-yield 50 :deferred-yield 30}
+                    :filled {:principal 80 :deferred-yield 10}
+                    :deferred {:principal 20 :realized-yield 50 :deferred-yield 20}
+                    :haircut {}
+                    :policy {:mode :waterfall
+                             :fill-order [:principal :realized-yield :deferred-yield]}
+                    :evidence {:available-liquidity 90}}
+          checks (pf/partial-fill-closed-form-checks decision)
+          priority (first (filter #(= :partial-fill/waterfall-priority
+                                      (:check/id %))
+                                  checks))]
+      (is (= :fail (:status priority)))
+      (is (seq (get-in priority [:details :violations]))))))
+
+(deftest test-partial-fill-closed-form-checks-waterfall-priority-not-applicable
+  (testing "waterfall priority is not-applicable outside waterfall mode"
+    (let [decision {:settlement-mode :partial-fill
+                    :requested {:principal 100 :realized-yield 50}
+                    :filled {:principal 80 :realized-yield 20}
+                    :deferred {:principal 20 :realized-yield 30}
+                    :haircut {}
+                    :policy {:mode :pro-rata}
+                    :evidence {:available-liquidity 100}}
+          checks (pf/partial-fill-closed-form-checks decision)
+          priority (first (filter #(= :partial-fill/waterfall-priority
+                                      (:check/id %))
+                                  checks))]
+      (is (= :not-applicable (:status priority))))))
 
 (deftest test-partial-fill-closed-form-checks-waterfall-not-applicable
   (testing "pro-rata fairness is explicitly not-applicable outside pro-rata mode"

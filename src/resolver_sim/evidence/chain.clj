@@ -227,19 +227,32 @@
 (defn- evidence->artifact-entry
   "Convert an evidence record (from emit-evidence!) into a registry artifact entry.
    The entry includes the evidence-hash as both identifier and integrity proof,
-   plus all component hashes for traceability."
+   plus all component hashes for traceability.
+
+   Note: :kind and :artifact-kind are stored as strings (not keywords) so they
+   survive JSON serialization/deserialization without hash mismatch during
+   verify-registry-hash — which reads the registry back from disk and recomputes
+   the registry hash.  Keywords and strings use different canonical encoding
+   type tags (0x22 vs 0x20), so round-tripping keyword values would produce a
+   different hash."
   [evidence]
   (let [eh (:evidence-hash evidence)]
     {:id (str "evidence-" (subs eh 0 (min 12 (count eh))))
-     :kind :transition-evidence
+     :kind "transition-evidence"
      :schema-version (evcfg/schema :evidence-record)
      :evidence-hash eh
      :context-hash (:context-hash evidence)
-     :before-hash (:before-hash evidence)
-     :after-hash (:after-hash evidence)
+     :before-hash (or (:before-hash evidence)
+                      (:world/before-hash evidence))
+     :after-hash (or (:after-hash evidence)
+                     (:world/after-hash evidence))
      :action-hash (:action-hash evidence)
      :result-hash (:result-hash evidence)
-     :artifact-kind (:artifact-kind evidence)}))
+     :artifact-kind (let [ak (:artifact-kind evidence)]
+                      (cond
+                        (string? ak) ak
+                        (keyword? ak) (name ak)
+                        :else (str ak)))}))
 
 (defn register-evidence!
   "Register an evidence record (map from emit-evidence!) into the chain registry.
@@ -300,9 +313,18 @@
   "evidence-registry.json")
 
 (defn registry->json
-  "Serialize a registry map to pretty-printed JSON string."
+  "Serialize a registry map to pretty-printed JSON string.
+   Uses preserve-ns-key inline so namespaced keyword keys survive
+   the JSON round-trip (matching how chain-cursor-final.json and
+   event-evidence files are serialized)."
   [registry]
-  (json/write-str registry {:indent true}))
+  (json/write-str registry {:key-fn (fn [k]
+                                      (if (keyword? k)
+                                        (if-let [ns (namespace k)]
+                                          (str ns "/" (name k))
+                                          (name k))
+                                        (str k)))
+                            :indent true}))
 
 (defn write-registry!
   "Write the registry to disk as JSON. Returns the written path.
@@ -445,7 +467,7 @@
      Default (CI/prod/attestation): throws on dirty
 
    One-shot: call once when the run completes (no new captures after)."
-  [& {:keys [dir private-key-path password allow-dirty? run-config-hash]
+  [& {:keys [dir private-key-path password allow-dirty? run-config-hash run-id]
       :or {password nil}}]
   (let [allow-dirty? (or allow-dirty? *allow-dirty* false)]
     (when-let [snapshot (cursor-snapshot)]
@@ -474,7 +496,7 @@
                           :cursor/signer private-key-path
                           :cursor/signed-at (now-iso)}))
               artifact (merge {:schema/version "chain-cursor-final.v1"
-                               :run/id (get-in @evidence-registry-atom [:run-id] "unknown")}
+                               :run/id (or run-id (get-in @evidence-registry-atom [:run-id]) "unknown")}
                               cursor-data
                               (when source
                                 {:source/hash           (:source/hash source)
@@ -749,20 +771,33 @@
 (defn verify-cursor-signature
   "Verify the Ed25519 signature on a chain-cursor-final artifact.
    cursor should be the parsed cursor JSON artifact.
-   Returns {:valid true/false :hash h} or {:error ...}."
+   Reconstructs cursor-data the same way enrich-cursor-data does
+   during signing — using the :cursor/source map embedded in the
+   artifact alongside the cursor snapshot fields.
+
+   Note: :cursor/scope is stored as a keyword internally but
+   becomes a string through JSON serialization.  The
+   verify-registry-hash function must promote known keyword
+   values back to keywords so the hash matches."
   [cursor]
   (try
-    (let [cursor-data {:cursor/scope (:cursor/scope cursor)
-                       :cursor/final-seq (:cursor/final-seq cursor)
-                       :cursor/final-self-hash (:cursor/final-self-hash cursor)
-                       :cursor/total-captured (:cursor/total-captured cursor)}
+    (let [base {:cursor/scope (keyword (:cursor/scope cursor))
+                :cursor/final-seq (:cursor/final-seq cursor)
+                :cursor/final-self-hash (:cursor/final-self-hash cursor)
+                :cursor/total-captured (:cursor/total-captured cursor)}
+          ;; Use the embedded :cursor/source map directly.  The artifact
+          ;; stores it as written by enrich-cursor-data, so reconstructing
+          ;; from top-level source-key copies would risk key name drift.
+          cursor-data (if (contains? cursor :cursor/source)
+                        (assoc base :cursor/source (:cursor/source cursor))
+                        base)
           h (hc/hash-with-intent {:hash/intent :evidence-chain} cursor-data)
           recorded-hash (:cursor/signed-hash cursor)
           forensic (:cursor/forensic cursor)]
       (if (and forensic recorded-hash)
         (if (hc/intent-hash= h recorded-hash)
-          (let [sig (:signature forensic)
-                signer (:signer forensic)
+          (let [sig (or (:cursor/signature forensic) (:signature forensic))
+                signer (or (:cursor/signer forensic) (:signer forensic))
                 pub-key-path (str signer ".pub")]
             (if (and sig pub-key-path)
               (let [valid (signing/verify-signature h sig pub-key-path)]
@@ -800,7 +835,7 @@
                             (log/warn! "forensic-status: failed to read evidence registry" {:path registry-path :error (.getMessage e)})
                             nil)))
         sig-path (str dir "/signature.json")
-        tsr-path (str dir "/registry.tsr")
+        tsr-path (str dir "/time-stamping-authority/tsa-response.tsr")
         cur-path (str dir "/chain-cursor-final.json")
         rh (or registry-hash (:registry-hash registry))
 
@@ -898,29 +933,30 @@
   [& {:keys [run-id private-key-path password tsa-url dir
              allow-dirty? run-config-hash]
       :or {run-id "unknown" password nil}}]
-  (let [allow-dirty? (or allow-dirty? *allow-dirty* false)]
-    (let [registry (build-registry :run-id run-id)
-          reg-hash (:registry-hash registry)
-          reg-path (write-registry! registry dir)
-          sig-result (write-registry-signature! registry
-                                                :private-key-path private-key-path
-                                                :password password
-                                                :dir dir)
-          cursor-path (write-chain-cursor-final!
-                       :dir dir
-                       :private-key-path private-key-path
-                       :password password
-                       :allow-dirty? allow-dirty?
-                       :run-config-hash run-config-hash)
-          tsa-url (or tsa-url ts/*tsa-url*)
-          tsa-result (when (and tsa-url reg-hash)
-                       (ts/write-tsa-timestamp! reg-hash
-                                                :tsa-url tsa-url
-                                                :dir dir))]
-      {:registry registry
-       :registry-path reg-path
-       :signature sig-result
-       :cursor-path cursor-path
-       :tsa tsa-result
-       :forensic? (boolean (or sig-result
-                               (and tsa-result (not (:error tsa-result)))))})))
+  (let [allow-dirty? (or allow-dirty? *allow-dirty* false)
+        registry (build-registry :run-id run-id)
+        reg-hash (:registry-hash registry)
+        reg-path (write-registry! registry dir)
+        sig-result (write-registry-signature! registry
+                                              :private-key-path private-key-path
+                                              :password password
+                                              :dir dir)
+        cursor-path (write-chain-cursor-final!
+                     :dir dir
+                     :run-id run-id
+                     :private-key-path private-key-path
+                     :password password
+                     :allow-dirty? allow-dirty?
+                     :run-config-hash run-config-hash)
+        tsa-url (or tsa-url ts/*tsa-url*)
+        tsa-result (when (and tsa-url reg-hash)
+                     (ts/write-tsa-timestamp! reg-hash
+                                              :tsa-url tsa-url
+                                              :dir dir))]
+    {:registry registry
+     :registry-path reg-path
+     :signature sig-result
+     :cursor-path cursor-path
+     :tsa tsa-result
+     :forensic? (boolean (or sig-result
+                             (and tsa-result (not (:error tsa-result)))))}))

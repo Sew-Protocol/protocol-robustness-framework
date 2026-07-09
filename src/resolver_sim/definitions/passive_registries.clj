@@ -540,7 +540,16 @@
     :execution/type :pro-rata
     :execution/mode :inline
     :description "Pro-rata allocation execution evidence node — records the full pro-rata computation chain (projection, allocation, claims, artifact) as a DAG-verifiable evidence node."
-    :claims #{:allocation-complete :non-negative :conservation :rounding-bounded :ordering-independent}}])
+    :claims #{:allocation-complete :non-negative :conservation :rounding-bounded :ordering-independent}}
+   {:id :evidence/chain-root
+    :version 1
+    :kind :evidence-root
+    :runner :scenario-runner
+    :entry 'resolver-sim.io.scenario-runner/run-and-report
+    :execution/type :evidence-root
+    :execution/mode :inline
+    :description "Evidence chain root node — a minimal anchor that parents all other DAG nodes and links to the chain cursor evidence root hash."
+    :claims #{}}])
 
 (def execution-registry
   {:registry-version 1

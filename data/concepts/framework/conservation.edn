@@ -10,12 +10,7 @@
  :concept/benchmark-domains #{:domain/protocol-value-conservation}
  :concept/benchmark-concepts [:robustness/protocol-value-conservation]
  :concept/roles
- {:role/reviewer
-  {:description "Evaluates whether the result is understandable, reproducible, and appropriately qualified."}
-  :role/researcher
-  {:description "Uses the concept to interpret benchmark results and compare protocol behavior across scenarios."}
-  :role/protocol-designer
-  {:description "Uses the concept to reason about protocol mechanisms, invariants, and failure modes."}}
+ {:role/reviewer {:description "Evaluates whether the result is understandable, reproducible, and appropriately qualified." :maps-to []} :role/researcher {:description "Uses the concept to interpret benchmark results and compare protocol behavior across scenarios." :maps-to []} :role/protocol-designer {:description "Uses the concept to reason about protocol mechanisms, invariants, and failure modes." :maps-to []}}
  :concept/entities
  {:entity/token
   {:description "A fungible asset tracked by the protocol across state transitions."

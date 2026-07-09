@@ -25,6 +25,7 @@
             [resolver-sim.util.attribution :as attr]
             [resolver-sim.yield.risk-monitor :as risk]
             [resolver-sim.evidence.chain :as chain]
+            [resolver-sim.evidence.timestamping :as ts]
             [resolver-sim.logging :as log]))
 
 ;; ---------------------------------------------------------------------------
@@ -210,14 +211,20 @@
                                    :error (.getMessage e)}))))
 
                  (let [signing-key (or (:signing-key replay-opts)
-                                       chain/*signing-key*)
+                                       chain/*signing-key*
+                                       (System/getenv "PRF_SIGNING_KEY"))
                        signing-pw (or (:signing-password replay-opts)
-                                      chain/*signing-password*)
+                                      chain/*signing-password*
+                                      (System/getenv "PRF_SIGNING_PASSWORD"))
+                       tsa-url (or (:tsa-url replay-opts)
+                                   ts/*tsa-url*
+                                   (System/getenv "PRF_TSA_URL"))
                        allow-dirty? (:allow-dirty? replay-opts)]
                    (chain/finalize-and-attest!
                     :run-id run-id
                     :private-key-path signing-key
                     :password signing-pw
+                    :tsa-url tsa-url
                     :allow-dirty? allow-dirty?))
 
                  (chain/register-scenario-snapshot!)

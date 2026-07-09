@@ -181,6 +181,7 @@
   [args options]
   (binding [chain/*signing-key* (:key options)
             chain/*signing-password* (:password options)
+            chain/*allow-dirty* true
             ts/*tsa-url* (:tsa-url options)]
     (let [benchmark-id (first args)
           {:keys [exit-code evidence output-path passed?]}

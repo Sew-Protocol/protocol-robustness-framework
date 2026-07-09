@@ -8,12 +8,7 @@
  :concept/frameworks #{:framework/prf}
  :concept/related [:verifiable-assurance/forensic-confidence :consensus/evidence]
  :concept/roles
- {:role/reviewer
-  {:description "Evaluates whether benchmark results have adequate evidence, coverage, and determinism to support their claims."}
-  :role/researcher
-  {:description "Uses confidence dimensions to qualify benchmark findings and identify gaps."}
-  :role/protocol-designer
-  {:description "Uses confidence to assess whether invariant and benchmark results are trustworthy enough to inform protocol changes."}}
+ {:role/reviewer {:description "Evaluates whether benchmark results have adequate evidence, coverage, and determinism to support their claims." :maps-to []} :role/researcher {:description "Uses confidence dimensions to qualify benchmark findings and identify gaps." :maps-to []} :role/protocol-designer {:description "Uses confidence to assess whether invariant and benchmark results are trustworthy enough to inform protocol changes." :maps-to []}}
  :concept/entities
  {:entity/claim-result
   {:description "A structured outcome for a single claim tested by a scenario or benchmark."

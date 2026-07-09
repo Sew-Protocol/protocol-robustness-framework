@@ -8,12 +8,7 @@
  :concept/frameworks #{:framework/prf}
  :concept/related [:consensus/finality]
  :concept/roles
- {:role/reviewer
-  {:description "Needs to know the exact configuration under which a result was produced to assess reproducibility and applicability."}
-  :role/researcher
-  {:description "Compares results across configurations to understand how parameter choices affect protocol behaviour."}
-  :role/protocol-designer
-  {:description "Uses configuration to define the conditions under which protocol properties are expected to hold."}}
+ {:role/reviewer {:description "Needs to know the exact configuration under which a result was produced to assess reproducibility and applicability." :maps-to []} :role/researcher {:description "Compares results across configurations to understand how parameter choices affect protocol behaviour." :maps-to []} :role/protocol-designer {:description "Uses configuration to define the conditions under which protocol properties are expected to hold." :maps-to []}}
  :concept/entities
  {:entity/scenario-definition
   {:description "A complete scenario map including events, agents, protocol-params, and expectations."

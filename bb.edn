@@ -101,6 +101,49 @@
                     (println (str "[artifact-registry-validation] No artifact registry found for slug: " slug))))
                 (catch Exception e
                   (println "[artifact-registry-validation] Skipped (operational):" (.getMessage e))))
+              ;; 5. Cross-link: reference file from artifact registry dir to forensic run dir
+              (try
+                (let [slug (some-> scenario-id
+                                   (clojure.string/replace (re-pattern "^.*/") "")
+                                   (clojure.string/replace (re-pattern "\\.(json|edn)$") ""))
+                      prf-dir (java.io.File. "prf-runs")
+                      forensic-dir (when (.exists prf-dir)
+                                     (->> (.listFiles prf-dir)
+                                          (filter (fn [d] (.startsWith (.getName d) "run-")))
+                                          (sort-by (fn [d] (.lastModified d)) >)
+                                          first))
+                      registry-dir (when (.exists prf-dir)
+                                     (->> (.listFiles prf-dir)
+                                          (filter (fn [d] (.startsWith (.getName d) (str slug "-"))))
+                                          (sort-by (fn [d] (.lastModified d)) >)
+                                          first))]
+                  (when (and forensic-dir registry-dir)
+                    (let [link-file (java.io.File. registry-dir "_forensic-run-path.txt")]
+                      (spit link-file (str (.getCanonicalPath forensic-dir) "\n"))))
+                  ;; 6. Summary box — researcher-friendly output locations
+                  (println)
+                  (println "############################")
+                  (println "# Scenario run complete")
+                  (println (str "# Scenario: " scenario-id))
+                  (when forensic-dir
+                    (println (str "# Forensics: " (.getPath forensic-dir)))
+                    (println (str "#   claims -> " (.getPath forensic-dir) "/claims/"))
+                    (println (str "#   attestations -> " (.getPath forensic-dir) "/attestations/"))
+                    (println (str "#   event-evidence -> " (.getPath forensic-dir) "/event-evidence/"))
+                    (println (str "#   chain-cursor -> " (.getPath forensic-dir) "/chain-cursor-final.json"))
+                    (println (str "#   evidence-registry -> " (.getPath forensic-dir) "/evidence-registry.json"))
+                    (when-let [links (and (.exists (java.io.File. forensic-dir "_run-links.edn"))
+                                          (slurp (str (.getPath forensic-dir) "/_run-links.edn")))]
+                      (println (str "#   run-links -> " (.getPath forensic-dir) "/_run-links.edn"))))
+                  (when registry-dir
+                    (println (str "# Registry: " (.getPath registry-dir)))
+                    (println (str "#   test-artifacts -> " (.getPath registry-dir) "/test-artifacts.json"))
+                    (println (str "#   test-summary -> " (.getPath registry-dir) "/test-summary.json"))
+                    (when (and forensic-dir registry-dir)
+                      (println (str "#   forensic-run-link -> " (.getPath (java.io.File. registry-dir "_forensic-run-path.txt"))))))
+                  (println "############################"))
+                (catch Exception e
+                  (println (str "[run-links] Error:" (.getMessage e)))))
               (when-not (zero? exit) (System/exit exit))))}
 
   run:scenario:search
@@ -418,13 +461,13 @@ cli-args (cond-> ["-M:run:with-sew" "--invariants" "--scenario" scenario]
                format-val (when (<= 0 format-idx) (nth args (inc format-idx) "table"))]
            (case format-val
              "edn" (clojure {:dir "." :extra-deps {}}
-                            "-M" "-e"
+                            "-M:with-sew" "-e"
                             "(require '[resolver-sim.io.scenario-runner :as sr]) (println (pr-str {:suites (sr/known-suite-summaries)}))")
              "json" (clojure {:dir "." :extra-deps {}}
-                             "-M" "-e"
+                             "-M:with-sew" "-e"
                              "(require '[resolver-sim.io.scenario-runner :as sr] '[resolver-sim.io.serialization :as ser]) (println (ser/serialize-artifact {:suites (sr/known-suite-summaries)} {:pretty? true}))")
              (clojure {:dir "." :extra-deps {}}
-                      "-M" "-e"
+                      "-M:with-sew" "-e"
                       "(require '[clojure.pprint :as pp] '[resolver-sim.io.scenario-runner :as sr]) (pp/print-table [:suite/key :suite/type :suite/protocols :suite/scenario-count :suite/title] (sr/known-suite-summaries))")))}
 
   test:evidence {:doc "Run evidence-chain unit tests (node, chain, registry, attestation, integrity, qol)"
@@ -597,17 +640,17 @@ cli-args (cond-> ["-M:run:with-sew" "--invariants" "--scenario" scenario]
 
   report {:doc "Print scenario coverage report"
           :task (clojure {:dir "."}
-                         "-M" "-e"
+                         "-M:with-sew" "-e"
                          "(require '[resolver-sim.scenario.coverage :as cov] '[resolver-sim.sim.reporter :as r]) (r/print-coverage (cov/coverage-report))")}
 
   report:release-gate {:doc "Print transition/guard coverage + unhit transition backlog"
                        :task (clojure {:dir "."}
-                                      "-M" "-e"
+                                      "-M:with-sew" "-e"
                                       "(require '[resolver-sim.scenario.coverage :as cov] '[resolver-sim.sim.reporter :as r]) (r/print-coverage (cov/coverage-report))")}
 
   report:dir {:doc "Print scenario coverage report for a directory. Usage: bb report:dir data/fixtures/traces"
               :task (clojure {:dir "."}
-                             "-M" "-e"
+                             "-M:with-sew" "-e"
                              "(require '[resolver-sim.scenario.coverage :as cov] '[resolver-sim.sim.reporter :as r]) (r/print-coverage (cov/coverage-report (or (first *command-line-args*) \"data/fixtures/traces\")))"
                              *args*)}
 

@@ -3,10 +3,11 @@
             [resolver-sim.benchmark.adapter :as adapter]
             [resolver-sim.benchmark.claims :as benchmark-claims]
             [resolver-sim.concepts.benchmark :as benchmark-concepts]
+            [resolver-sim.evidence.chain :as chain]
             [resolver-sim.hash.canonical :as hc]
             [resolver-sim.io.resource-path :as rp]
-            [resolver-sim.logging :as log]
             [resolver-sim.io.scenarios :as io-sc]
+            [resolver-sim.logging :as log]
             [resolver-sim.protocols.sew :as sew]
             [resolver-sim.protocols.sew.invariants :as sew-inv]
             [resolver-sim.scenario.suites :as suites]
@@ -88,7 +89,7 @@
   (let [path (.getPath scenario-file)
         scenario (load-scenario path)
         result   (sew/replay-with-sew-protocol scenario
-                                               {:allow-dirty? true})
+                                               {:allow-dirty? (or chain/*allow-dirty* false)})
         public-id (benchmark-public-scenario-id suite-kw path)
         scenario-evidence (hc/hash-with-intent
                            {:hash/intent :evidence-content}

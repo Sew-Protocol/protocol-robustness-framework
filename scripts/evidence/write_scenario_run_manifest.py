@@ -96,7 +96,12 @@ def mk_artifact_entry(
 
 def get_vcs_info() -> dict:
     try:
-        from scripts.vcs_info import commit_sha, commit_message
+        if not sys.path or not any("scripts" in p for p in sys.path):
+            here = pathlib.Path(__file__).resolve().parent
+            scripts_root = str(here.parent)  # <project>/scripts/
+            if scripts_root not in sys.path:
+                sys.path.insert(0, scripts_root)
+        from vcs_info import commit_sha, commit_message  # type: ignore[import-untyped]
         return {"git_commit": commit_sha(), "git_message": commit_message()}
     except Exception:
         return {"git_commit": None, "git_message": None}

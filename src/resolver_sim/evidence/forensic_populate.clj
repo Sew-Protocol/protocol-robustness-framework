@@ -151,18 +151,20 @@
               cr (write-claim-result!
                   {:claim-id (str (name criterion))
                    :category "audit"
+                   :confidence (if pass? "high" "low")
                    :status (if pass? "pass" "fail")
                    :evidence-refs [{:ref/kind "cursor"
                                     :ref/hash (str (:hash detail))
                                     :ref/path "../workspace/chain-cursor-final.json"}]
                    :description (str "Forensic claim: " (name criterion))
                    :failure-detail (when-not pass?
-                                     (pr-str (select-keys detail [:error :valid :recorded-hash])))})]
+                                     (pr-str (select-keys detail [:error :valid :recorded])))})]
           (swap! claim-results conj cr)))
       ;; Write composite forensic-grade claim result
       (let [composite-cr (write-claim-result!
                           {:claim-id "forensic-grade"
                            :category "composite"
+                           :confidence (if (:all-pass? fs) "high" "low")
                            :status (if (:all-pass? fs) "pass" "fail")
                            :evidence-refs (vec (mapv (fn [cr]
                                                        {:ref/kind "claim-result"

@@ -556,7 +556,10 @@
    - :partial-fill/capacity-bound
    - :partial-fill/per-claim-bound
    - :partial-fill/per-claim-conservation
+   - :partial-fill/claim-key-consistency
    - :partial-fill/pro-rata-cross-product
+   - :partial-fill/principal-first-priority
+   - :partial-fill/waterfall-priority
    - :partial-fill/rounding-residual-bounded
 
    These checks operate on the structured decision returned by
@@ -629,8 +632,61 @@
                (remove nil?)
                vec)
           [])
-        residual-ok? (and (<= 0 residual)
-                          (< residual (max 1 eligible-claim-count)))]
+        rounding-policy (:rounding-policy policy :floor-and-carry)
+        rounding-applicable? (#{:floor-and-carry :floor :largest-remainder :principal-protective-floor} rounding-policy)
+        residual-ok? (case rounding-policy
+                       (:floor-and-carry :floor :principal-protective-floor)
+                       (and (<= 0 residual)
+                            (< residual (max 1 eligible-claim-count)))
+                       :largest-remainder
+                       (zero? residual)
+                       false)
+        claim-key-consistency-violations
+        (->> (set (concat (keys filled) (keys deferred) (keys haircut)))
+             (keep (fn [k]
+                     (when (not (contains? requested k))
+                       {:key k
+                        :source (cond (contains? filled k) :filled
+                                      (contains? deferred k) :deferred
+                                      :else :haircut)})))
+             vec)
+        principal-first-violations
+        (when (= :principal-first mode)
+          (let [principal-requested (long (get requested :principal 0))
+                principal-filled (long (get filled :principal 0))
+                yield-keys (remove #{:principal} (keys filled))]
+            (->> yield-keys
+                 (keep (fn [k]
+                         (let [yf (long (get filled k 0))]
+                           (when (and (pos? principal-requested)
+                                      (pos? yf)
+                                      (< principal-filled principal-requested))
+                             {:claim k
+                              :yield-filled yf
+                              :principal-requested principal-requested
+                              :principal-filled principal-filled}))))
+                 vec)))
+        waterfall-violations
+        (when (= :waterfall mode)
+          (let [fill-order (:fill-order policy [:principal :realized-yield :deferred-yield])]
+            (->> (for [i (range (count fill-order))
+                       j (range (inc i) (count fill-order))]
+                   [i j])
+                 (keep (fn [[i j]]
+                         (let [higher (nth fill-order i)
+                               lower (nth fill-order j)
+                               higher-requested (long (get requested higher 0))
+                               higher-filled (long (get filled higher 0))
+                               lower-filled (long (get filled lower 0))]
+                           (when (and (pos? higher-requested)
+                                      (< higher-filled higher-requested)
+                                      (pos? lower-filled))
+                             {:higher-bucket higher
+                              :higher-requested higher-requested
+                              :higher-filled higher-filled
+                              :lower-bucket lower
+                              :lower-filled lower-filled}))))
+                 vec)))]
     (let [conservation-ch (future
                             (check-result :partial-fill/conservation
                                           (if conservation-ok? :pass :fail)
@@ -655,18 +711,47 @@
                                (check-result :partial-fill/pro-rata-cross-product
                                              :not-applicable
                                              {:mode mode})))
-           residual-ch (future
-                         (check-result :partial-fill/rounding-residual-bounded
-                                       (if residual-ok? :pass :fail)
-                                       {:available-liquidity available
-                                        :total-filled total-filled
-                                        :residual residual
-                                        :eligible-claim-count eligible-claim-count}))
-           per-claim-conservation-ch (future
-                                       (check-result :partial-fill/per-claim-conservation
-                                                     (if (empty? per-claim-conservation-violations) :pass :fail)
-                                                     {:violations per-claim-conservation-violations}))]
-      (mapv deref [conservation-ch capacity-ch per-claim-ch cross-product-ch residual-ch per-claim-conservation-ch]))))
+          residual-ch (future
+                        (if rounding-applicable?
+                          (check-result :partial-fill/rounding-residual-bounded
+                                        (if residual-ok? :pass :fail)
+                                        {:available-liquidity available
+                                         :total-filled total-filled
+                                         :residual residual
+                                         :eligible-claim-count eligible-claim-count
+                                         :rounding-policy rounding-policy})
+                          (check-result :partial-fill/rounding-residual-bounded
+                                        :not-applicable
+                                        {:mode mode
+                                         :rounding-policy rounding-policy
+                                         :reason "no defined residual bound for this rounding policy"})))
+          per-claim-conservation-ch (future
+                                      (check-result :partial-fill/per-claim-conservation
+                                                    (if (empty? per-claim-conservation-violations) :pass :fail)
+                                                    {:violations per-claim-conservation-violations}))
+          claim-key-ch (future
+                         (check-result :partial-fill/claim-key-consistency
+                                       (if (empty? claim-key-consistency-violations) :pass :fail)
+                                       {:violations claim-key-consistency-violations}))
+          principal-first-ch (future
+                               (if (= :principal-first mode)
+                                 (check-result :partial-fill/principal-first-priority
+                                               (if (empty? principal-first-violations) :pass :fail)
+                                               {:violations principal-first-violations})
+                                 (check-result :partial-fill/principal-first-priority
+                                               :not-applicable
+                                               {:mode mode})))
+          waterfall-ch (future
+                         (if (= :waterfall mode)
+                           (check-result :partial-fill/waterfall-priority
+                                         (if (empty? waterfall-violations) :pass :fail)
+                                         {:violations waterfall-violations})
+                           (check-result :partial-fill/waterfall-priority
+                                         :not-applicable
+                                         {:mode mode})))]
+      (mapv deref [conservation-ch capacity-ch per-claim-ch per-claim-conservation-ch
+                   claim-key-ch cross-product-ch principal-first-ch waterfall-ch
+                   residual-ch]))))
 
 (defn post-partial-fill-position
   "Update a position after a partial-fill settlement decision has been applied.

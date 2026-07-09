@@ -255,7 +255,7 @@ run_framework() {
                 'resolver-sim.sim.strategy-adaptation-test
                 'resolver-sim.sim.waterfall-test)]
               (when (pos? (+ (:error results) (:fail results)))
-                (System/exit 1)))"
+                (System/exit 1))))"
   return $?
 }
 
@@ -382,7 +382,7 @@ run_sew() {
                 'resolver-sim.evidence.qol-test
                 'resolver-sim.evidence.registry-test)]
               (when (pos? (+ (:error results) (:fail results)))
-                (System/exit 1)))))"
+                (System/exit 1))))"
   return $?
 }
 
@@ -411,7 +411,7 @@ run_yield() {
                'resolver-sim.scenario.yield-expectations-test
                 'resolver-sim.scenario.yield-scenario-lint-test)]
               (when (pos? (+ (:error results) (:fail results)))
-                (System/exit 1)))"
+                (System/exit 1))))"
   return $?
 }
 

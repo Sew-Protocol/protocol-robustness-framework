@@ -829,6 +829,34 @@
     (catch Exception e
       (log-event :warn :forensic-claims-failed :error (.getMessage e)))))
 
+(defn- write-run-links!
+  "Write a researcher-friendly _run-links.edn file into the forensic run directory.
+   Provides cross-reference metadata so the artifact registry and forensic run
+   directories are discoverable from each other."
+  [run-id dispatch protocol-id tsa-url canonical?]
+  (try
+    (let [dir (evcfg/artifact-dir)
+          scenario-path (:scenario dispatch)
+          links {:type :forensic-run
+                 :run/id run-id
+                 :scenario/path scenario-path
+                 :protocol/id protocol-id
+                 :evidence/root (chain/evidence-root-hash :dir dir)
+                 :tsa/configured? (boolean tsa-url)
+                 :tsa/url tsa-url
+                 :signature/configured? (boolean (System/getenv "PRF_SIGNING_KEY"))
+                 :canonical? canonical?
+                 :generated-at (str (java.time.Instant/now))}
+          f (io/file dir "_run-links.edn")]
+      (.mkdirs (io/file dir))
+      (spit f (pr-str links))
+      (log-event :info :run-links-written
+                 :path (.getPath f)
+                 :scenario scenario-path))
+    (catch Exception e
+      (log-event :warn :run-links-failed
+                 :error (.getMessage e)))))
+
 (defn- build-enriched-bundle-root
   "Merge source provenance and execution node hashes into the bundle root."
   [bundle-root execution-node source-provenance]
@@ -941,6 +969,27 @@
                           enriched-root (build-enriched-bundle-root
                                          bundle-root execution-node source-provenance)]
                       (populate-forensic-claims!)
+                      (write-run-links! run-id dispatch protocol-id tsa-url canonical?)
+
+                      ;; Emit a minimal evidence-root execution node that parents the
+                      ;; main execution node, anchoring the DAG to the evidence chain.
+                      ;; This gives the DAG a single root with parent-hashes: [].
+                      (try
+                        (let [evidence-root (chain/evidence-root-hash)]
+                          (when (and evidence-root execution-node)
+                            (ev-node/emit-execution-node!
+                             {:execution-id :evidence/chain-root
+                              :policy-id :evidence-policy/computed
+                              :parent-hashes []
+                              :bootstrap-roots [(str "evidence:" evidence-root)]
+                              :timestamp (str (java.time.Instant/now))
+                              :status :pass
+                              :inputs {:evidence/root evidence-root}
+                              :outputs {:child-node-hash (:node-hash execution-node)
+                                        :child-content-hash (:content-hash execution-node)}})))
+                        (catch Exception e
+                          (log-event :warn :evidence-root-node-failed
+                                     :error (.getMessage e))))
 
             ;; Execution DAG (best-effort, lazy-loaded)
                       (try

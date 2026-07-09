@@ -101,7 +101,7 @@
       (is (= (:after-hash ev) (:after-hash entry)))
       (is (= (:action-hash ev) (:action-hash entry)))
       (is (= (:result-hash ev) (:result-hash entry)))
-      (is (= (:artifact-kind ev) (:artifact-kind entry))))))
+      (is (= (name (:artifact-kind ev)) (:artifact-kind entry))))))
 
 (deftest artifact-entries-have-consistent-ids
   (chain/reset-registry!)
@@ -407,6 +407,7 @@
                (chain/inject-chain-fields))]
     (chain/register-evidence! ev)
     (let [path (chain/write-chain-cursor-final! :dir (str (evcfg/artifact-dir))
+                                                :run-id "test-mirror-run"
                                                 :allow-dirty? true)
           content (when path (json/read-str (slurp path)))]
       (when (and content (string? (get content "code-hash")))
