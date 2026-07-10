@@ -12,6 +12,25 @@ under `protocols_src/` and are added via the `:with-sew` alias:
 The `workspaces/with-sew/` directory provides the same full-stack view
 without the alias.  See `workspaces/MAP.md` for details.
 
+## Public Benchmark Showcase
+
+PRF is a working robustness framework with a deliberately limited public
+benchmark catalogue. The current catalogue demonstrates named workloads and
+claims; it does not claim comprehensive protocol assurance.
+
+| Today | Scope |
+|---|---|
+| Sew-backed deterministic replay | The included Sew dispute workload produces matching canonical results and evidence roots across repeated PRF-runner executions. |
+| Sew yield shortfall checks | The named yield workload runs invariant-backed preservation, fairness, cap, and leakage claims. |
+| Sew dispute/slashing checks | Active Sew benchmarks run their declared invariant-backed safety and liveness claims. |
+
+Experimental profiles retain visible deferred claims for protocol robustness and
+shortfall research. Defined concepts and scenario mappings are explanatory;
+they do not count as evaluated coverage without a runnable claim evaluator.
+
+Start with the [benchmark showcase](benchmarks/README.md#public-showcase) for
+the capability matrix, lifecycle definitions, and evidence-inspection path.
+
 ## Repository map
 
 This repository is split between the protocol-agnostic Protocol Robustness Framework
@@ -170,12 +189,10 @@ The framework has evolved to provide robust tools for audit, traceability, and d
 
 ## Current status
 
-* **Core framework**: operational in-process deterministic runner.
-* **Reference protocol**: Sew protocol model integrated as the main validation target.
-* **Invariant system**: active across framework, Sew protocol, equilibrium, and yield modules.
-* **SPE proxy validation**: bounded public-state epsilon-SPE proxy with counterexample generation.
-* **Adversarial suite integration**: Python-based suite available through gRPC bridge.
-* **Artifact validation**: opt-in validation-root and artifact-registry validation available.
+* **Demonstrated benchmark catalogue**: Sew-backed replay, yield-shortfall, dispute, and slashing workloads with declared runnable claims.
+* **Experimental research profiles**: broad protocol-robustness and PRF shortfall profiles retain deferred semantic claims and are not readiness evidence.
+* **Framework capability**: an operational in-process deterministic runner and evidence/artifact infrastructure.
+* **Research tooling**: adversarial, equilibrium, and integration tools exist, but their presence does not imply they are covered by an active public benchmark.
 
 ## Registry Architecture
 
@@ -517,7 +534,7 @@ bb adv:server
 Run the Python failure-mode suite:
 
 ```bash
-python3 python/invariant_suite.py
+python3 integration/python/invariant_suite.py
 ```
 
 ### 5. Run dispute-resolution robustness validation
@@ -686,4 +703,3 @@ Stronger claims require broader scenario coverage, deviation evidence, formal an
 ## License
 
 Apache 2
-

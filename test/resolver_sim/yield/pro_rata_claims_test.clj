@@ -15,7 +15,7 @@
     :ordering-independent})
 
 (def extended-claims
-  (conj phase-6-claims :pro-rata-fairness))
+  (conj phase-6-claims :pro-rata-fairness :partial-fill-fairness))
 
 (def representative-fixtures
   [{:slash-obligation 11
@@ -163,5 +163,44 @@
 (deftest pro-rata-fairness-missing-evidence
   (testing "pro-rata-fairness fails when evidence content is missing"
     (let [result (claims/evaluate-claim :pro-rata-fairness {:evidence-nodes []})]
+      (is (false? (:holds? result)))
+      (is (= [{:type :missing-evidence-content}] (:violations result))))))
+
+;; ── Partial-fill bridge evaluator tests ─────────────────────────────────
+
+(deftest partial-fill-fairness-passes-on-proportional-decision
+  (testing "partial-fill-fairness passes when fill ratios are equal"
+    (let [decision {:requested {:a 40 :b 60}
+                    :filled {:a 20 :b 30}
+                    :policy {:mode :pro-rata}}
+          result (claims/evaluate-claim
+                  :partial-fill-fairness
+                  {:evidence-nodes [{:result decision}]})]
+      (is (true? (:holds? result)))
+      (is (empty? (:violations result))))))
+
+(deftest partial-fill-fairness-fails-on-non-proportional-decision
+  (testing "partial-fill-fairness fails when fill ratios differ"
+    (let [decision {:requested {:a 40 :b 60}
+                    :filled {:a 10 :b 40}
+                    :policy {:mode :pro-rata}}
+          result (claims/evaluate-claim
+                  :partial-fill-fairness
+                  {:evidence-nodes [{:result decision}]})]
+      (is (false? (:holds? result)))
+      (is (seq (:violations result))))))
+
+(deftest partial-fill-fairness-passes-with-single-claim
+  (testing "partial-fill-fairness passes with a single claimant"
+    (let [decision {:requested {:a 40} :filled {:a 20} :policy {:mode :pro-rata}}
+          result (claims/evaluate-claim
+                  :partial-fill-fairness
+                  {:evidence-nodes [{:result decision}]})]
+      (is (true? (:holds? result)))
+      (is (empty? (:violations result))))))
+
+(deftest partial-fill-fairness-missing-evidence
+  (testing "partial-fill-fairness fails when evidence is missing"
+    (let [result (claims/evaluate-claim :partial-fill-fairness {:evidence-nodes []})]
       (is (false? (:holds? result)))
       (is (= [{:type :missing-evidence-content}] (:violations result))))))

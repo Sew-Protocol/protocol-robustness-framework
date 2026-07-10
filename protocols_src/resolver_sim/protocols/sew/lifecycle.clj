@@ -782,7 +782,9 @@
   (am/update-attributed #(accrue-resolver-yield % resolver-addr token)))
 
 (defn accrue-yield-monadic
-  "Monadic implementation of accrue-yield, threading AttributedState."
+  "Monadic implementation of accrue-yield, threading AttributedState.
+   Computes yield delta and records it via Sew accounting so held-adjustments
+   and total-yield-generated remain consistent with invariant expectations."
   [workflow-id]
   (monad/update-state
    (fn [attributed-state]
@@ -793,20 +795,36 @@
          (let [et    (t/get-transfer world workflow-id)
                now   (time-ctx/block-ts world)
                last  (:last-accrual-time et now)
-               dt    (- now last)]
+               dt    (- now last)
+               oid    (t/escrow-yield-owner-id workflow-id)
+               tok    (:token et)
+               pos-before (get-in world [:yield/positions oid])]
            (if (pos? dt)
-             (let [world' (yield-ops/apply-yield-op world {:op/type :yield/accrue
+             (let [unrealized-before (:unrealized-yield pos-before 0)
+                   realized-before   (:realized-yield pos-before 0)
+                   world' (yield-ops/apply-yield-op world {:op/type :yield/accrue
                                                            :module/id mid
-                                                           :owner/id (t/escrow-yield-owner-id workflow-id)
-                                                           :token (:token et)
+                                                           :owner/id oid
+                                                           :token tok
                                                            :dt dt})
-                   oid    (t/escrow-yield-owner-id workflow-id)
                    pos    (get-in world' [:yield/positions oid])
-                   accrued (+ (:unrealized-yield pos 0) (:realized-yield pos 0))
-                   world'' (-> world'
-                               (assoc-in [:escrow-transfers workflow-id :last-accrual-time] now)
-                               (assoc-in [:escrow-transfers workflow-id :accumulated-yield] accrued))]
-               (attr/wrap-state world'' (attr/get-attribution attributed-state)))
+                   unrealized-after (:unrealized-yield pos 0)
+                   realized-after   (:realized-yield pos 0)
+                   yield-delta (- (+ unrealized-after realized-after)
+                                  (+ unrealized-before realized-before))
+                   ;; Record yield delta through Sew accounting layer so
+                   ;; held-adjustments-cover-total-held-delta? and related
+                   ;; invariants see matching held-adjustment entries.
+                   world'' (cond-> world'
+                             (pos? yield-delta)
+                             (acct/add-held tok yield-delta {:action "yield-accrual" :workflow-id workflow-id})
+                             (neg? yield-delta)
+                             (acct/sub-held tok (- yield-delta) {:action "yield-accrual" :workflow-id workflow-id}))
+                    world''' (-> world''
+                                (update-in [:total-yield-generated tok] (fnil + 0) yield-delta)
+                                (assoc-in [:escrow-transfers workflow-id :last-accrual-time] now)
+                                (assoc-in [:escrow-transfers workflow-id :accumulated-yield] (+ unrealized-after realized-after)))]
+               (attr/wrap-state world''' (attr/get-attribution attributed-state)))
              attributed-state))
          attributed-state)))))
 

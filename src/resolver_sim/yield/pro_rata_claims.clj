@@ -322,7 +322,9 @@
 (defn check-pro-rata-fairness
   "No pair of claimants has a different fill ratio (cross-product equality).
    Pro-rata fairness: received[i] / owed[i] = received[j] / owed[j] for all i, j.
-   Verified via cross-multiplication: received[i] * owed[j] = received[j] * owed[i]."
+   Verified via cross-multiplication: received[i] * owed[j] = received[j] * owed[i].
+   
+   Reads from :claims/direct-result → :allocations (Sew slash allocation format)."
   [{:keys [evidence-nodes]}]
   (let [content (evidence-content evidence-nodes)]
     (if-not content
@@ -333,6 +335,41 @@
           {:holds? true}
           {:holds? false
            :violations (into shadow-violations fairness-violations)})))))
+
+;; ── Partial-fill bridge evaluator ───────────────────────────────────────
+
+(defn- partial-fill-decision->content
+  "Adapt a partial-fill decision artifact into claims-compatible content
+   so the existing pro-rata-fairness-violations check can be reused."
+  [decision]
+  (let [requested (:requested decision {})
+        filled (:filled decision {})
+        allocations (mapv (fn [k]
+                            {:id k
+                             :paid (long (get filled k 0))
+                             :owed (long (get requested k 0))})
+                          (keys requested))]
+    {:claims/direct-result {:allocations allocations}
+     :claims/projection-result {:allocations allocations}
+     :claims/projection-artifact {:projection-hash "partial-fill-direct"}
+     :claims/projection-artifact-again {:projection-hash "partial-fill-direct"}}))
+
+(defn check-partial-fill-fairness
+  "Pro-rata fairness check over partial-fill decision artifacts.
+   Reads a partial-fill decision from evidence-node content and verifies
+   cross-product equality across all claimed buckets.
+   
+   Evidence node should contain a partial-fill decision artifact
+   with :requested and :filled maps (as produced by decision-artifact)."
+  [{:keys [evidence-nodes]}]
+  (let [raw-content (evidence-content evidence-nodes)]
+    (if-not raw-content
+      {:holds? false :violations [{:type :missing-evidence-content}]}
+      (let [content (partial-fill-decision->content raw-content)
+            fairness-violations (pro-rata-fairness-violations content)]
+        (if (empty? fairness-violations)
+          {:holds? true}
+          {:holds? false :violations fairness-violations})))))
 
 ;; ── Evaluator resolver for claims engine ────────────────────────────────
 
@@ -345,7 +382,8 @@
    :conservation              check-conservation
    :rounding-bounded          check-rounding-bounded
    :ordering-independent      check-ordering-independent
-   :pro-rata-fairness         check-pro-rata-fairness})
+   :pro-rata-fairness         check-pro-rata-fairness
+   :partial-fill-fairness     check-partial-fill-fairness})
 
 (defn evaluator-resolver
   "Resolve a claim-id to its evaluator function.

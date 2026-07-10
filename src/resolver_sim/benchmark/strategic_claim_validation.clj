@@ -61,6 +61,32 @@
     :benchmark/manifest-path "benchmarks/packs/prf-core/shortfall-allocation-v0.edn"
     :mechanism-levels [:allocation/partial-fill]
     :required-threat-tags #{"shortfall"}
+    :match-dimensions #{:allocation/partial-fill}}
+
+   :claim/shortfall-detection-validity
+   {:claim/id :claim/shortfall-detection-validity
+    :claim/title "Shortfall detection validity"
+    :claim/description
+    "Shortfall scenarios should detect and record shortfall correctly:
+     the shortfall evidence root must be verifiable, conservation invariants
+     must hold, and deferred/haircut splits must be consistent with the
+     declared basis amount."
+    :benchmark/manifest-path "benchmarks/packs/prf-core/shortfall-allocation-v0.edn"
+    :mechanism-levels [:allocation/shortfall]
+    :required-threat-tags #{"shortfall"}
+    :match-dimensions #{:allocation/shortfall}}
+
+   :claim/pro-rata-fairness-end-to-end
+   {:claim/id :claim/pro-rata-fairness-end-to-end
+    :claim/title "Pro-rata fairness end-to-end"
+    :claim/description
+    "Partial-fill scenarios should produce fair pro-rata allocations:
+     every claimant must receive the same fill ratio within rounding
+     tolerance. Validated via evidence-root verifiability, invariant
+     compliance, and complete allocation reporting."
+    :benchmark/manifest-path "benchmarks/packs/prf-core/shortfall-allocation-v0.edn"
+    :mechanism-levels [:allocation/partial-fill]
+    :required-threat-tags #{"shortfall"}
     :match-dimensions #{:allocation/partial-fill}}})
 
 (def ^:private artifact-kind :game-theoretic-validation)

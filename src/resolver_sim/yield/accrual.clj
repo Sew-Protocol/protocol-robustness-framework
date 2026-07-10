@@ -607,10 +607,7 @@
                               (assoc :shortfall-affected? true)))
             pos-key (or (:position/id pos) owner-id)
             annotated-pos (loss/annotate-accrual-loss world' updated-pos final-index)]
-        (-> world'
-            (assoc-in [:yield/positions owner-id] annotated-pos)
-            (update-in [:total-yield-generated tok] (fnil + 0) (max 0 yield-delta))
-            (update-in [:total-held tok] (fnil + 0) yield-delta)))
+        (assoc-in world' [:yield/positions owner-id] annotated-pos))
       world')))
 
 (defn apply-accrual-decision-with-attribution

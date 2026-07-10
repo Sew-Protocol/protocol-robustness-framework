@@ -8,14 +8,14 @@ lives here; protocol-specific packs appear under `packs/<protocol>/`.
 A concept or scenario mapping is not evidence by itself. A property is
 demonstrated only when an active benchmark executes its registered evaluator.
 
-| Capability | Runnable claims | Active benchmark | Status |
-|---|---|---|---|
-| Sew-backed deterministic replay | identical results, canonical hash consistency, no nondeterminism | `:benchmark/prf-deterministic-replay-v1` | Demonstrated for the included Sew workload only |
-| Sew yield shortfall handling | invariant-backed preservation, fairness, cap, and leakage checks | `:benchmark/sew-yield-shortfall-v1` | Demonstrated for its 15-scenario workload |
-| Escrow dispute and slashing invariants | named invariant-backed safety and liveness claims | Sew active benchmarks | Demonstrated within named suites |
-| Broad protocol robustness | deferred semantic claims | `:benchmark/prf-protocol-robustness-v0` | Experimental research profile |
-| PRF shortfall assurance profile | deferred scenario claims | `:benchmark/prf-shortfall-allocation-v0` | Experimental, not semantic assurance |
-| Evidence-reference integrity | no active benchmark claim yet | None | Roadmap |
+| Capability | Concept | Claims | Evaluator | Active benchmark | Status |
+|---|---|---|---|---|---|
+| Sew-backed deterministic replay | evidence integrity | identical results, canonical hash consistency, no nondeterminism | benchmark consistency evaluators | `:benchmark/prf-deterministic-replay-v1` | Demonstrated for the included Sew workload only |
+| Sew yield shortfall handling | shortfall, partial fill, pro-rata fairness | preservation, fairness, cap, and leakage | named Sew invariants | `:benchmark/sew-yield-shortfall-v1` | Demonstrated for its 15-scenario workload |
+| Escrow dispute and slashing invariants | authority, liveness, conservation | named safety and liveness claims | named Sew invariants | Sew active benchmarks | Demonstrated within named suites |
+| Broad protocol robustness | accountability, adversarial liveness, fund safety | deferred semantic claims | none | none | Experimental research profile |
+| PRF shortfall assurance profile | allocation completeness and conservation | deferred scenario claims | none | none | Experimental, not semantic assurance |
+| Evidence-reference integrity | evidence DAG reference integrity | no active claim yet | none | none | Roadmap |
 
 ### First Run
 

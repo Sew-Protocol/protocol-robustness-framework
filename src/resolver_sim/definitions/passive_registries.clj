@@ -425,7 +425,15 @@
            :evaluation {:type :policy-check
                         :policy :cross-multiplication-fairness}
            :outputs [:holds? :violations]}
-            ;; Protocol-specific claim definitions are registered dynamically
+          {:id :partial-fill-fairness
+           :version 1
+           :category :invariant
+           :description "Pro-rata fairness over partial-fill decision artifacts. Verifies cross-product equality across all claimed buckets for partial-fill decisions."
+           :inputs [:evidence-nodes]
+           :evaluation {:type :policy-check
+                        :policy :cross-multiplication-fairness}
+           :outputs [:holds? :violations]}
+           ;; Protocol-specific claim definitions are registered dynamically
            ;; by protocol implementation namespaces via register-claim-definitions!.
            ;; See protocols_src/resolver_sim/evidence/forensic_claims.clj for
             ;; the Sew forensic-grade claims (registry-hash-verifies,

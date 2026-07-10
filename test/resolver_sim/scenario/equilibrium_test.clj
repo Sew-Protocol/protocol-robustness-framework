@@ -28,7 +28,9 @@
   [{:keys [terminal? halt-reason total-held
            attack-attempts attack-successes funds-lost
            invariant-violations negative-payoff-count
-           coalition-net-profit]
+           coalition-net-profit
+           total-shortfall-basis total-shortfall-filled
+           total-shortfall-deferred total-shortfall-haircut]
     :or   {terminal?          true
            halt-reason        :all-terminal
            total-held         {}
@@ -39,12 +41,16 @@
   {:terminal-world {:terminal?          terminal?
                     :total-held-by-token total-held
                     :escrow-count       1}
-   :metrics        {:attack-attempts       attack-attempts
-                    :attack-successes      attack-successes
-                    :funds-lost            funds-lost
-                    :invariant-violations  invariant-violations
-                    :negative-payoff-count negative-payoff-count
-                    :coalition-net-profit  coalition-net-profit}
+   :metrics        {:attack-attempts          attack-attempts
+                    :attack-successes         attack-successes
+                    :funds-lost               funds-lost
+                    :invariant-violations     invariant-violations
+                    :negative-payoff-count    negative-payoff-count
+                    :coalition-net-profit     coalition-net-profit
+                    :total-shortfall-basis    total-shortfall-basis
+                    :total-shortfall-filled   total-shortfall-filled
+                    :total-shortfall-deferred total-shortfall-deferred
+                    :total-shortfall-haircut  total-shortfall-haircut}
    :trace-summary  {:halt-reason   halt-reason
                     :events-count  2
                     :actors        ["buyer" "seller"]
@@ -116,6 +122,37 @@
     (let [proj (projection {:attack-attempts 1 :attack-successes 0 :funds-lost 100})
           result (-> (eq/evaluate-mechanism-properties [:incentive-compatibility] proj)
                      :incentive-compatibility)]
+      (is (= :fail (:status result))))))
+
+;; ---------------------------------------------------------------------------
+;; pro-rata-fairness
+;; ---------------------------------------------------------------------------
+
+(deftest test-pro-rata-fairness-inconclusive-no-shortfall
+  (testing "no shortfall metrics → :inconclusive"
+    (let [proj (projection {})
+          result (-> (eq/evaluate-mechanism-properties [:pro-rata-fairness] proj)
+                     :pro-rata-fairness)]
+      (is (= :inconclusive (:status result))))))
+
+(deftest test-pro-rata-fairness-pass-conservation-holds
+  (testing "shortfall conservation holds → :pass"
+    (let [proj (projection {:total-shortfall-basis 1000
+                            :total-shortfall-filled 600
+                            :total-shortfall-deferred 300
+                            :total-shortfall-haircut 100})
+          result (-> (eq/evaluate-mechanism-properties [:pro-rata-fairness] proj)
+                     :pro-rata-fairness)]
+      (is (= :pass (:status result))))))
+
+(deftest test-pro-rata-fairness-fail-imbalance
+  (testing "shortfall conservation violated → :fail"
+    (let [proj (projection {:total-shortfall-basis 1000
+                            :total-shortfall-filled 500
+                            :total-shortfall-deferred 300
+                            :total-shortfall-haircut 100})
+          result (-> (eq/evaluate-mechanism-properties [:pro-rata-fairness] proj)
+                     :pro-rata-fairness)]
       (is (= :fail (:status result))))))
 
 ;; ---------------------------------------------------------------------------

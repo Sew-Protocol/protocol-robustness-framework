@@ -174,7 +174,7 @@ jobs:
       - name: Run profitability sweep
         run: |
           set -x
-          python3 python/adversarial_profitability_sweep.py --top-n 10 2>&1 || echo "SWEEP: non-zero exit (pre-existing — requires gRPC server)"
+          python3 integration/python/adversarial_profitability_sweep.py --top-n 10 2>&1 || echo "SWEEP: non-zero exit (pre-existing — requires gRPC server)"
 
       - name: Run adversarial artifact gates
         run: |

@@ -689,7 +689,7 @@ run_equivalence_new() {
   (when any-fail (System/exit 1)))"
 
   _eq_out=$(python3 -c "from evidence_config import EvidenceConfig; c=EvidenceConfig(); print(c.artifact_path('equivalence-summary'))")
-  python3 python/equivalence_pair_diff.py \
+  python3 integration/python/equivalence_pair_diff.py \
     --traces-dir data/fixtures/traces \
     --out "$_eq_out" \
     --replay-dir "$ARTIFACT_DIR/equivalence-pairs" || true
@@ -715,7 +715,7 @@ run_coverage_gates() {
 
 run_adversarial_sweep() {
   echo "Running adversarial profitability sweep..."
-  python3 python/adversarial_profitability_sweep.py --top-n 10
+  python3 integration/python/adversarial_profitability_sweep.py --top-n 10
   return $?
 }
 

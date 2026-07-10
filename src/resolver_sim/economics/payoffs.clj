@@ -468,10 +468,11 @@
                      :action-hash action-hash
                      :action-hash-at action-hash-at}
                     (when attribution
-                      {:scenario-id (:ctx/scenario-id attribution)
-                       :run-id (:ctx/run-id attribution)
-                       :event-index (:ctx/event-index attribution)
-                       :event-type (:ctx/event-type attribution)}))
+                      (into {} (remove (comp nil? val)
+                                       {:scenario-id (:ctx/scenario-id attribution)
+                                        :run-id (:ctx/run-id attribution)
+                                        :event-index (:ctx/event-index attribution)
+                                        :event-type (:ctx/event-type attribution)}))))
         source (get projection-artifact :source {})
         source-hash (hc/hash-with-intent {:hash/intent :pro-rata-allocation-result}
                                          {:projection-artifact-hash projection-artifact-hash

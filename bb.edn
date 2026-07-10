@@ -120,21 +120,41 @@
                   (when (and forensic-dir registry-dir)
                     (let [link-file (java.io.File. registry-dir "_forensic-run-path.txt")]
                       (spit link-file (str (.getCanonicalPath forensic-dir) "\n"))))
-                  ;; 6. Summary box — researcher-friendly output locations
+                  ;; 6. Format generated files for readability
+                  (try
+                    (when (and forensic-dir (.exists forensic-dir))
+                      (doseq [f (filter (fn [x] (.isFile x)) (file-seq forensic-dir))
+                              :let [n (.getName f)]]
+                        (cond
+                          (.endsWith n ".edn")
+                          (try
+                            (let [data (clojure.edn/read-string (slurp f))]
+                              (spit f (with-out-str (clojure.pprint/pprint data))))
+                            (catch Exception _ nil))
+                          (.endsWith n ".json")
+                          (try
+                            (let [path (.getCanonicalPath f)
+                                  py-cmd (str "import json; d=json.load(open('" path "'));"
+                                              "json.dump(d, open('" path ".fmt','w'), indent=2)")]
+                              (shell "python3" "-c" py-cmd)
+                              (shell "mv" (str path ".fmt") path))
+                            (catch Exception _ nil)))))
+                    (catch Exception e
+                      (println (str "[format] " (.getMessage e)))))
+                  ;; 7. Summary box — researcher-friendly output locations
                   (println)
                   (println "############################")
                   (println "# Scenario run complete")
                   (println (str "# Scenario: " scenario-id))
                   (when forensic-dir
                     (println (str "# Forensics: " (.getPath forensic-dir)))
-                    (println (str "#   claims -> " (.getPath forensic-dir) "/claims/"))
-                    (println (str "#   attestations -> " (.getPath forensic-dir) "/attestations/"))
-                    (println (str "#   event-evidence -> " (.getPath forensic-dir) "/event-evidence/"))
-                    (println (str "#   chain-cursor -> " (.getPath forensic-dir) "/chain-cursor-final.json"))
-                    (println (str "#   evidence-registry -> " (.getPath forensic-dir) "/evidence-registry.json"))
-                    (when-let [links (and (.exists (java.io.File. forensic-dir "_run-links.edn"))
-                                          (slurp (str (.getPath forensic-dir) "/_run-links.edn")))]
-                      (println (str "#   run-links -> " (.getPath forensic-dir) "/_run-links.edn"))))
+                    (let [entries (sort-by (fn [f] (str (if (.isDirectory f) 0 1) (.getName f)))
+                                           (.listFiles forensic-dir))]
+                      (doseq [e entries]
+                        (if (.isDirectory e)
+                          (let [fc (count (filter (fn [f] (.isFile f)) (file-seq e)))]
+                            (println (str "#   " (.getName e) "/    (" fc " file" (when-not (= 1 fc) "s") ")")))
+                          (println (str "#   " (.getName e)))))))
                   (when registry-dir
                     (println (str "# Registry: " (.getPath registry-dir)))
                     (println (str "#   test-artifacts -> " (.getPath registry-dir) "/test-artifacts.json"))
@@ -535,14 +555,24 @@ cli-args (cond-> ["-M:run:with-sew" "--invariants" "--scenario" scenario]
    test:notebooks {:doc "Load every notebook namespace to verify it compiles"
                     :task (shell "scripts/with-test-artifact-lock.sh" "clojure" "-M:with-sew" "-m" "scripts.test-notebooks")}
 
+   test:quick
+   {:doc "Fast confidence check (~3 min). Covers: framework + dispute-resolution + evidence + contracts + validate."
+    :task (shell "bash" "-c"
+            "bb test:framework:parallel && bb test:dispute-resolution && bb test:evidence && bb test:contracts && bb validate")}
+
+   test:medium
+   {:doc "Medium coverage check (~12 min). Adds suites to the quick set."
+    :task (shell "bash" "-c"
+            "bb test:quick && bb test:suites")}
+
    adv:sweep {:doc "Run adversarial profitability sweeps and generate safe/unsafe regions"
-             :task (shell "python3 python/adversarial_profitability_sweep.py")}
+             :task (shell "python3 integration/python/adversarial_profitability_sweep.py")}
 
   adv:sweep:promote {:doc "Run sweep and emit top risky promotion backlog"
-                     :task (shell "python3 python/adversarial_profitability_sweep.py --top-n 20")}
+                     :task (shell "python3 integration/python/adversarial_profitability_sweep.py --top-n 20")}
 
   trace:compare {:doc "Compare baseline vs candidate trace JSON and emit markdown+json report"
-                 :task (apply shell "python3" "python/trace_compare.py" *command-line-args*)}
+                 :task (apply shell "python3" "integration/python/trace_compare.py" *command-line-args*)}
 
   trace:structural-diff {:doc "Structural world diff between replay JSON files. Usage: bb trace:structural-diff --baseline a.json --candidate b.json"
                          :task (apply shell "clojure -M:diff-traces" *command-line-args*)}
@@ -551,14 +581,14 @@ cli-args (cond-> ["-M:run:with-sew" "--invariants" "--scenario" scenario]
               :task (let [s1 (first *command-line-args*)
                           s2 (second *command-line-args*)
                           od (or (nth *command-line-args* 2 nil) "results/trace-compare/diff")]
-                      (apply shell "python3" "python/trace_compare.py"
+                      (apply shell "python3" "integration/python/trace_compare.py"
                              "--scenario-a" s1 "--scenario-b" s2 "--out-dir" od))}
 
   sim:diff {:doc "Compare scenario replay at baseline git commit vs HEAD. Usage: bb sim:diff --baseline <sha> --scenario <path>"
             :task (apply shell "./scripts/scenarios/sim_diff.sh" *command-line-args*)}
 
   report:attack-map {:doc "Generate visual attack-to-outcome artifacts (state diagram, surface snapshot, timeline — all Mermaid)"
-                     :task (apply shell "python3" "python/attack_outcome_map.py" *command-line-args*)}
+                     :task (apply shell "python3" "integration/python/attack_outcome_map.py" *command-line-args*)}
 
   lint {:doc "Lint source and test code with clj-kondo (excludes notebooks/archive/)"
         :task (shell "clj -M:lint/core")}
@@ -656,10 +686,10 @@ cli-args (cond-> ["-M:run:with-sew" "--invariants" "--scenario" scenario]
                              *args*)}
 
   adv:broad {:doc "Run adversarial agent broad discovery preset"
-             :task (shell "python3 python/adversarial_agent.py --target-effective-steps 40 --max-attempts 300 --guided-ratio 0.65 --rejected-step-weight 0.10")}
+             :task (shell "python3 integration/python/adversarial_agent.py --target-effective-steps 40 --max-attempts 300 --guided-ratio 0.65 --rejected-step-weight 0.10")}
 
   adv:deep {:doc "Run adversarial agent deeper exploit-chain preset"
-            :task (shell "python3 python/adversarial_agent.py --target-effective-steps 80 --max-attempts 800 --guided-ratio 0.80 --rejected-step-weight 0.05")}
+            :task (shell "python3 integration/python/adversarial_agent.py --target-effective-steps 80 --max-attempts 800 --guided-ratio 0.80 --rejected-step-weight 0.05")}
 
   adv:server {:doc "Start gRPC simulation server on 50051 in background"
               :task (shell "nohup clojure -M:with-sew -e \"(require 'resolver-sim.server.grpc) (resolver-sim.server.grpc/start! 50051) (resolver-sim.server.grpc/await-termination)\" > grpc-server.log 2>&1 &" "sleep 2" "ss -ltnp | grep 50051 || true")}

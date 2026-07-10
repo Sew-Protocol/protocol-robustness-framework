@@ -401,7 +401,8 @@
    :world/after-hash "a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b"
    :evidence/type "escrow-created"
    :evidence/importance "core"
-   :inputs {:token "USDC" :amount 4000 :resolver "0xresolver"}})
+   :inputs {:token "USDC" :amount 4000 :resolver "0xresolver"}
+   :attestations ["attestation:sha256:a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b"]})
 
 ^{:nextjournal.clerk/visibility {:code :hide :result :hide}}
 (defn compute-domain-hash
@@ -466,11 +467,16 @@
   (clerk/html
    [:div {:style {:background "#1e293b" :border "1px solid #334155"
                   :borderRadius "8px" :padding "16px" :marginBottom "20px"}}
-    [:h3 {:style {:color "#7ADDDC" :marginTop 0}} "Canonical Hashing — Live Demo"]
-    [:p {:style {:color "#94a3b8" :fontSize "13px" :marginBottom "12px"}}
-     "The following hashes are computed live from the scenario data using the same
-      canonical hashing functions used during evidence capture. Every hash is
-      deterministic and domain-separated."]
+   [:h3 {:style {:color "#7ADDDC" :marginTop 0}} "Canonical Hashing — Live Demo"]
+     [:p {:style {:color "#94a3b8" :fontSize "13px" :marginBottom "12px"}}
+      "The following hashes are computed live from the scenario data using the same
+       canonical hashing functions used during evidence capture. Every hash is
+       deterministic and domain-separated."]
+     [:div {:style {:background "#1e3a5f" :border "1px solid #1d4ed8" :borderRadius "6px"
+                    :padding "8px" :marginBottom "12px" :fontSize "11px" :color "#93c5fd"}}
+      "Evidence DAG nodes carry typed attestation references "
+      "(\"attestation:sha256:<64-hex>\") instead of bare IDs, enabling "
+      "unambiguous offline resolution through the attestation resolver."]
 
     ;; ── Typed Encoding ────────────────────────────────────────────────────────
     [:h4 {:style {:color "#f8fafc" :marginBottom "8px" :fontSize "14px"}}
@@ -702,12 +708,30 @@
      "Pure Clojure port of Solidity StateManagementLibrary. Allowed-transitions graph + guard functions."
      [:br] [:span {:style {:color "#64748b"}}
             "→ protocols_src/resolver_sim/protocols/sew/state_machine.clj"]]]
-   [:div {:style {:background "#0f172a" :padding "12px" :borderRadius "6px" :border "1px solid #334155"}}
-    [:div {:style {:color "#7ADDDC" :fontWeight 700 :marginBottom "4px"}} "Evidence Chain"]
-    [:div {:style {:color "#94a3b8" :fontSize "12px"}}
-     "Content-addressed evidence DAG with domain-separated SHA-256 hashing. Ed25519 signing + RFC 3161 TSA."
-     [:br] [:span {:style {:color "#64748b"}}
-            "→ src/resolver_sim/evidence/chain.clj"]]]
+    [:div {:style {:background "#0f172a" :padding "12px" :borderRadius "6px" :border "1px solid #334155"}}
+     [:div {:style {:color "#7ADDDC" :fontWeight 700 :marginBottom "4px"}} "Evidence DAG Nodes"]
+     [:div {:style {:color "#94a3b8" :fontSize "12px"}}
+      "Canonical DAG-verifiable execution evidence nodes with content-addressed hashing, DAG parent-linking, and typed attestation references."
+      [:br] [:span {:style {:color "#64748b"}}
+             "→ src/resolver_sim/evidence/node.clj"]]]
+    [:div {:style {:background "#0f172a" :padding "12px" :borderRadius "6px" :border "1px solid #334155"}}
+     [:div {:style {:color "#7ADDDC" :fontWeight 700 :marginBottom "4px"}} "Evidence Chain"]
+     [:div {:style {:color "#94a3b8" :fontSize "12px"}}
+      "Linear hash chain of evidence records with seq/prev-hash/self-hash ordering. Backed by the DAG node abstraction for cross-referencing."
+      [:br] [:span {:style {:color "#64748b"}}
+             "→ src/resolver_sim/evidence/chain.clj"]]]
+    [:div {:style {:background "#0f172a" :padding "12px" :borderRadius "6px" :border "1px solid #334155"}}
+     [:div {:style {:color "#7ADDDC" :fontWeight 700 :marginBottom "4px"}} "Attestation DAG"]
+     [:div {:style {:color "#94a3b8" :fontSize "12px"}}
+      "DAG-verifiable attestation evidence nodes with typed references (attestation:sha256:<hash>). Parent-hash linking for chain-of-custody."
+      [:br] [:span {:style {:color "#64748b"}}
+             "→ src/resolver_sim/evidence/attestation_dag.clj"]]]
+    [:div {:style {:background "#0f172a" :padding "12px" :borderRadius "6px" :border "1px solid #334155"}}
+     [:div {:style {:color "#7ADDDC" :fontWeight 700 :marginBottom "4px"}} "Attestation Resolver"]
+     [:div {:style {:color "#94a3b8" :fontSize "12px"}}
+      "Parse typed references → registry lookup → hash match → type verify → optional signature check. Distinct error types for each failure mode."
+      [:br] [:span {:style {:color "#64748b"}}
+             "→ src/resolver_sim/evidence/attestation_resolver.clj"]]]
    [:div {:style {:background "#0f172a" :padding "12px" :borderRadius "6px" :border "1px solid #334155"}}
     [:div {:style {:color "#7ADDDC" :fontWeight 700 :marginBottom "4px"}} "Canonical Hash"]
     [:div {:style {:color "#94a3b8" :fontSize "12px"}}

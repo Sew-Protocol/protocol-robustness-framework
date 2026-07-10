@@ -59,6 +59,11 @@
         (mapv keyword parts)))
 
     (string? seg) (keyword seg)
+
+    (= seg :yield-positions) :yield/positions
+    (= seg :yield-indices)   :yield/indices
+    (= seg :yield-held)      :yield/held-balances
+
     :else seg))
 
 (defn- normalize-path [path]

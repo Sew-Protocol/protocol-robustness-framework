@@ -138,9 +138,7 @@
        result)
       result)))
 
-^{::clerk/visibility {:code :fold :result :show}
-  ::clerk/auto-expand-results? true
-  ::clerk/budget nil}
+^{::clerk/visibility {:code :fold :result :show}}
 (clerk/html
  (let [r @lifecycle-result
        trace (:trace r)
@@ -184,9 +182,7 @@
   (delay (-> (deref (run-batch 200 {:malicious 1.0}))
              (checks/assert-batch-shape!))))
 
-^{::clerk/visibility {:code :fold :result :show}
-  ::clerk/auto-expand-results? true
-  ::clerk/budget nil}
+^{::clerk/visibility {:code :fold :result :show}}
 (clerk/html
  (let [r @malice-batch
        slash-count (get r :fraud-slashed-count 0)

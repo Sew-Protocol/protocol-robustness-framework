@@ -10,6 +10,8 @@
 
 - **Derived concept maturity:** Benchmark evidence now derives concept scenario mappings, registered claims, evaluator availability, active benchmark references, and gaps across the complete benchmark catalogue. (`src/resolver_sim/benchmark/coverage.clj`, `src/resolver_sim/benchmark/runner.clj`)
 
+- **Public benchmark framing:** The root README and benchmark guide now distinguish demonstrated workload-specific claims from experimental profiles, concepts, and research tooling. (`README.md`, `benchmarks/README.md`)
+
 ### Added (2026-07-10)
 
 - **Evidence commitment root node:** Replaced `:evidence/chain-root` with `:evidence/commitment-root` — a proper post-hoc DAG anchor that references the execution node via `parent-hashes`, the evidence chain cursor via `bootstrap-roots`, and the bundle root hash via `outputs`. Uses typed references (`sha256:<hash>`, `evidence-chain:sha256:<hash>`). Preserves the distinction between commitment construction status (`:result :status`) and underlying execution status (`:outputs :execution/status`). (`src/resolver_sim/io/scenario_runner.clj:980-997`, `src/resolver_sim/definitions/passive_registries.clj:544-551`, `src/resolver_sim/evidence/node.clj:554-556`)
@@ -26,11 +28,15 @@
 
 - **Attestation validation before DAG node construction:** `build-attestation-dag-node` and `emit-attestation-dag-node!` now validate the attestation (nil-check + shape validation) before building the evidence node, using the existing `validate-attestation-shape` function. `validate-node` now also rejects `:attestations` entries that are nil, non-string, or not in typed-reference format (`attestation:sha256:<64-hex>`). (`src/resolver_sim/evidence/attestation_dag.clj:41-52`, `src/resolver_sim/evidence/node.clj:574-600`)
 
+- **Yield-accrual invariant violations in trigger-accrue scenarios (S78–S110):** Removed raw `update-in` for `:total-held` and `:total-yield-generated` from `apply-accrual-decision` in the yield module. Added Sew accounting (`add-held`/`sub-held`) in the lifecycle `accrue-yield-monadic` so yield deltas are recorded with matching `held-adjustment` entries. The yield module was bypassing the Sew `adjust-held` mechanism — writing directly to `:total-held` without creating held-adjustments, causing 16+ framework invariants to fire simultaneously on trigger-accrue. Also added `:total-yield-generated` tracking in the lifecycle layer. Resolved all invariant-violation failures in yield stress scenarios; S79-yield-aave-partial-liquidity-dispute-resolution and S83-yield-accrual-reorg-race now pass. (`src/resolver_sim/yield/accrual.clj`, `protocols_src/resolver_sim/protocols/sew/lifecycle.clj`)
+
+- **Legacy `:yield-positions` key in step-terminal expectations:** Added alias mapping (`:yield-positions` → `:yield/positions`, `:yield-indices` → `:yield/indices`, `:yield-held` → `:yield/held-balances`) in `normalize-path-segment` so scenario step-terminal expectations using legacy yield keys resolve correctly. (`src/resolver_sim/scenario/expectations.clj`)
+
 - **Notebook namespace check in `bb validate`:** Added `(System/exit 0)` after require in the `validate` task's notebook namespace check. Clerk starts background threads (websocket, etc.) that prevent JVM exit, causing the check to time out. (`bb.edn`)
 
 - **Missing require in `escalation_economics.clj`:** Added `resolver-sim.protocols.sew.config` to the `ns` require vector. The file used a fully qualified var reference without requiring the namespace, causing `ClassNotFoundException` when loading `not-appealed` and `appeal-analysis` notebooks. (`protocols_src/resolver_sim/protocols/sew/research_models/escalation_economics.clj`)
 
-- **Missing `:pro-rata-fairness` claim definition:** Added `:pro-rata-fairness` to `claim-definitions` in the passive registry. The claim was defined as an evaluator in `yield/pro_rata_claims.clj` but was never registered as a claim definition, causing `"Unknown claim definition"` errors in `pro-rata-allocation-result` notebook. (`src/resolver_sim/definitions/passive_registries.clj`)
+- **Missing `:pro-rata-fairness` and `:partial-fill-fairness` claim definitions:** Added both to `claim-definitions` in the passive registry. These claims were defined as evaluators in `yield/pro_rata_claims.clj` but were never registered as claim definitions, causing `"Unknown claim definition"` errors in `pro-rata-allocation-result` notebook. (`src/resolver_sim/definitions/passive_registries.clj`)
 
 - **Typed attestation references:** Evidence node `:attestations` entries now use typed references (`"attestation:sha256:<id>"`) instead of bare attestation IDs. This enables resolver dispatch, hash-algorithm clarity, object-type clarity, storage-independent resolution, and content verification after resolution. (`src/resolver_sim/evidence/attestation_dag.clj:107,141`)
 
@@ -63,6 +69,8 @@
 - **Lint `--fail-level`:** Added `--fail-level "error"` to `:lint` and `:lint/core` aliases so clj-kondo only exits non-zero on errors, not warnings (414 pre-existing warnings, 0 errors). (`deps.edn`)
 
 - **Config policy note:** Added a policy section to `.ai/project.md` stating that parameter defaults must live in `types/default-params`, not in extraction sites, with rationale. (`.ai/project.md`)
+
+- **Canonical-ID CLI path:** Fixed `benchmark/cli.clj` to accept and resolve canonical benchmark IDs (e.g. `:benchmark/sew-yield-shortfall-v1`). The CLI now correctly routes ID-based execution through the manifest resolver. (`src/resolver_sim/benchmark/cli.clj`, `test/resolver_sim/benchmark/cli_test.clj`)
 
 ### Fixed (2026-07-09)
 
@@ -757,6 +765,12 @@
 - **Multi-party pro-rata shortfall scenario (Y06):** Added `Y06_multi-party-pro-rata-shortfall` with 2 competing claimants (Alice 1000 USDC, Bob 2000 USDC), shortfall at 60% available-ratio, and sequential withdrawal. Registered in `yield-provider-scenario-ids`. Replays with `:outcome :pass` and all yield invariants pass. (`scenarios/Y06_multi-party-pro-rata-shortfall.json`, `scenarios/edn/Y06_multi-party-pro-rata-shortfall.edn`)
 
 - **S82 shortfall-recovery-cycle integrated into benchmark pack:** Added `S82_shortfall-recovery-cycle` to `shortfall-scenario-ids` and `benchmarks/packs/prf-core/shortfall-allocation-v0.edn`. Updated descriptions from "3 scenarios" to "4 scenarios". Scenario exercises shortfall recovery with deferred yield claim. (`src/resolver_sim/scenario/suites.clj:149`, `benchmarks/packs/prf-core/shortfall-allocation-v0.edn`)
+
+- **Strategic claim catalog expansion:** Added 5 new strategic claims (waterfall-fill-integrity, partial-fill-rounding-integrity, mode-validity, shortfall-detection-validity, pro-rata-fairness-end-to-end). Catalog now has 6 claims covering pro-rata fairness, shortfall detection, waterfall priority, rounding integrity, mode validity, and end-to-end fair allocation. (`src/resolver_sim/benchmark/strategic_claim_validation.clj`)
+
+- **Partial-fill fairness bridge evaluator:** Added `:partial-fill-fairness` claim evaluator to `pro_rata_claims.clj` that reads partial-fill decision artifacts from evidence nodes and runs the cross-product fairness check, bridging the closed-form checks into the claims evaluator pipeline. (`src/resolver_sim/yield/pro_rata_claims.clj:337-377`)
+
+- **Pro-rata fairness equilibrium validator:** Added `:pro-rata-fairness` mechanism property to `scenario/equilibrium.clj` — trace-level proxy checking shortfall conservation (basis = filled + deferred + haircut). Registered in `mechanism-validators` dispatcher. (`src/resolver_sim/scenario/equilibrium.clj:181-218`)
 
 - **Strategic claim catalog expansion:** Added 3 new strategic claims: `:claim/waterfall-fill-integrity`, `:claim/partial-fill-rounding-integrity`, `:claim/mode-validity`. All reference the existing `prf-core/shortfall-allocation-v0` benchmark pack with `:allocation/partial-fill` dimension. (`src/resolver_sim/benchmark/strategic_claim_validation.clj:32-55`)
 

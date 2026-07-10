@@ -99,7 +99,10 @@ prf.jar
 
 results/.notebook-focus
 .rebel_readline_history
+
+# ai
 .aider*
+.kilo
 
 # experimental scripts
 scripts/experimental

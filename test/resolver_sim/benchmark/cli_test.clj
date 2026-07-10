@@ -11,3 +11,11 @@
                                             (throw (ex-info "boom" {:entry entry})))]
         (is (nil? (#'cli/record-history-best-effort! {:benchmark {:benchmark/id "bm-1"}})))
         (is (= 1 (count @calls)))))))
+
+(deftest benchmark-index-retains-canonical-benchmark-ids
+  (let [entries (:benchmarks (#'cli/load-index))
+        replay (first (filter #(= :benchmark/prf-deterministic-replay-v1
+                                  (:benchmark/id %))
+                              entries))]
+    (is replay)
+    (is (= "prf-core/prf-deterministic-replay-v1" (:id replay)))))

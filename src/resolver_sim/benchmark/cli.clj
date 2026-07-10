@@ -42,7 +42,10 @@
                     desc (or (load-benchmark-description bench-path)
                              (keyword->display-name (:benchmark/id b)))
                     bm-id (str pack-name "/" (name (:benchmark/id b)))]
-                {:id bm-id :description desc :manifest bench-path}))
+                {:id bm-id
+                 :benchmark/id (:benchmark/id b)
+                 :description desc
+                 :manifest bench-path}))
             (:benchmarks pack-reg)))
     (do (println "Pack registry not found:" pack-reg-path) [])))
 
@@ -147,7 +150,12 @@
    taking over the process (no System/exit)."
   [benchmark-id-or-path options]
   (let [index (load-index)
-        benchmark-from-index (first (filter #(= (:id %) benchmark-id-or-path)
+        canonical-id (when (and (string? benchmark-id-or-path)
+                                (.startsWith benchmark-id-or-path ":"))
+                       (keyword (subs benchmark-id-or-path 1)))
+        benchmark-from-index (first (filter #(or (= (:id %) benchmark-id-or-path)
+                                                 (= (:benchmark/id %) benchmark-id-or-path)
+                                                 (= (:benchmark/id %) canonical-id))
                                             (:benchmarks index)))
         manifest-path (cond
                         benchmark-from-index (:manifest benchmark-from-index)

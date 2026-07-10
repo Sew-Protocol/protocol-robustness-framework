@@ -251,6 +251,65 @@
                 :required [:population-metrics :belief-distributions]))
 
 ;; ---------------------------------------------------------------------------
+;; Mechanism-property validator: pro-rata fairness
+;; ---------------------------------------------------------------------------
+
+(defn- check-pro-rata-fairness
+  "Trace-level proxy for pro-rata allocation fairness.
+
+   Examines shortfall-processing metrics:
+     :total-shortfall-basis     — sum of all shortfall basis-amounts
+     :total-shortfall-filled    — sum of all fulfilled-amounts
+     :total-shortfall-deferred  — sum of all deferred-amounts
+     :total-shortfall-haircut   — sum of all haircut-amounts
+
+   When shortfall events occurred, conservation must hold:
+     basis = filled + deferred + haircut
+   Violation indicates value leaked or was created during shortfall processing.
+
+   This is a single-trace proxy. Per-claimant proportional fairness is
+   verified independently by the closed-form partial-fill checks
+   (:partial-fill/pro-rata-cross-product in resolver-sim.yield.partial-fill).
+
+   :inconclusive — no shortfall events recorded (untested).
+   :pass         — conservation holds; recovery = basis.
+   :fail         — conservation violated; imbalance detected."
+  [{:keys [metrics]}]
+  (let [basis (long (or (:total-shortfall-basis metrics) 0))
+        filled (long (or (:total-shortfall-filled metrics) 0))
+        deferred (long (or (:total-shortfall-deferred metrics) 0))
+        haircut (long (or (:total-shortfall-haircut metrics) 0))
+        recovery (+ filled deferred haircut)]
+    (cond
+      (zero? basis)
+      (inconclusive :pro-rata-fairness :single-trace-metric-proxy :untested-no-shortfall
+                    "no shortfall events in trace; pro-rata fairness untested"
+                    :required [:total-shortfall-basis]
+                    :available [:metrics])
+
+      (not= basis recovery)
+      (fail :pro-rata-fairness :single-trace-metric-proxy
+            {:total-shortfall-basis basis
+             :total-shortfall-filled filled
+             :total-shortfall-deferred deferred
+             :total-shortfall-haircut haircut
+             :recovery-sum recovery
+             :imbalance (- basis recovery)}
+            {:total-shortfall-basis basis
+             :recovery-sum basis}
+            [{:metric :shortfall-imbalance
+              :observed (- basis recovery)
+              :expected 0}])
+
+      :else
+      (pass :pro-rata-fairness :single-trace-metric-proxy
+            {:total-shortfall-basis basis
+             :total-shortfall-filled filled
+             :total-shortfall-deferred deferred
+             :total-shortfall-haircut haircut}
+            "shortfall conservation holds; recovery = basis"))))
+
+;; ---------------------------------------------------------------------------
 ;; Dispatcher maps (generic only)
 ;; Protocol-specific validators are merged in at evaluation time via
 ;; protocol/mechanism-property-validators and protocol/equilibrium-concept-validators.
@@ -258,7 +317,8 @@
 
 (def ^:private mechanism-validators
   {:incentive-compatibility     check-incentive-compatibility
-   :sybil-resistance            check-sybil-resistance})
+   :sybil-resistance            check-sybil-resistance
+   :pro-rata-fairness           check-pro-rata-fairness})
 
 (def ^:private equilibrium-validators
   {:dominant-strategy-equilibrium check-dominant-strategy-equilibrium
