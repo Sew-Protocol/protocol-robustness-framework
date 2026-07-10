@@ -18,11 +18,22 @@
 #   scripts/with-test-artifact-lock.sh clojure -M:with-sew -e '(println "hi")'
 #
 # The wrapped command's exit code is preserved.
+#
+# If the command hangs, a previous process may still hold the lock.
+# Check with: lsof results/.test-artifact.lock
+# Remove stale lock with: rm -f results/.test-artifact.lock
 
 set -euo pipefail
 
 LOCK_FILE="results/.test-artifact.lock"
 
 mkdir -p "$(dirname "${LOCK_FILE}")"
+
+# Try to acquire the lock in non-blocking mode first to report helpful messages.
+if ! flock -n "${LOCK_FILE}" true 2>/dev/null; then
+  echo " Waiting for test artifact lock (${LOCK_FILE})..."
+  echo " If no other test is running, the lock may be stale."
+  echo " Remove with: rm -f ${LOCK_FILE}"
+fi
 
 exec flock "${LOCK_FILE}" "$@"

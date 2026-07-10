@@ -87,6 +87,37 @@
                                                          {:key :c :amount 3}])]
       (is (= [4 3 3] (mapv :filled (:allocations result)))))))
 
+(deftest ^:characterization lra-dust-distribution-deterministic
+  (testing "dust distribution is deterministic across repeated calls"
+    (let [claims [{:key :a :amount 3} {:key :b :amount 3} {:key :c :amount 3}]
+          r1 (exact-math/largest-remainder-alloc 10 claims)
+          r2 (exact-math/largest-remainder-alloc 10 claims)]
+      (is (= (mapv :filled (:allocations r1))
+             (mapv :filled (:allocations r2)))))))
+
+(deftest ^:characterization lra-input-order-advantage-bounded
+  (testing "first-in-input advantage does not exceed 1 unit over last-in-input"
+    (doseq [claims [[{:key :a :amount 3} {:key :b :amount 3} {:key :c :amount 3}]
+                    [{:key :a :amount 5} {:key :b :amount 5} {:key :c :amount 5} {:key :d :amount 5}]
+                    [{:key :a :amount 1} {:key :b :amount 2} {:key :c :amount 3} {:key :d :amount 4}]]]
+      (let [total (reduce + 0 (map :amount claims))
+            total-with-tie (inc total)
+            forward (exact-math/largest-remainder-alloc total-with-tie claims)
+            reversed (exact-math/largest-remainder-alloc total-with-tie (vec (rseq claims)))
+            f-filled (mapv :filled (:allocations forward))
+            r-filled (mapv :filled (:allocations reversed))
+            max-diff (reduce max (map (fn [f r] (abs (- f r))) f-filled (vec (rseq r-filled))))]
+        (is (<= max-diff 1)
+            (str "max allocation difference = " max-diff " for claims=" (pr-str claims)))))))
+
+(deftest ^:characterization lra-dust-goes-to-largest-remainder
+  (testing "dust goes to largest fractional remainder, not blindly to first position"
+    (let [claims [{:key :a :amount 3} {:key :b :amount 3} {:key :c :amount 1}]
+          result (exact-math/largest-remainder-alloc 8 claims)
+          dust-recipient (:key (first (sort-by :filled > (:allocations result))))]
+      (is (= :a dust-recipient)
+          "first claim with largest remainder receives the dust"))))
+
 (deftest ^:characterization lra-float-amounts
   (testing "float amounts are rationalized internally"
     (let [result (exact-math/largest-remainder-alloc 10 [{:amount 0.5} {:amount 0.5}])]

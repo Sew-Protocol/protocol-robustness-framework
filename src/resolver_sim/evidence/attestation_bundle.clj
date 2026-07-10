@@ -34,6 +34,8 @@
 
 ;; ── Constants ────────────────────────────────────────────────────────────────
 
+(def ^:const default-bundle-dir "results/attestation-bundle")
+
 (def ^:const bundle-version "attestation-bundle.v1")
 (def ^:const bundle-kind :attestation-verification-package)
 
@@ -65,7 +67,7 @@
    Returns the bundle manifest map."
   [{:keys [attestations claim-results evidence-nodes registries sensitivity-report options]
     :or {attestations [] claim-results [] evidence-nodes []}}]
-  (let [bundle-dir (or (:bundle-dir options) "attestation-bundle")
+  (let [bundle-dir (or (:bundle-dir options) default-bundle-dir)
         _ (.mkdirs (io/file bundle-dir "attestations"))
         _ (.mkdirs (io/file bundle-dir "claims"))
         _ (.mkdirs (io/file bundle-dir "evidence-nodes"))

@@ -403,9 +403,9 @@
                      held-after  (get-in world-after  [:total-held token] 0)
                      delta-held  (- held-after held-before)
 
-                     claimable-before (get-token-claimable-sum world-before token)
-                     claimable-after  (get-token-claimable-sum world-after token)
-                     delta-claimable  (- claimable-after claimable-before)
+                      claimable-before (get-token-claimable-sum world-before token)
+                      claimable-after  (get-token-claimable-sum world-after token)
+                      delta-claimable  (- claimable-after claimable-before)
                        
                       ;; Expected immediately-claimable amount:
                      ;;   partial-yield shortfall → principal + net liquid yield (fee on yield leg)
@@ -439,9 +439,12 @@
                         shortfall
                         (= delta-claimable expected-claimable)
 
-                        ;; Yield without shortfall: at least principal in claimable (yield adds more)
+                        ;; Yield without shortfall: at least principal in claimable (yield adds more).
+                        ;; When negative yield reduced total-held below afa, the
+                        ;; claimable delta equals the exact held movement instead.
                         :else
-                        (>= delta-claimable net-afa))]
+                        (or (>= delta-claimable net-afa)
+                            (= delta-claimable (- delta-held))))]
                :when (not ok?)]
           {:workflow-id     wf
            :token           token

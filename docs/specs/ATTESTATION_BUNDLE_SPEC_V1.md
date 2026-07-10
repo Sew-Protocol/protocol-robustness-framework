@@ -63,7 +63,12 @@ Attestations, claim results, evidence nodes, registries, and sensitivity decisio
  :attestation/path "attestations/<hash>.edn"}
 ```
 
-Each entrypoint references one attestation by hash and declares its file path within the bundle directory.
+Each entrypoint references one attestation by hash and declares its file path
+within the bundle directory. The `:attestation/hash` value is the bare
+64-character lowercase hex SHA-256 of the attestation record. When this
+attestation is referenced from an evidence node, the typed reference format
+`attestation:sha256:<hash>` is used instead (see
+`ATTESTATION_RESOLVER_SPEC_V1`).
 
 ### 3.3 Object Entry
 
@@ -132,7 +137,7 @@ Where `manifest-minus-root-hash` is the manifest map with `:bundle/root-hash` re
 bundle-root/
   manifest.edn                         # bundle manifest (EDN)
   attestations/
-    <attestation-hash>.edn             # attestation records
+    <bare-sha256-hex>.edn              # attestation records (bare hash filename)
   claims/
     <claim-result-hash>.edn            # claim result maps
   evidence-nodes/
@@ -144,6 +149,13 @@ bundle-root/
   reports/
     sensitivity-sentinel-report.edn    # sensitivity sentinel report
 ```
+
+**Note on attestation file naming:** Attestation files use the bare SHA-256
+hash as their filename (`abcdef.edn`), not the typed reference format
+(`attestation:sha256:abcdef`). The typed reference is used when referencing
+attestations from evidence nodes. The resolver handles both formats:
+it parses the typed reference, extracts the bare hash, and looks up the
+file by that hash.
 
 ------
 

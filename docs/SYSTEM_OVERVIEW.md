@@ -455,7 +455,7 @@ These controls are tested in focused yield failure tests and are replay/scenario
 | ----------------------------------------------- | ------------------------------------------------------------- |
 | Deep architecture and layering rules            | `docs/architecture/ARCHITECTURE.md`                           |
 | Adapter implementation and authoring            | `docs/architecture/ADAPTER_AUTHORING_GUIDE.md`                |
-| Framework / adapter / Sew / research boundaries | `docs/framework-boundaries.md`                                |
+| Framework / adapter / Sew / research boundaries | `docs/architecture/framework-boundaries.md`                                |
 | Reusable adapter design notes                   | `docs/overview/REUSABLE_COMPONENTS.md`                        |
 | Use-of-funds accounting contract                | `docs/overview/USE_OF_FUNDS.md`                               |
 | End-user and CLI workflows                      | `docs/quickstart/QUICKSTART.md`, `docs/usage.md`              |

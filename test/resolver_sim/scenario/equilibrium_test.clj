@@ -30,7 +30,9 @@
            invariant-violations negative-payoff-count
            coalition-net-profit
            total-shortfall-basis total-shortfall-filled
-           total-shortfall-deferred total-shortfall-haircut]
+           total-shortfall-deferred total-shortfall-haircut
+           redistribution-total-passes redistribution-iteration-limit-hit?
+           redistribution-negative-allocations]
     :or   {terminal?          true
            halt-reason        :all-terminal
            total-held         {}
@@ -50,7 +52,10 @@
                     :total-shortfall-basis    total-shortfall-basis
                     :total-shortfall-filled   total-shortfall-filled
                     :total-shortfall-deferred total-shortfall-deferred
-                    :total-shortfall-haircut  total-shortfall-haircut}
+                     :total-shortfall-haircut  total-shortfall-haircut
+                     :redistribution-total-passes redistribution-total-passes
+                     :redistribution-iteration-limit-hit? redistribution-iteration-limit-hit?
+                     :redistribution-negative-allocations redistribution-negative-allocations}
    :trace-summary  {:halt-reason   halt-reason
                     :events-count  2
                     :actors        ["buyer" "seller"]
@@ -153,6 +158,44 @@
                             :total-shortfall-haircut 100})
           result (-> (eq/evaluate-mechanism-properties [:pro-rata-fairness] proj)
                      :pro-rata-fairness)]
+      (is (= :fail (:status result))))))
+
+;; ---------------------------------------------------------------------------
+;; redistribution-fairness
+;; ---------------------------------------------------------------------------
+
+(deftest test-redistribution-fairness-inconclusive-no-redistribution
+  (testing "no redistribution passes → :inconclusive"
+    (let [proj (projection {:redistribution-total-passes 0})
+          result (-> (eq/evaluate-mechanism-properties [:redistribution-fairness] proj)
+                     :redistribution-fairness)]
+      (is (= :inconclusive (:status result))))))
+
+(deftest test-redistribution-fairness-pass-clean
+  (testing "redistribution completed cleanly → :pass"
+    (let [proj (projection {:redistribution-total-passes 2
+                            :redistribution-iteration-limit-hit? false
+                            :redistribution-negative-allocations 0})
+          result (-> (eq/evaluate-mechanism-properties [:redistribution-fairness] proj)
+                     :redistribution-fairness)]
+      (is (= :pass (:status result))))))
+
+(deftest test-redistribution-fairness-fail-iteration-limit
+  (testing "iteration limit hit → :fail"
+    (let [proj (projection {:redistribution-total-passes 10
+                            :redistribution-iteration-limit-hit? true
+                            :redistribution-negative-allocations 0})
+          result (-> (eq/evaluate-mechanism-properties [:redistribution-fairness] proj)
+                     :redistribution-fairness)]
+      (is (= :fail (:status result))))))
+
+(deftest test-redistribution-fairness-fail-negative-allocations
+  (testing "negative allocations after redistribution → :fail"
+    (let [proj (projection {:redistribution-total-passes 2
+                            :redistribution-iteration-limit-hit? false
+                            :redistribution-negative-allocations 1})
+          result (-> (eq/evaluate-mechanism-properties [:redistribution-fairness] proj)
+                     :redistribution-fairness)]
       (is (= :fail (:status result))))))
 
 ;; ---------------------------------------------------------------------------

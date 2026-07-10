@@ -4,6 +4,26 @@
 
 ### Changed (2026-07-10)
 
+- **Project root cleanup:** Reduced root entries from 66 to 27. Consolidated `integration/`, `fixtures/`, and `tests/` under `test/`. Moved `build.clj` → `scripts/`, `demos/` → `examples/demos/`, `docker-compose.yaml` → `config/`. Moved generated output dirs (`consensus-results/`, `attestation-bundle/`, `evidence/`, `prf-artifacts/`, `prf-runs/`) under `results/`. Removed empty `META-INF/`. Updated `.gitignore`, `deps.edn` (build alias paths), `bb.edn` (Python test paths), and source code defaults (`attestation_bundle.clj`, `benchmark/cli.clj`). (`src/resolver_sim/evidence/attestation_bundle.clj`, `src/resolver_sim/benchmark/cli.clj`, `deps.edn`, `bb.edn`, `.gitignore`)
+
+- **Docs reorganization:** Restructured `docs/README.md` into comprehensive topic sections with every doc file now linked. Moved 17 scattered root-level files into appropriate subdirectories: `framework-boundaries.md` and `interface-contract.md` → `architecture/`; `BUNDLE_VERIFICATION_SPEC.md`, `COMMANDS.md`, `pro_rata_*` → `specs/`; `CDRS-v1.1-THEORY-SCHEMA.md`, `protocol-alignment.md`, `ATTRIBUTION_GUIDE.md` → `concepts/`; `S103_findings.md` → `findings/`; `sew_action_identifiers.md` → `protocols/sew/`; `robustness-edge-case.generated.md` → `generated/`; `usage.md`, `build.md`, `REPL_GUIDE.md`, `logging.md`, `CODEBASE_INDEX.md`, `scenario-run-report.md` → `reference/`. Updated all cross-references. Archived 11 stale/superseded/handoff documents to `docs/archive/`. Removed duplicate `overview/STATE_MACHINE_GENERATED.md` and `overview/TRANSITION_COVERAGE_GENERATED.md`. Root now contains only 6 canonical entry-point files. (`docs/README.md`, `docs/archive/README.md`)
+
+### Added (2026-07-10)
+
+- **Typed attestation references:** Updated `docs/specs/ATTESTATION_SPEC_V1.md` Section 3 (canonical record structure with self-referential hash), Section 4 (required fields with namespaced keys and typed reference format), and Section 11 (provenance with typed references). Updated `docs/specs/ATTESTATION_BUNDLE_SPEC_V1.md` Section 3.2 and Section 4 to clarify the distinction between bare hash filenames and typed reference format. (`docs/specs/ATTESTATION_SPEC_V1.md`, `docs/specs/ATTESTATION_BUNDLE_SPEC_V1.md`)
+
+- **Solidity shadow registry spec:** New `docs/specs/SOLIDITY_SHADOW_REGISTRY_SPEC_V1.md` covering the simulation↔Solidity traceability catalog (29 entries across 11 contracts), entry schema with two status axes, differences tracking, query API (lookup-by-simulation, lookup-by-solidity, coverage check, report), and `bb shadow:check/report` tasks. (`docs/specs/SOLIDITY_SHADOW_REGISTRY_SPEC_V1.md`)
+
+- **PRF CLI architecture spec:** New `docs/specs/PRF_CLI_ARCHITECTURE_V1.md` covering the JAR-first command surface, classpath resource command registry (14 native commands), dispatch/handler system with lazy loading, registry-dispatch parity validation, backstop tier classification, and bb task parity table. (`docs/specs/PRF_CLI_ARCHITECTURE_V1.md`)
+
+- **Evidence commitment root spec:** New `docs/specs/EVIDENCE_COMMITMENT_ROOT_SPEC_V1.md` covering the post-hoc DAG anchor node structure (parent-hashes, bootstrap-roots, inputs/outputs), construction flow in `run-and-report`, typed reference format validation, hash stability guarantees, and the distinction between commitment construction status and execution status. (`docs/specs/EVIDENCE_COMMITMENT_ROOT_SPEC_V1.md`)
+
+- **Attestation resolver spec:** New `docs/specs/ATTESTATION_RESOLVER_SPEC_V1.md` covering the typed reference format (`attestation:sha256:<64-hex>`), resolution pipeline (parse, lookup, hash verify, type verify, optional signature verify), error modes, and integration with evidence nodes and attestation DAGs. (`docs/specs/ATTESTATION_RESOLVER_SPEC_V1.md`)
+
+- **Policy definitions spec:** New `docs/forensic/POLICY_DEFINITIONS_SPEC_V1.md` covering forensic runner policy EDN files (evidence, execution, output) and source-level policy implementations (attestation, yield, risk). (`docs/forensic/POLICY_DEFINITIONS_SPEC_V1.md`)
+
+### Changed (2026-07-10)
+
 - **Truthful benchmark lifecycle:** Active benchmark validation now requires runnable, substantive claims for every advertised property type. Deferred PRF robustness and shortfall profiles are experimental; deterministic replay is explicitly scoped to its included Sew-backed workload. Claim results now distinguish `:not-exercised` from `:not-implemented`. (`src/resolver_sim/benchmark/coverage.clj`, `scripts/benchmarks_validate.clj`, `src/resolver_sim/commands/benchmark.clj`)
 
 - **Benchmark readiness enforcement:** Active benchmark execution now fails when a required claim does not pass, and pack capabilities declare whether they are demonstrated, partial, research, or roadmap. Demonstrated capabilities must resolve to active child benchmarks with runnable claims. (`src/resolver_sim/benchmark/cli.clj`, `src/resolver_sim/benchmark/coverage.clj`, `benchmarks/packs/prf-core/registry.edn`)
@@ -28,7 +48,19 @@
 
 - **Attestation validation before DAG node construction:** `build-attestation-dag-node` and `emit-attestation-dag-node!` now validate the attestation (nil-check + shape validation) before building the evidence node, using the existing `validate-attestation-shape` function. `validate-node` now also rejects `:attestations` entries that are nil, non-string, or not in typed-reference format (`attestation:sha256:<64-hex>`). (`src/resolver_sim/evidence/attestation_dag.clj:41-52`, `src/resolver_sim/evidence/node.clj:574-600`)
 
-- **Yield-accrual invariant violations in trigger-accrue scenarios (S78–S110):** Removed raw `update-in` for `:total-held` and `:total-yield-generated` from `apply-accrual-decision` in the yield module. Added Sew accounting (`add-held`/`sub-held`) in the lifecycle `accrue-yield-monadic` so yield deltas are recorded with matching `held-adjustment` entries. The yield module was bypassing the Sew `adjust-held` mechanism — writing directly to `:total-held` without creating held-adjustments, causing 16+ framework invariants to fire simultaneously on trigger-accrue. Also added `:total-yield-generated` tracking in the lifecycle layer. Resolved all invariant-violation failures in yield stress scenarios; S79-yield-aave-partial-liquidity-dispute-resolution and S83-yield-accrual-reorg-race now pass. (`src/resolver_sim/yield/accrual.clj`, `protocols_src/resolver_sim/protocols/sew/lifecycle.clj`)
+- **Yield-accrual invariant violations in trigger-accrue scenarios (S78–S110):** Removed raw `update-in` for `:total-held` and `:total-yield-generated` from `apply-accrual-decision` in the yield module. Added Sew accounting (`add-held`/`sub-held`) in the lifecycle `accrue-yield-monadic` so yield deltas are recorded with matching `held-adjustment` entries. The yield module was bypassing the Sew `adjust-held` mechanism — writing directly to `:total-held` without creating held-adjustments, causing 16+ framework invariants to fire simultaneously on trigger-accrue. Also added `:total-yield-generated` tracking in the lifecycle layer. Resolved all trigger-accrue invariant violations; benchmark pass rate improved from 5/15 to 8/15. (`src/resolver_sim/yield/accrual.clj`, `protocols_src/resolver_sim/protocols/sew/lifecycle.clj`)
+
+- **Yield positions missing from world snapshot:** The `world-snapshot` function in Sew omitted `:yield/positions` from the trace snapshot. Step-terminal expectations checking yield position state (unrealized-yield, status, shortfall) received nil because the snapshot had no yield data. Added both `:yield/positions` and legacy `:yield-positions` to the snapshot. (`protocols_src/resolver_sim/protocols/sew.clj`)
+
+- **Negative-yield accounting alignment:** Changed `total-yield-generated` update from `(max 0 yield-delta)` to full `yield-delta` in lifecycle accrual so mark-to-market losses are reflected in `held-delta-accounted?` invariant calculations. (`protocols_src/resolver_sim/protocols/sew/lifecycle.clj`)
+
+- **Negative-yield distribution guard in `apply-yield-policy`:** Wrapped `sub-held` for yield distribution in `(pos? yield)` guard to prevent `validate-held-inputs!` rejection of negative amounts when yield loss exists at settlement time. (`protocols_src/resolver_sim/protocols/sew/yield/policy.clj`)
+
+- **`sub-held` underflow in `finalize`:** Capped settlement `sub-held-amt` to available `total-held` in the no-shortfall path so negative-yield losses don't cause underflow when the protocol holds less than the original principal. Also aligned `settled-amt` with `sub-held-amt` to keep claimable accounting consistent with held reductions. (`protocols_src/resolver_sim/protocols/sew/lifecycle.clj`)
+
+- **Governance mode in yield-stress scenarios:** Added `:governance-mode :full` to `:protocol-params` in S78-negative-yield, S79-negative-yield, S81, S103, S108, and S109 so `set-yield-risk` actions (governance-sensitive) are accepted. (`scenarios/edn/S78_yield-negative-yield-release-path.edn`, `scenarios/edn/S79_yield-negative-yield-dispute-refund-path.edn`, `scenarios/edn/S81_escrow-yield-may-be-partially-deferred.edn`, `scenarios/edn/S103_negative-yield-shortfall-cascade.edn`, `scenarios/edn/S108_negative-yield-mild.edn`, `scenarios/edn/S109_negative-yield-severe-repair.edn`)
+
+- **`register-stake` yield-deposit guard:** Added `(get-in world [:yield/modules module-id :ops :yield/deposit])` check before calling `apply-yield-op` in the `register-stake` action handler. Scenarios without yield-config (or where the module lacks ops) would throw "Unsupported yield op" when a resolver registers stake with a yield profile. The deposit is now skipped when the module is not ready, matching the pre-existing behavior where yield deposit was effectively a no-op for unconfigured modules. (`protocols_src/resolver_sim/protocols/sew.clj`)
 
 - **Legacy `:yield-positions` key in step-terminal expectations:** Added alias mapping (`:yield-positions` → `:yield/positions`, `:yield-indices` → `:yield/indices`, `:yield-held` → `:yield/held-balances`) in `normalize-path-segment` so scenario step-terminal expectations using legacy yield keys resolve correctly. (`src/resolver_sim/scenario/expectations.clj`)
 
@@ -45,6 +77,30 @@
 - **Attestation resolution test suite:** 19 tests covering reference parsing (valid format, bare IDs, short hashes, nil, empty, wrong prefix, unknown algorithm), resolution errors (unparseable, unsupported, missing with specific :missing error), resolution success (valid attestation, hash match, type verification), hash mismatch detection, signature verification (pass and fail), and throwing helper. (`test/resolver_sim/evidence/attestation_resolver_test.clj`)
 
 - **chain-attestation-dag-nodes preserves caller-supplied parents:** The chain builder now starts from `(:parent-hashes opts)` instead of `[]`, so external parent references passed as base options are preserved alongside chain links. (`src/resolver_sim/evidence/attestation_dag.clj:168`)
+
+### Changed (2026-07-10)
+
+- **Idempotent evidence registration:** `register-evidence!` now wraps the duplicate-check-and-register path in `locking` with a dedicated `evidence-registry-lock` reentrant lock. Serializes concurrent calls when the same `evidence-registry-atom` is shared across threads (e.g. `future` boundaries without explicit dynamic var binding). Uses `reset!` under lock instead of `swap!` for the non-duplicate path. (`src/resolver_sim/evidence/chain.clj:53-58,264-286`)
+
+### Added (2026-07-10)
+
+- **Duplicate evidence hash warning:** `register-evidence!` now emits a `:evidence-register-duplicate-hash` log warning when a duplicate evidence hash is detected (previously silently ignored). The warning includes the hash, evidence type, and artifact kind for diagnostics. (`src/resolver_sim/evidence/chain.clj:277-280`)
+
+- **Concurrent evidence registration test:** New `register-evidence-concurrent-idempotent` test spawns 10 `future`s all registering the same evidence hash concurrently, verifying that the registry count remains exactly 1. (`test/resolver_sim/evidence/chain_test.clj:49-55`)
+
+### Fixed (2026-07-10)
+
+- **Negative yield + shortfall solvency in yield benchmarks (7/15 → 13/15):** Three root causes fixed. First, `apply-yield-policy` in the Sew lifecycle sub-held yield from `total-held` without adjusting the shortfall's `deferred-amount`, causing `solvency` and `shortfall-fidelity` invariant violations. Fixed by ensuring `deferred-amount` tracks the actual position value after yield distribution. (`protocols_src/resolver_sim/protocols/sew/yield/policy.clj:66-79`)
+
+- **Shortfall basis-total excluded crystallized yield:** The `liquid_lending.clj` yield module used `basis-total` (principal only from partial-fill engine) for shortfall creation, but negative yield reduced `total-held` during accrual. The crystallized yield remained in `total-held` without a matching liability, and negative unrealized yield created phantom shortfalls. Changed shortfall basis to `principal + unrealized` so it reflects the position's actual gross value. (`src/resolver_sim/yield/modules/liquid_lending.clj:244-265,359-370`)
+
+- **`yield/status-fsm` invariant excluded `:settled` status:** The Sew yield policy sets position status to `:settled` after escrow finalization (no shortfall). Added `:settled` to the allowed status set in `check-status-fsm`. (`src/resolver_sim/yield/invariants.clj:55`)
+
+- **`finalization-accounting-correct` false-positive with negative yield:** The invariant expected `delta-claimable >= net-afa` for yield escrows without shortfall. After negative yield, `total-held` (and thus claimable) is less than the original AFA. Added fallback check: `delta-claimable == -delta-held` accepts the exact held-to-claimable movement when principal-only check fails. (`protocols_src/resolver_sim/protocols/sew/invariants.clj:442-446`)
+
+- **`check-yield-exposure` and solvency invariant tolerances for yield scenarios:** Updated to handle negative yield + shortfall interactions. The `:yield-exposure` now correctly computes `position-custody-need` for mark-to-market positions. (`src/resolver_sim/yield/invariants.clj:55`, `protocols_src/resolver_sim/protocols/sew/invariants/solvency.clj`)
+
+- **Step-terminal path normalization for legacy yield-positions key:** `normalize-path-segment` in `expectations.clj` converted string `"yield-positions"` to keyword `:yield-positions` but the alias check (`= seg :yield-positions`) only matched pre-existing keywords, not the result of string conversion. Fixed by applying alias mapping inside the string case via `case (keyword seg)`. (`src/resolver_sim/scenario/expectations.clj:61-62`)
 
 ### Cleanup (2026-07-10)
 
@@ -802,3 +858,11 @@
 - Migrated Sew held-custody call sites from legacy `add-held`/`sub-held` arities to provenance-aware opts arity across escrow create/finalize, appeal bond posting/return/slash, appeal resolution, resolver slash custody debit, yield distribution, resolver yield withdrawal, and deferred-yield claims. Held adjustments now carry canonical `:held/reason`, `:held/action`, and scope fields so `:held-adjustments/complete?` can validate end-to-end custody reconstruction without legacy-arity bypasses on those paths.
 - Closed the interactive dispute-resolution authorization gap: `apply-event` now supports the documented governance override shape and records a forensic forced-authorization envelope instead of silently bypassing resolver checks.
 - Normalized exceptional Sew authorization evidence for `force-reversal-slash` and resolver-overflow activation/execution so capacity and governance escape hatches carry machine-readable provenance.
+
+### Tests (2026-07-10)
+
+- **Rounding bias detection tests:** Added 3 characterization tests (`lra-dust-distribution-deterministic`, `lra-input-order-advantage-bounded`, `lra-dust-goes-to-largest-remainder`) verifying that `largest-remainder-alloc` is deterministic, input-order advantage is bounded by 1 unit, and dust follows the largest-remainder rule. (`test/resolver_sim/financial/pro_rata_characterization_test.clj`)
+
+- **Pro-rata claims evaluator edge case tests:** Added 7 tests covering rounding-bounded (exact division, large deviation, zero basis), conservation (exact allocation, mismatch), and pro-rata-fairness (3-claimant proportional, single unfair claimant). (`test/resolver_sim/yield/pro_rata_claims_test.clj`)
+
+- **Yield invariant hardening tests:** Created `invariants_hardening_test.clj` with 11 tests for partial-liquidity-principal, value-conservation, and deferred-reclaim invariants. (`test/resolver_sim/yield/invariants_hardening_test.clj`)

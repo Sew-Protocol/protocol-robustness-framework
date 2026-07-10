@@ -54,7 +54,8 @@
    "Y03_vault-risk-override-schedule-shadowing"
    "Y04_vault-recovery-claim-deferred"
    "Y05_auto-generated-shortfall"
-   "Y06_multi-party-pro-rata-shortfall"])
+   "Y06_multi-party-pro-rata-shortfall"
+   "Y07_adversarial-shortfall-exploit"])
 
 (def ^:private dispute-resolution-scenario-ids
   ["S-DR-001-basic-release-ruling"

@@ -310,6 +310,55 @@
             "shortfall conservation holds; recovery = basis"))))
 
 ;; ---------------------------------------------------------------------------
+;; Mechanism-property validator: redistribution fairness
+;; ---------------------------------------------------------------------------
+
+(defn- check-redistribution-fairness
+  "Trace-level proxy for redistribution fairness.
+
+   When a pro-rata allocation requires redistribution (items hit caps),
+   the redistribution must complete without hitting the iteration limit
+   and must not produce negative per-item allocations.
+
+   Consumes metrics:
+     :redistribution-total-passes          — number of redistribution passes (0 = none needed)
+     :redistribution-iteration-limit-hit?  — true if max-redistribution-passes was reached
+     :redistribution-negative-allocations  — count of items with negative allocated amounts
+
+   :inconclusive — no redistribution occurred (single-pass allocation sufficed).
+   :pass         — redistribution completed successfully.
+   :fail         — iteration limit was reached, indicating cascading caps prevented
+                   full distribution of available liquidity."
+  [{:keys [metrics]}]
+  (let [total-passes (long (or (:redistribution-total-passes metrics) 0))
+        limit-hit? (:redistribution-iteration-limit-hit? metrics)
+        negative-allocs (long (or (:redistribution-negative-allocations metrics) 0))]
+    (cond
+      (zero? total-passes)
+      (inconclusive :redistribution-fairness :single-trace-metric-proxy :untested-no-redistribution
+                    "no redistribution passes recorded; allocation was single-pass"
+                    :required [:redistribution-total-passes]
+                    :available [:metrics])
+
+      (or (true? limit-hit?) (pos? negative-allocs))
+      (fail :redistribution-fairness :single-trace-metric-proxy
+            {:redistribution-total-passes total-passes
+             :iteration-limit-hit? limit-hit?
+             :negative-allocations negative-allocs}
+            {:iteration-limit-hit? false
+             :negative-allocations 0}
+            (cond-> []
+              (true? limit-hit?)
+              (conj {:metric :redistribution-iteration-limit-hit? :observed true :expected false})
+              (pos? negative-allocs)
+              (conj {:metric :redistribution-negative-allocations :observed negative-allocs :expected 0})))
+
+      :else
+      (pass :redistribution-fairness :single-trace-metric-proxy
+            {:redistribution-total-passes total-passes}
+            "redistribution completed without iteration limit or negative allocations"))))
+
+;; ---------------------------------------------------------------------------
 ;; Dispatcher maps (generic only)
 ;; Protocol-specific validators are merged in at evaluation time via
 ;; protocol/mechanism-property-validators and protocol/equilibrium-concept-validators.
@@ -318,7 +367,8 @@
 (def ^:private mechanism-validators
   {:incentive-compatibility     check-incentive-compatibility
    :sybil-resistance            check-sybil-resistance
-   :pro-rata-fairness           check-pro-rata-fairness})
+   :pro-rata-fairness           check-pro-rata-fairness
+   :redistribution-fairness     check-redistribution-fairness})
 
 (def ^:private equilibrium-validators
   {:dominant-strategy-equilibrium check-dominant-strategy-equilibrium

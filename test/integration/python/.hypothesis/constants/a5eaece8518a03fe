@@ -1,0 +1,4 @@
+# file: /home/user/Code/sew-simulation/python/sew_sim/live_runner.py
+# hypothesis_version: 6.152.4
+
+[100, 1000, ', ', '_attack_count', 'action', 'agent', 'amount', 'attack_attempts', 'attack_successes', 'create_escrow', 'disputes_triggered', 'error', 'execute_resolution', 'halted', 'holds?', 'invariant_violated', 'invariant_violated: ', 'invariant_violation', 'invariant_violations', 'ok', 'params', 'pass', 'raise_dispute', 'resolutions_executed', 'result', 'reverts', 'seq', 'time', 'total_escrows', 'total_volume', 'trace_entry', 'violations', 'world_view']

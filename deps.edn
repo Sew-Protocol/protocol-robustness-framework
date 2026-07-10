@@ -113,10 +113,11 @@
   :monitoring
   {:extra-deps {ring/ring-core {:mvn/version "1.12.2"}}}
 
-  :build
-  {:extra-deps {io.github.clojure/tools.build {:git/tag "v0.10.7"
-                                               :git/sha "573711e"}}
-   :ns-default build}
+   :build
+   {:extra-paths ["scripts"]
+    :extra-deps {io.github.clojure/tools.build {:git/tag "v0.10.7"
+                                                :git/sha "573711e"}}
+    :ns-default build}
 
   :lint
   {:extra-deps {clj-kondo/clj-kondo {:mvn/version "2025.04.07"}}

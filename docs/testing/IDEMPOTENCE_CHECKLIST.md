@@ -71,7 +71,7 @@ Optional event params (kebab-case internal, snake_case on wire):
 | `event-id` / `event_id` | Logical transaction identifier; gates replay-boundary dedupe |
 | `hop-id` / `hop_id` | Escalation hop scope when the same `event-id` spans multiple levels |
 
-See `docs/interface-contract.md` for wire mapping.
+See `docs/architecture/interface-contract.md` for wire mapping.
 
 ---
 

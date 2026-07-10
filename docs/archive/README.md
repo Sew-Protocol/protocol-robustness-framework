@@ -27,6 +27,16 @@ the original reasoning behind design decisions made during early phase work.
 | `testing/SIMULATION_TESTING_OUTLINE.md` | `docs/testing/` | 2026-05-21 | Layman's guide; superseded by `ROBUSTNESS_FRAMEWORK.md` |
 | `testing/FIXTURE_BACKLOG_DIFF_SEMANTICS.md` | `docs/testing/` | 2026-05-21 | Backlog/planning artifact; actionable items should move to issues |
 | `challenge/BENCHMARK_CHALLENGE.md` | `docs/challenge/` | 2026-05-21 | References stale protocol version (v0.1, commit `31ba27b`); refresh before republishing |
+| `evidence/summary.md` | `docs/evidence/` | 2026-07-10 | Marked stale in README; needs refresh before return |
+| `benchmarks/BENCHMARK_CONCEPT_REVIEW_HANDOFF.md` | `docs/benchmarks/` | 2026-07-10 | Agent-to-agent handoff document; not user-facing |
+| `forensic/MECHANISM_PERSISTENCE_MINI_HANDOFF.md` | `docs/forensic/` | 2026-07-10 | Mini handoff with action TODO list; superseded by `docs/specs/MECHANISM_PERSISTENCE_SPEC_V1.md` |
+| `finality/INTERACTIVE_FINALITY_SESSION_LOG.md` | `docs/finality/` | 2026-07-10 | Raw interactive research session log; not canonical |
+| `evidence/historical-note.md` | `docs/evidence/` | 2026-07-10 | Purely historical context about pre-standard hashing |
+| `scenarios-S01-S23.generated.md` | `docs/` | 2026-07-10 | Superseded by `docs/scenarios.md` (canonical scenario index) |
+| `idepotence_analysis.md` | `docs/` | 2026-07-10 | Misspelled filename; superseded by `docs/testing/IDEMPOTENCE_CHECKLIST.md` |
+| `researcher-log/dispute-resolution-research-log-*.edn` (4 files) | `docs/researcher-log/` | 2026-07-10 | Raw research session logs; preserved for historical traceability |
+| `overview/STATE_MACHINE_GENERATED.md` | `docs/overview/` | 2026-07-10 | Superseded by `docs/protocols/sew/STATE_MACHINE_GENERATED.md` (more current transition list) |
+| `overview/TRANSITION_COVERAGE_GENERATED.md` | `docs/overview/` | 2026-07-10 | Superseded by `docs/protocols/sew/TRANSITION_COVERAGE_GENERATED.md` (includes S62, S78-S81, S83, S86, S103-S109) |
 
 ## What "archived" means here
 

@@ -67,13 +67,13 @@
                                      (rp/pack-registry-path (:pack/registry pack))))
              (:packs registry))}
     (do (println "benchmarks/registry.edn not found, falling back to BENCHMARKS.edn")
-        (when-let [legacy (try (rp/edn-read "BENCHMARKS.edn")
+        (when-let [legacy (try (rp/edn-read "benchmarks/BENCHMARKS.edn")
                                (catch Exception _ nil))]
           {:benchmarks legacy}))))
 
 (def cli-options
   [["-o" "--output PATH" "Output path for evidence bundle"
-    :default "evidence/latest.edn"]
+    :default "results/evidence/latest.edn"]
    ["-k" "--key PATH" "Path to private key for signing/attesting"]
    ["-p" "--password PASS" "Password for private key"]
    ["-v" "--verify" "Verify evidence bundle integrity and signature"]

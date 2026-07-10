@@ -1,0 +1,4 @@
+# file: /home/user/Code/sew-simulation/python/sew_sim/replay_runner.py
+# hypothesis_version: 6.151.12
+
+[1000, '1.0', ':result', 'action', 'agents', 'amount', 'attack_attempts', 'attack_successes', 'create_escrow', 'differences', 'disputes_triggered', 'error', 'events', 'events_processed', 'execute_resolution', 'fail', 'halt_reason', 'halted', 'halted_at_seq', 'initial_block_time', 'invalid', 'invariant_violated', 'invariant_violation', 'invariant_violations', 'match', 'metrics', 'ok', 'outcome', 'params', 'pass', 'protocol_params', 'raise_dispute', 'resolutions_executed', 'result', 'reverts', 'scenario_id', 'schema_version', 'seq', 'total_escrows', 'total_volume', 'trace', 'trace_entry', 'unknown']

@@ -1,0 +1,4 @@
+# file: /home/user/Code/sew-simulation/python/sew_sim/schema.py
+# hypothesis_version: 6.151.12
+
+[1000, 10000, 2592000, '0xsimhash', '1.0', 'Scenario', 'advance_time', 'after', 'attacker', 'auto_cancel_disputed', 'create_escrow', 'execute_resolution', 'frozen', 'honest', 'opportunistic', 'raise_dispute', 'recipient_cancel', 'release', 'sender_cancel']

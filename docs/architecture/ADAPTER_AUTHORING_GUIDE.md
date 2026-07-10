@@ -9,7 +9,7 @@ Canonical terminology:
 - primary protocol model (Sew — the main validation target in this repo)
 - research track
 
-See also: `docs/framework-boundaries.md`
+See also: `docs/architecture/framework-boundaries.md`
 
 ## Design principle
 

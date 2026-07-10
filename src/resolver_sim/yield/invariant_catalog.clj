@@ -36,7 +36,11 @@
 
    :yield/shortfall-detected
    {:description "Shortfall is correctly detected: basis-amount does not exceed position value (no over-detection), and unwinding positions in shortfall mode have shortfall data (no under-detection)."
-    :prf-tags [:liquidity-shortfall :detection :shortfall-affected]}})
+    :prf-tags [:liquidity-shortfall :detection :shortfall-affected]}
+
+   :yield/aggregate-shortfall-cap
+   {:description "Aggregate shortfall per (module-id, token) pair does not exceed the sum of position values. Prevents systemic over-counting."
+    :prf-tags [:liquidity-shortfall :conservation :aggregate]}})
 
 (def default-runtime-invariant-ids
   "Checked on every successful replay step (yield-v1 adapter)."

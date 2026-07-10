@@ -52,7 +52,7 @@
 
 (defn check-status-fsm
   [world]
-  (let [allowed #{:active :unwinding :withdrawn}]
+  (let [allowed #{:active :unwinding :withdrawn :settled}]
     (every? #(contains? allowed (:status %)) (vals (:yield/positions world {})))))
 
 (defn check-shortfall-splits
@@ -112,6 +112,35 @@
                      (<= (+ deferred haircut) (+ principal (max 0 unrealized)))
                      true))))
           (vals (:yield/positions world {}))))
+
+(defn check-aggregate-shortfall-cap
+  "Aggregate shortfall per (module-id, token) pair must not exceed
+   the sum of position values (principal + realized-yield + max(0, unrealized-yield))
+   in that pair. This prevents systemic over-counting where the total
+   recorded shortfall across all positions exceeds available value.
+
+   Returns {:holds? bool :violations [{:module-id mid :token tok
+                                       :total-basis n :total-value n
+                                       :imbalance n}]}."
+  [world]
+  (let [positions (vals (:yield/positions world {}))
+        by-key (group-by (fn [p] [(:module/id p) (:token p)]) positions)
+        violations (into []
+                        (keep (fn [[[mid tok] pos-group]]
+                                (let [total-basis (reduce + 0 (map (comp (fn [v] (long (or v 0))) :basis-amount :shortfall) pos-group))
+                                      total-value (reduce + 0 (map (fn [p]
+                                                                      (+ (long (:principal p 0))
+                                                                         (long (:realized-yield p 0))
+                                                                         (max 0 (long (:unrealized-yield p 0)))))
+                                                                    pos-group))]
+                                  (when (> total-basis total-value)
+                                    {:module-id mid :token tok
+                                     :total-basis total-basis
+                                     :total-value total-value
+                                     :imbalance (- total-basis total-value)}))))
+                        by-key)]
+    {:holds? (empty? violations)
+     :violations (vec violations)}))
 
 (defn check-deferred-reclaim
   "Withdrawn positions: no shortfall; reclaimed ≥ 0."
@@ -208,7 +237,8 @@
    :yield/realized-non-negative check-realized-non-negative
    :yield/partial-liquidity-principal check-partial-liquidity-principal
    :yield/value-conservation   check-value-conservation
-   :yield/deferred-reclaim     check-deferred-reclaim})
+   :yield/deferred-reclaim     check-deferred-reclaim
+   :yield/aggregate-shortfall-cap check-aggregate-shortfall-cap})
 
 (defn registered-ids []
   (vec (keys check-fns)))

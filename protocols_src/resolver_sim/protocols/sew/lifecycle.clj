@@ -19,6 +19,7 @@
             [resolver-sim.protocols.sew.registry      :as reg]
             [resolver-sim.protocols.sew.economics     :as sew-econ]
             [resolver-sim.yield.ops                    :as yield-ops]
+            [resolver-sim.yield.module                 :as yield-module]
             [resolver-sim.yield.accounting             :as yield-acct]
             [resolver-sim.yield.expectations           :as yield-exp]
             [resolver-sim.yield.registry               :as yield-reg]
@@ -158,30 +159,30 @@
                             (yield-acct/partial-yield-shortfall? pos pos-shortfall))
         ;; Partial-yield shortfall: principal is immediate; liquid yield is settled in policy.
         principal-immediate (if partial-yield? (:principal pos 0) net-amt)
-        settled-amt   (if pos-shortfall
-                        (if partial-yield?
-                          principal-immediate
-                          (:fulfilled-amount pos-shortfall 0))
-                        net-amt)
         world-after-policy
         (yield-policy/apply-yield-policy world-after-yield workflow-id direction)
         ;; Sub-held (computed after policy so accrual-in-held is reconciled):
-        ;; - no-shortfall: remove gross afa (amt)
+        ;; - no-shortfall: remove gross afa (amt), capped at available total-held
         ;; - partial-yield shortfall: held after policy minus deferred obligation
         ;; - gross shortfall: fulfilled only (deferred remains in :total-held)
+        held-after-policy (get-in world-after-policy [:total-held token] 0)
+        raw-settle-amt (if pos-shortfall
+                         (if partial-yield?
+                           principal-immediate
+                           (:fulfilled-amount pos-shortfall 0))
+                         net-amt)
         sub-held-amt  (if pos-shortfall
                         (let [fulfilled (:fulfilled-amount pos-shortfall 0)
                               deferred  (:deferred-amount pos-shortfall 0)
-                              haircut   (:haircut-amount pos-shortfall 0)
-                              held      (get-in world-after-policy [:total-held token] 0)]
+                              haircut   (:haircut-amount pos-shortfall 0)]
                           (cond
                             partial-yield?
-                            (- held deferred)
-
+                            (- held-after-policy deferred)
                             (pos? deferred) fulfilled
-                            (>= held (+ fulfilled haircut)) (+ fulfilled haircut)
+                            (>= held-after-policy (+ fulfilled haircut)) (+ fulfilled haircut)
                             :else fulfilled))
-                        amt)
+                        (min raw-settle-amt held-after-policy))
+        settled-amt sub-held-amt
         shortfall-started (:started-at pos-shortfall)
         result (-> world-after-policy
                    (acct/sub-held token
@@ -353,8 +354,9 @@
                                   :auto-cancel-time  auto-can
                                   :last-accrual-time (time-ctx/block-ts world)
                                   :escrow-state      :pending})
-                  ymid          (:yield-generation-module snapshot)
-                  world'        (-> world
+                   ymid          (when-let [m (:yield-generation-module snapshot)]
+                                   (yield-module/resolve-module-id world m))
+                   world'        (-> world
                                     (assoc :next-workflow-id (inc workflow-id))
                                     (assoc-in [:escrow-transfers workflow-id] et)
                                     (assoc-in [:escrow-settings workflow-id]
@@ -372,16 +374,16 @@
                                                              :held/to to}})
                                      (acct/record-fee token fee)
                                     (update-in [:total-fot-fees token] (fnil + 0) (- amount afa fee)))
-                ;; Trigger yield deposit if module is configured
-                  world''       (if (and ymid
-                                         (t/yield-preset-yield-enabled? (:yield-preset settings))
-                                         (contains? (:yield/modules world') ymid))
-                                  (yield-ops/apply-yield-op world' {:op/type :yield/deposit
-                                                                    :module/id ymid
-                                                                    :owner/id (t/escrow-yield-owner-id workflow-id)
-                                                                    :amount afa
-                                                                    :token token})
-                                  world')]
+                 ;; Trigger yield deposit if module is configured
+                   world''       (if (and ymid
+                                          (t/yield-preset-yield-enabled? (:yield-preset settings))
+                                          (contains? (:yield/modules world') ymid))
+                                   (yield-ops/apply-yield-op world' {:op/type :yield/deposit
+                                                                     :module/id ymid
+                                                                     :owner/id (t/escrow-yield-owner-id workflow-id)
+                                                                     :amount afa
+                                                                     :token token})
+                                   world')]
              ;; Evidence capture with canonical attribution + rich domain payload
               (let [yield-deposit-applied? (and ymid
                                                 (t/yield-preset-yield-enabled? (:yield-preset settings))
@@ -422,11 +424,11 @@
                     :escrow/auto-release auto-rel
                     :escrow/auto-cancel auto-can
                     :escrow/yield-module ymid
-                    :escrow/yield-deposit-applied? yield-deposit-applied?
-                    :escrow/settings settings-ev}
-                   nil
-                   {:world-before world
-                    :world-after world''})))
+                   :escrow/yield-deposit-applied? yield-deposit-applied?
+                   :escrow/settings settings-ev}
+                  nil
+                  {:world-before world
+                   :world-after world''})))
               (assoc (t/ok world'') :workflow-id workflow-id))))))))
 
 ;; ---------------------------------------------------------------------------

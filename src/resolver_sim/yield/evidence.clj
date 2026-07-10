@@ -61,6 +61,52 @@
                      positions)]
     (reduce + 0 losses)))
 
+(defn extract-per-claim-allocation
+  "Extract per-claim allocation data from a partial-fill decision artifact.
+   Returns a vector of normalized per-claim records:
+     {:claim/key k
+      :requested n
+      :filled n
+      :deferred n
+      :haircut n
+      :fill-ratio double
+      :cap-hit? bool}
+
+   Uses :allocation-rows from the decision's evidence when available (richer data),
+   otherwise falls back to computing from the :requested/:filled/:deferred/:haircut maps."
+  [decision]
+  (let [allocation-rows (get-in decision [:evidence :allocation-rows])]
+    (if (seq allocation-rows)
+      ;; Use pre-computed allocation rows from the engine
+      (mapv (fn [row]
+              {:claim/key (:key row)
+               :requested (long (:owed row))
+               :filled (long (:filled row))
+               :deferred (long (:deferred row))
+               :haircut 0
+               :fill-ratio (double (:fill-ratio row 0.0))
+               :cap-hit? (boolean (:cap-hit? row false))})
+            allocation-rows)
+      ;; Fall back to computing from the flat requested/filled/deferred maps
+      (let [requested (:requested decision {})
+            filled (:filled decision {})
+            deferred (:deferred decision {})
+            haircut (:haircut decision {})
+            all-keys (set (concat (keys requested) (keys filled) (keys deferred) (keys haircut)))]
+        (mapv (fn [k]
+                (let [r (long (get requested k 0))
+                      f (long (get filled k 0))
+                      d (long (get deferred k 0))
+                      h (long (get haircut k 0))]
+                  {:claim/key k
+                   :requested r
+                   :filled f
+                   :deferred d
+                   :haircut h
+                   :fill-ratio (if (pos? r) (double (/ f r)) 0.0)
+                   :cap-hit? false}))
+              (sort all-keys))))))
+
 (defn canonical-yield-evidence
   "Produces a canonical yield evidence summary for projection.
    Extracts supported failure modes from world's yield risk configuration."

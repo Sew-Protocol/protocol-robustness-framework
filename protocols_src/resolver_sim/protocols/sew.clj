@@ -888,15 +888,17 @@
             yield-profile-id (:yield-profile-id p)
             world            (reg/register-stake world addr amount yield-profile-id)]
         (if yield-profile-id
-          (let [{:keys [module-id]} (yield-proto/resolve-yield-profile yield-profile-id)
-                world' (-> world
-                           (yield-proto/apply-op {:op/type :yield/deposit
-                                                  :owner/id (lc/resolver-yield-owner-id addr)
-                                                  :module/id module-id
-                                                  :amount amount
-                                                  :token token})
-                           (lc/init-resolver-yield-accrual-time addr))]
-            (t/ok world'))
+          (let [{:keys [module-id]} (yield-proto/resolve-yield-profile yield-profile-id)]
+            (if (get-in world [:yield/modules module-id :ops :yield/deposit])
+              (let [world' (-> world
+                               (yield-proto/apply-op {:op/type :yield/deposit
+                                                      :owner/id (lc/resolver-yield-owner-id addr)
+                                                      :module/id module-id
+                                                      :amount amount
+                                                      :token token})
+                               (lc/init-resolver-yield-accrual-time addr))]
+                (t/ok world'))
+              (t/ok world)))
           (t/ok world))))))
 
 (defmethod apply-action "withdraw-stake"
@@ -1285,8 +1287,10 @@
       :bond-balances       (:bond-balances world {})
       :held-adjustments    (:held-adjustments world [])
       :held-artifacts      (:held-artifacts world {})
-      :held-ledger/index   (:held-ledger/index world {})
-      :yield-evidence      (yield-evi/get-evidence world)})))
+       :held-ledger/index   (:held-ledger/index world {})
+       :yield/positions     (:yield/positions world {})
+       :yield-positions     (:yield-positions world {})
+       :yield-evidence      (yield-evi/get-evidence world)})))
 
 (def ^:private sew-state-error-codes
   ;; State machine / lifecycle transition rejections

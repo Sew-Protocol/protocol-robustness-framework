@@ -50,23 +50,24 @@
                          (cond-> (pos? recipient-amt)
                            (acct/record-claimable-v2 escrow-id :settlement/yield (:to et) recipient-amt))
                         ;; Yield pool reduction: funds move from "held" to "claimable/fees"
-                         (acct/sub-held token
-                                        yield
-                                        {:action "apply-yield-policy"
-                                         :reason :yield-distributed
-                                         :extra {:held/action "apply-yield-policy"
-                                                 :held/workflow-id escrow-id
-                                                 :owner/address (:to et)
-                                                 :held/settlement-outcome settlement-outcome
-                                                 :held/yield-preset preset}})
+                      (cond-> (pos? yield)
+                        (acct/sub-held token
+                                       yield
+                                       {:action "apply-yield-policy"
+                                        :reason :yield-distributed
+                                        :extra {:held/action "apply-yield-policy"
+                                                :held/workflow-id escrow-id
+                                                :owner/address (:to et)
+                                                :held/settlement-outcome settlement-outcome
+                                                :held/yield-preset preset}}))
                         ;; Capture any remaining yield (not allocated to participants) as additional protocol fees
                          (cond-> (> net (+ sender-amt recipient-amt))
                            (acct/record-fee token (- net (+ sender-amt recipient-amt)))))]
-          (-> world'
-              ;; If there's a shortfall, keep the position active for later recovery
-              (cond->
-               shortfall
-                (assoc-in pos-key (assoc position :realized-yield 0 :unrealized-yield 0))
-
-                (not shortfall)
-                (update-in pos-key assoc :status :settled :realized-yield 0 :unrealized-yield 0))))))))
+          (let [settled-position
+                (when (and position (not shortfall))
+                  (assoc position :status :settled :realized-yield 0 :unrealized-yield 0))]
+            (cond-> world'
+              shortfall
+              (assoc-in pos-key (assoc position :realized-yield 0 :unrealized-yield 0))
+              settled-position
+              (assoc-in pos-key settled-position))))))))

@@ -1,0 +1,4 @@
+# file: /home/user/Code/sew-simulation/python/sew_sim/grpc_client.py
+# hypothesis_version: 6.151.12
+
+[1000, 50051, 'SimulationClient', 'agents', 'event', 'initial_block_time', 'localhost', 'ok', 'protocol_params', 'session_id', 'utf-8']

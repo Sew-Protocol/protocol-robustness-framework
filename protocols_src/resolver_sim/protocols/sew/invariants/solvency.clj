@@ -75,13 +75,13 @@
                      ;; violations from register-stake / withdraw-stake.
                      losses     (yield-evi/sum-recognized-losses world token)
 
-                     liabilities (+ (+ escrow-sum bond-sum slash-bond-sum yield-sum)
-                                    losses)
+                      liabilities (+ (+ escrow-sum bond-sum slash-bond-sum yield-sum)
+                                     losses)
 
-                     ext-bal    (when token-balances (get token-balances token 0))
-                     internal-ok? (= liabilities held)
-                     external-ok? (or (nil? ext-bal) (<= held ext-bal))]
-              :when (not (and internal-ok? external-ok?))]
+                      ext-bal    (when token-balances (get token-balances token 0))
+                      internal-ok? (= liabilities held)
+                      external-ok? (or (nil? ext-bal) (<= held ext-bal))]
+               :when (not (and internal-ok? external-ok?))]
           {:token       token
            :liabilities liabilities
            :held        held

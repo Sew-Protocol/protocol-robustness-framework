@@ -4,7 +4,7 @@
 > For the current overview, see:
 > - [docs/README.md](../README.md) — documentation index
 > - [docs/overview/SIMULATION_OVERVIEW.md](SIMULATION_OVERVIEW.md) — current simulation architecture
-> - [docs/framework-boundaries.md](../framework-boundaries.md) — framework substrate / adapter / primary protocol model / research track boundaries
+> - [docs/architecture/framework-boundaries.md](../architecture/framework-boundaries.md) — framework substrate / adapter / primary protocol model / research track boundaries
 > - [docs/RESEARCH_NOTE_V0.md](../RESEARCH_NOTE_V0.md) — research findings
 
 The content below is preserved for historical context only. It documents the DR1/DR2/DR3 Monte Carlo phases which preceded the current protocol-adapter replay and adversarial simulation approach.

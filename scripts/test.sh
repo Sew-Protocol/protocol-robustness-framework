@@ -435,8 +435,8 @@ run_dispute_resolution() {
          'resolver-sim.protocols.sew.dispute-resolution-coverage-test)
 (binding [resolver-sim.evidence.chain/*allow-dirty* true]
   (let [results (t/run-tests 'resolver-sim.protocols.sew.dispute-resolution-coverage-test)]
-  (when (pos? (+ (:error results) (:fail results)))
-    (System/exit 1)))"
+    (when (pos? (+ (:error results) (:fail results)))
+      (System/exit 1))))"
   local dr_exit=$?
   # CI Gate: validate artifact registry
   if [[ -f "scripts/validate/ci_gate_validation.py" ]]; then

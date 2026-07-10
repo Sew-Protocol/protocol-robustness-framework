@@ -58,7 +58,11 @@
         [(keyword "sew/escrow") (Long/parseLong (nth parts 2))]
         (mapv keyword parts)))
 
-    (string? seg) (keyword seg)
+    (string? seg) (case (keyword seg)
+                    :yield-positions :yield/positions
+                    :yield-indices   :yield/indices
+                    :yield-held      :yield/held-balances
+                    (keyword seg))
 
     (= seg :yield-positions) :yield/positions
     (= seg :yield-indices)   :yield/indices

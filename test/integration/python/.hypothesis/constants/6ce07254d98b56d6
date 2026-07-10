@@ -1,0 +1,4 @@
+# file: /home/user/Code/sew-simulation/python/sew_sim/generator.py
+# hypothesis_version: 6.151.12
+
+[0.0, 0.1, 0.15, 0.3, 0.4, 0.6, 1.0, 100, 200, 1000, 5000, 10000, 50000, 86400, 604800, 1000000, 7776000, '0xResolver', '0xSeller', '0xUSDC', 'amount', 'create_escrow', 'custom_resolver', 'raise_dispute', 'resolver', 'seller', 'to', 'token', 'workflow_id']

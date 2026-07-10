@@ -8,77 +8,256 @@ Primary project framing and status live in the root `../README.md`.
 |---|---|
 | System overview (narrative) | `SYSTEM_OVERVIEW.md` |
 | System overview (technical / architecture) | `architecture/ARCHITECTURE.md` |
-| Run validation suite | `testing/RUNNING_TESTS.md` |
-| Understand trust controls for game-theoretic claims | `testing/ADDING_GAME_THEORETIC_VALIDATION.md` |
 | Set up and run locally | `quickstart/QUICKSTART.md` |
-| Understand adapter / framework boundaries | `framework-boundaries.md` |
-| Protocol alignment convention (proposed vs current) | `protocol-alignment.md` |
-| Protocol design findings index | `findings/` |
-| Reusable abstractions (kernel/adapter/components) | `overview/REUSABLE_COMPONENTS.md` |
-| Generalized outcomes contract (cross-protocol) | `overview/OUTCOME_MODEL.md` |
+| Run validation suite | `testing/RUNNING_TESTS.md` |
+| Understand adapter / framework boundaries | `architecture/framework-boundaries.md` |
 | Scenario index and protocol properties | `scenarios.md` |
+| Protocol design findings index | `findings/` |
 | Evidence for external reviewers | `evidence/RESEARCHER_EVIDENCE_PACK.md` |
+| CLI/API usage reference | `reference/usage.md` |
 
-- `protocol-alignment.md` — **canonical** protocol status convention (`:protocol/current`, `:protocol/proposed`, `:solidity/*`)
-- `findings/` — protocol design findings, each classified with `:protocol/status`
+## Specifications
+
+### Core attestation & evidence
+
+| Document | Description |
+|---|---|
+| `specs/ATTESTATION_SPEC_V1.md` | Attestation record schema, self-referential hash, typed references |
+| `specs/ATTESTATION_RESOLVER_SPEC_V1.md` | Typed reference format (`attestation:sha256:`), resolution pipeline |
+| `specs/ATTESTATION_BUNDLE_SPEC_V1.md` | Portable offline verification bundle format |
+| `specs/ATTESTATION_QUORUM_SPEC_V1.md` | Multi-attestor quorum reports |
+| `specs/ATTESTOR_REGISTRY_SPEC_V1.md` | Attestor identity registration and key authorization |
+| `specs/ATTESTOR_ACCOUNTABILITY_SPEC_V1.md` | Attestor accountability and slashing conditions |
+| `specs/CLAIMS_SPEC_V1.md` | Claim result schema and evidence references |
+| `specs/CLAIM_DEFINITION_REGISTRY_SPEC_V1.md` | Registered claim definitions with canonical hashes |
+| `specs/EVIDENCE_COMMITMENT_ROOT_SPEC_V1.md` | Post-hoc DAG anchor for execution + evidence chain |
+| `specs/DAG_NODE_VALIDATION_SPEC_V1.md` | Evidence node validation rules and checks |
+| `specs/RUN_BUNDLE_ROOT_SPEC_V1.md` | Bundle root manifest format |
+| `specs/RUN_OVERVIEW_SPEC_V1.md` | Run overview record format |
+| `specs/RUN_REQUEST_SPEC_V1.md` | Run request schema and runner selection |
+| `specs/SENSITIVITY_SENTINEL_SPEC_V1.md` | Sensitivity gating for bundle export |
+| `specs/BUNDLE_VERIFICATION_SPEC.md` | Bundle verification guide |
+| `specs/evidence/` (7 documents) | Chain of custody, evidence record, chain spec, ink, DAG spec, event evidence, evidence status |
+
+### Hashing & intents
+
+| Document | Description |
+|---|---|
+| `specs/INTENT_DSL_SPEC_V1.md` | Structured semantic intent DSL for hashing |
+| `specs/INTENT_REGISTRY_SPEC_V1.md` | Registered hash intent definitions |
+| `specs/HASH_INTENT_REGISTRY_SPEC_V1.md` | Hash intent-to-kind mapping |
+| `specs/ARTIFACT_KIND_REGISTRY_SPEC_V1.md` | Registered artifact kinds and their hash intents |
+
+### Pro-rata & projections
+
+| Document | Description |
+|---|---|
+| `specs/PROJECTION_PRORATA_SPEC_V1.md` | Pro-rata projection and allocation |
+| `specs/PROJECTION_ARTIFACT_SPEC_V1.md` | Projection artifact schema |
+| `specs/PROJECTION_DEFINITION_REGISTRY_SPEC_V1.md` | Registered projection definitions |
+| `specs/MECHANISM_PERSISTENCE_SPEC_V1.md` | Mechanism persistence layer |
+| `specs/PRO_RATA_PROPORTIONAL_MATH_SPEC.md` | Proportional math specification |
+| `specs/PRO_RATA_TEST_VECTORS.md` | Pro-rata test vector documentation |
+
+### CLI & tooling
+
+| Document | Description |
+|---|---|
+| `specs/PRF_CLI_ARCHITECTURE_V1.md` | JAR-first CLI, command registry, dispatch, bb parity |
+| `specs/COMMANDS.md` | Registered backstop command tiers |
+
+### Forensic runner
+
+| Document | Description |
+|---|---|
+| `forensic/POLICY_DEFINITIONS_SPEC_V1.md` | Evidence, execution, and output policy EDN definitions |
+| `forensic/FORENSIC_ATTESTATIONS_SPEC_V1.md` | Attestation records in forensic run bundles |
+| `forensic/FORENSIC_CLAIMS_SPEC_V1.md` | Claim result records in forensic run bundles |
+| `forensic/FORENSIC_PREFLIGHT_SPEC_V1.md` | Preflight validation for forensic runs |
+| `forensic/FORENSIC_WORKSPACE_SPEC_V1.md` | Workspace classes and boundaries |
+| `forensic/FORENSIC_HARDENING.md` | Production hardening and configuration |
+| `forensic/PRODUCTION_READINESS.md` | Production readiness checklist |
+| `forensic/PRODUCTION_GAPS.md` | Identified production gaps |
+| `forensic/RUNNER_CONSENSUS_SPEC_V1.md` | Multi-runner consensus protocol |
+| `forensic/RUNNER_IDENTITY_SPEC_V1.md` | Runner identity and attestation |
+| `forensic/RUNNER_MAILBOX_SPEC_V1.md` | Runner mailbox protocol |
+| `forensic/RUNNER_MAILBOX_VALIDATION_SPEC_V1.md` | Mailbox message validation |
+| `forensic/RUNNER_MESSAGE_SPEC_V1.md` | Runner message format |
+
+### Traceability
+
+| Document | Description |
+|---|---|
+| `specs/SOLIDITY_SHADOW_REGISTRY_SPEC_V1.md` | Simulation↔Solidity mapping with documented differences |
+
+## Architecture
+
+| Document | Description |
+|---|---|
+| `architecture/ARCHITECTURE.md` | Layering rules, namespace map, generalisation matrix |
+| `architecture/ADAPTER_AUTHORING_GUIDE.md` | How to implement a protocol adapter |
+| `architecture/DECISION_FRAMEWORK.md` | Confidence-level calibration for reviewers |
+| `architecture/framework-boundaries.md` | Framework / adapter / Sew / research track boundaries |
+| `architecture/interface-contract.md` | Python/Clojure gRPC bridge interface contract |
+| `architecture/ADR-0003-canonical-scenario-generation-boundary.md` | ADR |
+| `architecture/ADR-0004-cross-protocol-funds-ledger-extraction.md` | ADR |
+| `architecture/EVIDENCE_CHAIN_ARCHITECTURE.md` | Evidence chain architecture |
+| `architecture/EVIDENCE_CHAIN_REMEDIATION.md` | Evidence chain remediation plan |
+| `architecture/EVIDENCE_REGISTRY.md` | Evidence registry design |
+| `architecture/FORENSIC_EVIDENCE.md` | Forensic evidence pipeline |
+| `architecture/RESOLVER_OVERFLOW_AND_FORCE_AUTHORISATION.md` | Resolver overflow and force-authorisation lifecycle |
+| `architecture/YIELD_AND_SNAPSHOT_MODULES.md` | Yield and snapshot module architecture |
+| `architecture/YIELD_V1_VAULT_CENTRIC_TESTING.md` | Yield V1 vault-centric testing approach |
+| `architecture/GENERIC_ECONOMICS_LAYERING.md` | Generic economics layering model |
+| `architecture/protocol-parity.md` | Protocol parity tracking |
+| `architecture/ORACLE_FIXTURE_EXHAUSTION.md` | Oracle fixture exhaustion analysis |
+| `architecture/AAVE_DIAGNOSTIC_ARCHITECTURE.md` | Aave diagnostic architecture |
+| `architecture/RNG_REVIEW.md` | Random number generator review |
+
+## Testing and validation
+
+| Document | Description |
+|---|---|
+| `testing/RUNNING_TESTS.md` | Canonical test entrypoints and baseline |
+| `testing/TEST_SUITE.md` | Full suite coverage and structure |
+| `testing/TRAJECTORIES.md` | Trajectory technical reference |
+| `testing/ADDING_GAME_THEORETIC_VALIDATION.md` | Contributor guide for new game-theoretic validation |
+| `testing/CLOSED_FORM_GAME_THEORETIC_VALIDATION.md` | Closed-form game-theoretic validation |
+| `testing/CANCELLATION_SHIPPING_GATES.md` | Cancellation scenario shipping gates |
+| `testing/CANCELLATION_GAME_THEORY_GAP_CHECKLIST.md` | Cancellation game theory gap checklist |
+| `testing/IDEMPOTENCE_CHECKLIST.md` | Idempotence verification checklist |
+| `testing/SIMULATOR_TO_SOLIDITY_INVARIANT_MAPPING.md` | Invariant mapping between simulator and Solidity |
+| `testing/subgame-validation.md` | Subgame-perfect equilibrium validation |
+| `scenarios.md` | Scenario index, evidence classification, protocol properties |
+| `concepts/CDRS-v1.1-THEORY-SCHEMA.md` | CDRS theory schema (scenario classification) |
+
+## Evidence and research
+
+| Document | Description |
+|---|---|
+| `evidence/README.md` | Evidence directory entry point |
+| `evidence/RESEARCHER_EVIDENCE_PACK.md` | ≤15-minute reproducibility pack for external reviewers |
+| `evidence/EVIDENCE_DAG_OVERVIEW.md` | Evidence DAG structure and policy-filtered output |
+| `evidence/EVIDENCE_CHAIN_PRODUCTION_PLAN.md` | Evidence chain production plan |
+| `evidence/investigation_guide_S19.md` | Investigation guide for scenario S19 |
+| `evidence/S80_MOSTLY_LIQUID_END_TO_END_DEMO.md` | S80 end-to-end demo walkthrough |
+| `evidence/detailed/` | Per-failure-class evidence with raw JSON traces |
+
+## Security and threat model
+
+| Document | Description |
+|---|---|
+| `security-model.md` | Simulation threat model and security assumptions |
+| `requirements/sybil-mitigation-roadmap.md` | Sybil ring mitigation requirements |
+
+## Protocol-specific reference
+
+### Sew (dispute resolution / escrow / yield)
+
+| Document | Description |
+|---|---|
+| `protocols/sew/STATE_MACHINE_GENERATED.md` | Sew protocol state machine (canonical) |
+| `protocols/sew/TRANSITION_COVERAGE_GENERATED.md` | Sew transition coverage (canonical) |
+| `protocols/sew/sew_action_identifiers.md` | Sew action identifier reference |
+| `overview/REUSABLE_COMPONENTS.md` | Adapter/harness/fixture reuse guide |
+| `overview/OUTCOME_MODEL.md` | Cross-protocol outcome model and migration plan |
+| `overview/USE_OF_FUNDS.md` | Use-of-funds accounting contract |
+| `overview/SEMANTIC_VOCAB.md` | Semantic vocabulary registry |
+| `overview/SEMANTIC_REGISTRY.edn` | Semantic registry EDN data |
+| `yield/YIELD_INVARIANTS.md` | Yield-general invariant catalog |
+| `yield/YIELD_BEARING_INVARIANTS.md` | Yield-bearing asset invariants |
+
+### Proposed Solidity upgrades
+
+| Document | Description |
+|---|---|
+| `proposed-solidity-upgrades-in-next-release/` (8 documents) | Planned Solidity changes for next release |
+
+## Concepts and findings
+
+| Document | Description |
+|---|---|
+| `concepts/README.md` | Concept layer entry point |
+| `concepts/CONCEPT_GLOSSARY.md` | Concept glossary |
+| `concepts/RISK_TAXONOMY.md` | Risk taxonomy by concept |
+| `concepts/scenario-annotation-guide.md` | Guide for annotating scenarios with concepts |
+| `concepts/protocol-alignment.md` | Protocol status convention (`:protocol/current`, `:protocol/proposed`, `:solidity/*`) |
+| `concepts/ATTRIBUTION_GUIDE.md` | Attribution system: `with-attribution` usage patterns, context tracking |
+| `concepts/CDRS-v1.1-THEORY-SCHEMA.md` | CDRS theory schema (scenario classification) |
+| `findings/` | Protocol design findings, each classified with `:protocol/status` |
+| `findings/S103_findings.md` | Findings from scenario S103 |
+
+## Usage, build, and reference
+
+| Document | Description |
+|---|---|
+| `quickstart/QUICKSTART.md` | Setup and first run |
+| `reference/usage.md` | CLI/API usage reference |
+| `reference/build.md` | Build guide |
+| `reference/REPL_GUIDE.md` | REPL usage guide |
+| `reference/logging.md` | Logging conventions |
+| `reference/CODEBASE_INDEX.md` | Codebase file index |
+| `reference/scenario-run-report.md` | Scenario run report format |
+
+## Notebooks
+
+| Document | Description |
+|---|---|
+| `notebooks/README.md` | Clerk interactive workbench index |
+
+## Framework invariants
+
+| Document | Description |
+|---|---|
+| `framework/evidence-invariant-mapping.md` | Evidence-to-invariant mapping |
+| `framework/invariant-parity.md` | Invariant parity between simulation and Solidity |
+| `framework/patch-fraud-slash-accounting.md` | Fraud/slash accounting patch |
+| `framework/temporal-rules.md` | Temporal rule definitions |
+
+## Replay and determinism
+
+| Document | Description |
+|---|---|
+| `replay/` (3 documents) | Replay engine and determinism documentation |
+| `ROBUSTNESS_FRAMEWORK.md` | Adversarial validation, deterministic replay, simulation architecture |
+
+## Generated artifacts
+
+| Document | Description |
+|---|---|
+| `generated/` (6 documents) | Auto-generated reports and cross-reference tables |
+| `generated/robustness-edge-case.generated.md` | Generated edge-case robustness report |
+
+## Research and proposals
+
+| Document | Description |
+|---|---|
+| `research/` (6 documents) | Research notes and analyses |
+| `researcher/` (2 documents) | Researcher workflow guides |
+| `prompts/` (1 document) | Agent prompts |
+| `proposals/` (1 document) | Design proposals |
+| `plain-language-explanations/` (2 documents) | Plain-language explanations of technical concepts |
+
+## Visual documentation
+
+| Document | Description |
+|---|---|
+| `visual/` (8 documents) | Diagrams, charts, and visual explanations |
+
+## Supplementary reference
+
+| Document | Description |
+|---|---|
+| `language/` (1 document) | Language-level conventions |
+| `hashing/` (1 document) | Hashing deep-dive |
+| `benchmarks/` (4 documents) | Benchmark definitions and reports |
+| `conceptual/` (1 document) | Architecture strengths conceptual overview |
 
 ## Documentation status convention
 
 - **Canonical**: primary source of truth for a topic.
 - **Companion**: practical or narrowed companion to a canonical doc.
 - **Archived**: historical context only; do not use for current implementation decisions.
-
-- `ATTRIBUTION_GUIDE.md` — **canonical** attribution system: `with-attribution` usage patterns, context tracking, observability best practices
-- `SYSTEM_OVERVIEW.md` — **canonical** narrative: two engines, current findings, roadmap, technical architecture
-- `ROBUSTNESS_FRAMEWORK.md` — **canonical** adversarial validation, deterministic replay, simulation architecture
-- `architecture/ARCHITECTURE.md` — **canonical** layering rules, namespace map, generalisation matrix
-- `framework-boundaries.md` — **canonical** framework / adapter / Sew / research track boundaries
-- `architecture/ADAPTER_AUTHORING_GUIDE.md` — how to implement a protocol adapter
-- `architecture/DECISION_FRAMEWORK.md` — confidence-level calibration for reviewers
-- `interface-contract.md` — Python/Clojure gRPC bridge interface contract
-- `architecture/ADR-0003-canonical-scenario-generation-boundary.md` — ADR
-- `architecture/ADR-0004-cross-protocol-funds-ledger-extraction.md` — ADR
-
-## Testing and validation
-
-- `testing/RUNNING_TESTS.md` — canonical test entrypoints and baseline
-- `testing/TEST_SUITE.md` — full suite coverage and structure
-- `testing/TRAJECTORIES.md` — trajectory technical reference
-- `scenarios.md` — scenario index, evidence classification, protocol properties
-- `CDRS-v1.1-THEORY-SCHEMA.md` — CDRS theory schema (scenario classification)
-- `testing/ADDING_GAME_THEORETIC_VALIDATION.md` — contributor guide for adding new game-theoretic validation checks (single-trace and multi-epoch)
-  - Includes trust-control slices for equilibrium evidence:
-    - `:equilibrium-trust-mode :relaxed` (default)
-    - `:equilibrium-trust-mode :strict-valid-time`
-    - `:equilibrium-trust-mode :strict-attestation`
-
-## Evidence and research
-
-- `evidence/README.md` — evidence directory entry point
-- `evidence/RESEARCHER_EVIDENCE_PACK.md` — ≤15-minute reproducibility pack
-- `evidence/summary.md` — adversarial simulation evidence summary ⚠️ *(stale commit ref — needs refresh)*
-- `evidence/detailed/` — per-failure-class evidence with raw JSON traces
-
-## Security and threat model
-
-- `security-model.md` — simulation threat model and security assumptions
-
-## Usage and onboarding
-
-- `quickstart/QUICKSTART.md` — setup and first run
-- `usage.md` — CLI/API usage reference
-- `make speds-comparator-shadow` — generate `results/test-artifacts/comparator-shadow.json` for side-by-side comparator strategy rollout checks
-
-## Notebooks
-
-- `notebooks/README.md` — Clerk interactive workbench index
-
-## Protocol-specific reference
-
-- `overview/REUSABLE_COMPONENTS.md` — adapter/harness/fixture reuse guide
-- `overview/USE_OF_FUNDS.md` — use-of-funds accounting contract
-- `overview/OUTCOME_MODEL.md` — canonical cross-protocol outcome model and migration plan
-- `requirements/sybil-mitigation-roadmap.md` — Sybil ring mitigation requirements
 
 ## Historical and superseded
 

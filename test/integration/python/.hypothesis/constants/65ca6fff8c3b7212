@@ -1,0 +1,4 @@
+# file: /home/user/Code/sew-simulation/python/sew_sim/agents.py
+# hypothesis_version: 6.151.12
+
+[0.3, 2592000, 'amount', 'auto_cancel_disputed', 'create_escrow', 'custom_resolver', 'execute_resolution', 'is_release', 'max_dispute_duration', 'raise_dispute', 'release', 'resolution_hash', 'to', 'token', 'workflow_id']

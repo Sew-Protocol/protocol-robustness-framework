@@ -27,7 +27,15 @@
     "required-sources"
     [{"source" "claim/id"
       "ids" ["pro-rata-fairness"]}]}
-  {"mechanism/id" "mechanism/evidence-integrity"
+   {"mechanism/id" "mechanism/redistribution-fairness"
+    "mechanism/name" "Redistribution fairness"
+    "mechanism/domain" "mechanism.domain/allocation"
+    "mechanism/version" "v1"
+    "concept/ids" ["allocation/pro-rata-fairness"]
+    "required-sources"
+    [{"source" "claim/id"
+      "ids" ["pro-rata-fairness"]}]}
+   {"mechanism/id" "mechanism/evidence-integrity"
    "mechanism/name" "Evidence integrity"
    "mechanism/domain" "mechanism.domain/assurance"
    "mechanism/version" "v1"

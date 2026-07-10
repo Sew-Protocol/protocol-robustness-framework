@@ -241,19 +241,30 @@
             ;; When shortfall-model specifies recoverable=false, all unfilled
             ;; amounts become permanent haircuts (recognized losses) rather
             ;; than deferred (future recoverable).
-                shortfall (when (pos? (- basis-total fulfilled-total))
+                unrealized (:unrealized-yield pos-after-accrue 0)
+                ;; When unrealized yield is negative (mark-to-market loss), the
+                ;; position's actual gross value is less than principal.  The
+                ;; partial-fill engine only requests principal (since unrealized
+                ;; is :not-claimable), creating a phantom shortfall.  Adjust
+                ;; the shortfall basis to the actual gross value so solvency
+                ;; and shortfall-fidelity invariants balance.
+                neg-unrealized (min 0 unrealized)
+                adjusted-basis (+ basis-total neg-unrealized)
+                shortfall (when (pos? (- adjusted-basis fulfilled-total))
                             (let [sf-reason (or (:type shortfall-model) :liquidity-shortfall)
-                                  recoverable? (:recoverable shortfall-model true)]
+                                  recoverable? (:recoverable shortfall-model true)
+                                  ;; Positive crystallized yield not yet in deferred
+                                  extra-deferred (if (and recoverable? (pos? unrealized)) unrealized 0)]
                               {:reason sf-reason
-                               :basis-amount basis-total
+                               :basis-amount (+ adjusted-basis (if (pos? unrealized) unrealized 0))
                                :available-ratio (if (pos? gross-amount)
                                                   (/ (rationalize fulfilled-total)
                                                      (rationalize gross-amount))
                                                   1)
                                :fulfilled-amount fulfilled-total
-                               :deferred-amount (if recoverable? deferred-total 0)
+                               :deferred-amount (+ (if recoverable? deferred-total 0) extra-deferred)
                                :haircut-amount (if recoverable? haircut-total
-                                                   (+ deferred-total haircut-total))
+                                                   (+ deferred-total haircut-total extra-deferred))
                                :as-of-index (:current-index pos-after-accrue)
                                :started-at now}))
 
@@ -345,19 +356,23 @@
             deferred-total (reduce + 0 (vals deferred-map))
             haircut-total (reduce + 0 (vals haircut-map))
             basis-total (reduce + 0 (vals (:requested settlement {})))
-            shortfall (when (pos? (- basis-total fulfilled-total))
+            unrealized (:unrealized-yield pos 0)
+            neg-unrealized (min 0 unrealized)
+            adjusted-basis (+ basis-total neg-unrealized)
+            shortfall (when (pos? (- adjusted-basis fulfilled-total))
                         (let [sf-reason (or (:type shortfall-model) :liquidity-shortfall)
-                              recoverable? (:recoverable shortfall-model true)]
+                              recoverable? (:recoverable shortfall-model true)
+                              extra-deferred (if (and recoverable? (pos? unrealized)) unrealized 0)]
                           {:reason sf-reason
-                           :basis-amount basis-total
+                           :basis-amount (+ adjusted-basis (if (pos? unrealized) unrealized 0))
                            :available-ratio (if (pos? gross-amount)
                                               (/ (rationalize fulfilled-total)
                                                  (rationalize gross-amount))
                                               1)
                            :fulfilled-amount fulfilled-total
-                           :deferred-amount (if recoverable? deferred-total 0)
+                           :deferred-amount (+ (if recoverable? deferred-total 0) extra-deferred)
                            :haircut-amount (if recoverable? haircut-total
-                                               (+ deferred-total haircut-total))
+                                               (+ deferred-total haircut-total extra-deferred))
                            :as-of-index (:current-index pos)
                            :started-at now}))
             realized-yield (if shortfall

@@ -1,0 +1,4 @@
+# file: /home/user/Code/sew-simulation/python/sew_sim/simulation.py
+# hypothesis_version: 6.151.12
+
+[0.0, 0.5, 5000.0, 100, 200, 500, 1000, 5000, 10000, '0xAlice', '0xBob', '0xBuyerA', '0xBuyerB', '0xGriefer', '0xResolver', '0xSeller', '0xUSDC', 'alice', 'bob', 'buyer_a', 'buyer_b', 'griefing', 'raise_dispute', 'resolver', 'seller', 'workflow_id']

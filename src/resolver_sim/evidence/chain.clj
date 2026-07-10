@@ -50,6 +50,13 @@
          :run-id nil
          :run-label nil}))
 
+(def ^:private evidence-registry-lock
+  "Reentrant lock for thread-safe evidence registration.
+   Serializes concurrent calls to register-evidence! when the same
+   evidence-registry-atom is shared across threads (e.g. futures
+   without explicit dynamic var binding)."
+  (Object.))
+
 (defn reset-registry!
   "Clear the registry atom for a new run.
    Optional: run-id and run-label for identification."
@@ -258,24 +265,28 @@
   "Register an evidence record (map from emit-evidence!) into the chain registry.
    Returns the evidence-hash. The registry tracks every evidence record produced
    during a run, enabling the full content-addressed chain to be built later.
-   Idempotent: duplicate evidence-hashes are silently ignored.
+   Idempotent: duplicate evidence-hashes are skipped.
+   Logs a warning when a duplicate evidence hash is detected.
    Logs a warning when evidence has no hash — the record will not be registered."
   [evidence]
-  (let [eh (:evidence-hash evidence)]
-    (if (and eh (string? eh))
-      (do (swap! evidence-registry-atom
-                 (fn [reg]
-                   (if (some #(hc/intent-hash= eh (:evidence-hash %)) (:artifacts reg))
-                     reg
-                     (-> reg
-                         (update :artifacts conj (evidence->artifact-entry evidence))
-                         (update :evidence-hashes conj eh)))))
+  (locking evidence-registry-lock
+    (let [eh (:evidence-hash evidence)]
+      (if (and eh (string? eh))
+        (let [reg @evidence-registry-atom]
+          (if (some #(hc/intent-hash= eh (:evidence-hash %)) (:artifacts reg))
+            (log/warn! :evidence-register-duplicate-hash
+                       {:evidence-hash eh
+                        :evidence-type (:evidence/type evidence)
+                        :artifact-kind (:artifact-kind evidence)})
+            (reset! evidence-registry-atom
+                    (-> reg
+                        (update :artifacts conj (evidence->artifact-entry evidence))
+                        (update :evidence-hashes conj eh))))
           eh)
-      (do (log/warn! :evidence-register-missing-hash
-                     {:evidence-type (:evidence/type evidence)
-                      :artifact-kind (:artifact-kind evidence)})
-          eh))
-    eh))
+        (do (log/warn! :evidence-register-missing-hash
+                       {:evidence-type (:evidence/type evidence)
+                        :artifact-kind (:artifact-kind evidence)})
+            eh)))))
 
 ;; ── Registry Builder ──────────────────────────────────────────────────────
 

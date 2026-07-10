@@ -17,6 +17,14 @@
 (def extended-claims
   (conj phase-6-claims :pro-rata-fairness :partial-fill-fairness))
 
+(defn- make-content
+  "Build evidence content with matching direct and projection results."
+  [direct-result]
+  {:claims/direct-result direct-result
+   :claims/projection-result (dissoc direct-result :claims/input-context)
+   :claims/projection-artifact {:projection-hash "h1"}
+   :claims/projection-artifact-again {:projection-hash "h1"}})
+
 (def representative-fixtures
   [{:slash-obligation 11
     :slash-policy {:policy/id :test-policy}
@@ -204,3 +212,93 @@
     (let [result (claims/evaluate-claim :partial-fill-fairness {:evidence-nodes []})]
       (is (false? (:holds? result)))
       (is (= [{:type :missing-evidence-content}] (:violations result))))))
+
+;; ── Edge case tests for claims evaluators (B3) ─────────────────────────
+
+(deftest rounding-bounded-passes-on-exact-division
+  (testing "rounding-bounded passes when allocation exactly matches ideal"
+    (let [allocations [{:id :a :basis-amount 50 :paid 50}
+                       {:id :b :basis-amount 50 :paid 50}]
+          result (claims/evaluate-claim
+                  :rounding-bounded
+                  {:evidence-nodes [{:result {:claims/input-context {:total-basis 100 :slash-obligation 100}
+                                              :claims/direct-result {:allocations allocations}
+                                              :claims/projection-result {:allocations allocations}
+                                              :claims/projection-artifact {:projection-hash "h1"}
+                                              :claims/projection-artifact-again {:projection-hash "h1"}}}]})]
+      (is (true? (:holds? result)))
+      (is (empty? (:violations result))))))
+
+(deftest rounding-bounded-fails-on-large-deviation
+  (testing "rounding-bounded fails when deviation exceeds 1 unit"
+    (let [allocations [{:id :a :basis-amount 50 :paid 100}]
+          result (claims/evaluate-claim
+                  :rounding-bounded
+                  {:evidence-nodes [{:result {:claims/input-context {:total-basis 100 :slash-obligation 100}
+                                              :claims/direct-result {:allocations allocations}
+                                              :claims/projection-result {:allocations allocations}
+                                              :claims/projection-artifact {:projection-hash "h1"}
+                                              :claims/projection-artifact-again {:projection-hash "h1"}}}]})]
+      (is (false? (:holds? result)))
+      (is (seq (:violations result))))))
+
+(deftest rounding-bounded-passes-on-zero-total-basis
+  (testing "rounding-bounded passes when total-basis is zero"
+    (let [result (claims/evaluate-claim
+                  :rounding-bounded
+                  {:evidence-nodes [{:result {:claims/input-context {:total-basis 0 :slash-obligation 0}
+                                              :claims/direct-result {:allocations []}
+                                              :claims/projection-result {:allocations []}
+                                              :claims/projection-artifact {:projection-hash "h1"}
+                                              :claims/projection-artifact-again {:projection-hash "h1"}}}]})]
+      (is (true? (:holds? result)))
+      (is (empty? (:violations result))))))
+(deftest conservation-passes-on-exact-allocation
+  (testing "conservation passes when requested = allocated + unmet + remainder"
+    (let [direct {:allocations [{:id :a :owed 50 :paid 25 :unmet 25}]
+                  :total-requested 50
+                  :total-allocated 25
+                  :total-unmet 25
+                  :remainder 0}
+          result (claims/evaluate-claim
+                  :conservation
+                  {:evidence-nodes [{:result (make-content direct)}]})]
+      (is (true? (:holds? result)))
+      (is (empty? (:violations result))))))
+
+(deftest conservation-fails-on-mismatch
+  (testing "conservation fails when totals do not sum to requested"
+    (let [direct {:allocations [] :total-requested 100 :total-allocated 60 :total-unmet 20 :remainder 0}
+          result (claims/evaluate-claim
+                  :conservation
+                  {:evidence-nodes [{:result (make-content direct)}]})]
+      (is (false? (:holds? result)))
+      (is (seq (:violations result))))))
+
+(deftest pro-rata-fairness-passes-on-three-claimants
+  (testing "pro-rata-fairness passes with three proportional claimants"
+    (let [allocations [{:id :a :paid 10 :owed 20}
+                       {:id :b :paid 15 :owed 30}
+                       {:id :c :paid 25 :owed 50}]
+          result (claims/evaluate-claim
+                  :pro-rata-fairness
+                  {:evidence-nodes [{:result {:claims/direct-result {:allocations allocations}
+                                              :claims/projection-result {:allocations allocations}
+                                              :claims/projection-artifact {:projection-hash "h1"}
+                                              :claims/projection-artifact-again {:projection-hash "h1"}}}]})]
+      (is (true? (:holds? result)))
+      (is (empty? (:violations result))))))
+
+(deftest pro-rata-fairness-detects-single-unfair-claimant
+  (testing "pro-rata-fairness detects one unfair claimant among many"
+    (let [allocations [{:id :a :paid 10 :owed 20}
+                       {:id :b :paid 20 :owed 30}
+                       {:id :c :paid 25 :owed 50}]
+          result (claims/evaluate-claim
+                  :pro-rata-fairness
+                  {:evidence-nodes [{:result {:claims/direct-result {:allocations allocations}
+                                              :claims/projection-result {:allocations allocations}
+                                              :claims/projection-artifact {:projection-hash "h1"}
+                                              :claims/projection-artifact-again {:projection-hash "h1"}}}]})]
+      (is (false? (:holds? result)))
+      (is (seq (:violations result))))))

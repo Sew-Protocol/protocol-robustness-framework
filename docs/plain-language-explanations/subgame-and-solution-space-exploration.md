@@ -281,7 +281,7 @@ You would **not** copy Sew’s escrow, bonds, or resolver slashing. You **would*
 - A two-player perfect-information game is **simpler** than Sew in some ways (public board) and **harder** in others (huge branching factor); bounds and `available-actions` matter more.
 - Start with **one recorded game** and **one decision** (“was this move best among legal moves after this dice roll?”). Expand once that works.
 
-For contributor-oriented adapter boundaries, see [framework-boundaries.md](../framework-boundaries.md).
+For contributor-oriented adapter boundaries, see [framework-boundaries.md](../architecture/framework-boundaries.md).
 
 ---
 
@@ -291,5 +291,5 @@ For contributor-oriented adapter boundaries, see [framework-boundaries.md](../fr
 |-----|----------|
 | [SYSTEM_OVERVIEW.md](../SYSTEM_OVERVIEW.md) | Two engines (replay vs Monte Carlo) |
 | [subgame-validation.md](../testing/subgame-validation.md) | Tree expansion and `spe-config` (technical) |
-| [framework-boundaries.md](../framework-boundaries.md) | What is reusable vs Sew-specific |
+| [framework-boundaries.md](../architecture/framework-boundaries.md) | What is reusable vs Sew-specific |
 | [ADDING_GAME_THEORETIC_VALIDATION.md](../testing/ADDING_GAME_THEORETIC_VALIDATION.md) | Adding new equilibrium checks |

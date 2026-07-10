@@ -243,7 +243,7 @@ The two registries are cross-validated at startup: every passive intent definiti
 
 ## Stability Tracking
 
-File: `STABILITY_MANIFEST.edn`
+File: `docs/STABILITY_MANIFEST.edn`
 
 The stability manifest records canonical hashes of source files that
 define stability-controlled surfaces. Each entry maps a named surface
@@ -288,12 +288,12 @@ Stability Check — 2026-06-27
 ```
 
 A `❌` means the source files for that surface have changed since the
-recorded checkpoint. Review `STABILITY.md` to determine if the change
+recorded checkpoint. Review `docs/STABILITY.md` to determine if the change
 is expected and whether the manifest should be updated.
 
 ### Adding a new stability surface
 
-1. Add an entry to `STABILITY_MANIFEST.edn` with `:stability/id`,
+1. Add an entry to `docs/STABILITY_MANIFEST.edn` with `:stability/id`,
    `:stability/files`, and `:stability/level`.
 2. Run `bb stability:check` once to populate the initial hash.
 3. The surface is now tracked — any future changes to its files will

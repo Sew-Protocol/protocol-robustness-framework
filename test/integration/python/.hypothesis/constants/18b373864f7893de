@@ -1,0 +1,4 @@
+# file: /home/user/Code/sew-simulation/python/sew_sim/anvil_runner.py
+# hypothesis_version: 6.152.4
+
+[0.3, 8545, '--port', '--private-key', '--rpc-url', '--silent', '00', '0x', '0x01', '0x1', '1', 'amount', 'amount-after-fee', 'anvil', 'block-number', 'block-time', 'blockTime()(uint256)', 'call', 'cancel_escrow', 'cast', 'create_escrow', 'deploy:local', 'dispute-levels', 'disputed', 'drModule', 'escrow-state', 'escrow-transfers', 'evm', 'execute_resolution', 'execute_settlement', 'exists', 'is-release', 'none', 'oracle', 'pending', 'pending-settlements', 'pnpm', 'r', 'raise_dispute', 'recipient_cancel', 'refunded', 'release', 'release_escrow', 'released', 'resolve_cancel', 'resolve_release', 'resolved', 'send', 'sender_cancel', 'sew-protocol', 'sim', 'to', 'token', 'total-fees', 'total-held', 'true', 'unknown', 'vault', 'workflow-id']
