@@ -2,7 +2,7 @@
  :suite-id :suites/all-invariants,
  :trace-id "s05-pending-settlement-execute",
  :final-state-hash
- "c3b8847b391849a1445eb87787565ee4ed579347a5cecc535f383006b78b2f78",
+ "0fa5a7fd5ffdcc5a227e9fea212dc965f3598f00708283d5ce00ec6b4752746d",
  :metrics
  {:yield/escrow-unrealized 0,
   :yield/position-status nil,

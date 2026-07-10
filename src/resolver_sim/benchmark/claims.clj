@@ -49,10 +49,13 @@
 (defn- check-invariants
   "Check that all named invariants passed in the scenario's invariant results.
    Returns {:holds? bool :violations [map]}.
-   Invariant IDs not found in results are treated as passing (matching
-   post-hoc inference behavior for transition invariants not re-checked)."
+   Missing invariants are :not-exercised, never an implicit pass: an active
+   benchmark must show that its required semantic check actually ran."
   [ctx invariant-ids]
   (let [inv-results (get-in ctx [:scenario/result :invariant-results])
+        missing    (remove (fn [id]
+                             (some #(= (:id %) id) inv-results))
+                           invariant-ids)
         failures   (keep (fn [id]
                            (let [entry (some #(when (= (:id %) id) %) inv-results)]
                              (when (and entry (not= :pass (:result entry)))
@@ -60,8 +63,18 @@
                                 :invariant-id id
                                 :message (str "invariant " id " failed for claim")})))
                          invariant-ids)]
-    {:holds?    (empty? failures)
-     :violations (vec failures)}))
+    (cond
+      (seq missing)
+      {:outcome :not-exercised
+       :violations (mapv (fn [id]
+                           {:type :invariant-not-exercised
+                            :invariant-id id
+                            :message (str "invariant " id " was not produced for claim")})
+                         missing)}
+
+      :else
+      {:holds? (empty? failures)
+       :violations (vec failures)})))
 
 (defn- scenario-group-key
   [result]
@@ -478,9 +491,9 @@
          scenario-fields (select-keys scenario-result
                                       [:scenario/id :simulator/scenario-path :file])]
      (if-let [{:keys [scope check]} (evaluator-resolver claim-id)]
-       (let [{:keys [holds? violations]} (check context)]
+       (let [{:keys [holds? violations outcome]} (check context)]
          (merge {:claim/id claim-id
-                 :claim/outcome (if holds? :pass :fail)
+                 :claim/outcome (or outcome (if holds? :pass :fail))
                  :claim/severity severity
                  :claim/evidence (mapv :type violations)}
                 (when (= scope :scenario)
@@ -489,7 +502,7 @@
                    :scenario/file (:file scenario-fields)
                    :simulator/scenario-path (:simulator/scenario-path scenario-fields)})))
        (merge {:claim/id claim-id
-               :claim/outcome :inconclusive
+               :claim/outcome :not-implemented
                :claim/severity severity
                :claim/evidence []
                :claim/error (str "No evaluator registered for " claim-id)}

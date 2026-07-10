@@ -32,7 +32,11 @@
     :prf-tags [:yield-accounting :conservation :shortfall-affected]}
    :yield/deferred-reclaim
    {:description "Withdrawn positions have no open shortfall; reclaimed amounts are non-negative."
-    :prf-tags [:recovery :shortfall-affected]}})
+    :prf-tags [:recovery :shortfall-affected]}
+
+   :yield/shortfall-detected
+   {:description "Shortfall is correctly detected: basis-amount does not exceed position value (no over-detection), and unwinding positions in shortfall mode have shortfall data (no under-detection)."
+    :prf-tags [:liquidity-shortfall :detection :shortfall-affected]}})
 
 (def default-runtime-invariant-ids
   "Checked on every successful replay step (yield-v1 adapter)."

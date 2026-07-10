@@ -4,6 +4,7 @@
          '[clojure.string :as str]
          '[resolver-sim.concepts.benchmark :as benchmark-concepts]
          '[resolver-sim.concepts.registry :as concepts-registry]
+         '[resolver-sim.benchmark.coverage :as coverage]
          '[resolver-sim.scenario.suites :as suites])
 
 (defn parse-edn [f]
@@ -210,6 +211,11 @@
               (swap! errors conj (str "invalid claim ref " (pr-str ref) " in " benchmark-path ": " (.getMessage e)))
               (println "    FAIL invalid claim ref" (pr-str ref)))))))
 
+    (when (= :active (:benchmark/status benchmark))
+      (doseq [error-id (coverage/active-benchmark-errors benchmark (set (keys claim-registry)))]
+        (swap! errors conj (str "active benchmark lifecycle violation " error-id " in " benchmark-path))
+        (println "    FAIL active benchmark lifecycle violation" error-id)))
+
     ;; ── Property types ─────────────────────────────────────────
     (let [prop-types (:benchmark/property-types benchmark)]
       (when prop-types
@@ -266,7 +272,25 @@
           (let [benchmark-path (str pack-dir "/" (:benchmark/file benchmark-ref))]
             (validate-file-exists! errors benchmark-path "benchmark file")
             (when-let [benchmark (read-edn-file benchmark-path)]
-               (validate-benchmark-file! errors concept-idx claim-registry benchmark-path benchmark))))))))
+               (validate-benchmark-file! errors concept-idx claim-registry benchmark-path
+                                         (assoc benchmark :benchmark/status (:benchmark/status benchmark-ref))))))))))
+
+(defn validate-pack-capabilities! [errors claim-registry registry-path]
+  (when-let [pack (read-edn-file registry-path)]
+    (let [pack-dir (.getParent (io/file registry-path))
+          manifests-by-id (into {}
+                                (keep (fn [benchmark-ref]
+                                        (when-let [manifest (read-edn-file
+                                                            (str pack-dir "/" (:benchmark/file benchmark-ref)))]
+                                          [(:benchmark/id benchmark-ref)
+                                           (assoc manifest :benchmark/status (:benchmark/status benchmark-ref))])))
+                                (:benchmarks pack))
+          known-claim-ids (if (:claims claim-registry)
+                            (set (map :claim/id (:claims claim-registry)))
+                            (set (keys claim-registry)))]
+      (doseq [error-id (coverage/pack-capability-errors pack manifests-by-id known-claim-ids)]
+        (swap! errors conj (str "pack capability violation " error-id " in " registry-path))
+        (println "    FAIL pack capability violation" error-id)))))
  
 (defn run-validation []
   (println "▶ benchmarks:validate\n")
@@ -361,7 +385,8 @@
           (let [domain-ids (registered-domain-ids "benchmarks/registry.edn")]
             (doseq [registry-path ["benchmarks/packs/prf-core/registry.edn"
                                    "benchmarks/packs/sew/registry.edn"]]
-              (validate-pack-registry! errors concept-idx claim-registry registry-path domain-ids)))
+              (validate-pack-registry! errors concept-idx claim-registry registry-path domain-ids)
+              (validate-pack-capabilities! errors claim-registry registry-path)))
 
           ;; ── Duplicate active benchmark detection ───────────────────
           (println "  Checking for duplicate active benchmark structures...")

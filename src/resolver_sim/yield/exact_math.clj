@@ -246,7 +246,8 @@
   [total-available claims]
   {:pre [(let [tot (ratio total-available)]
            (and (not (nil? tot)) (>= tot 0)))
-         (sequential? claims)]}
+         (sequential? claims)
+         (every? #(and (number? (:amount %)) (not (neg? (long (:amount %))))) claims)]}
   (let [total (ratio total-available)
         [total-units total-rem] (quantize-base-units total)
         n (count claims)

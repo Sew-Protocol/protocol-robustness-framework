@@ -14,6 +14,9 @@
     :rounding-bounded
     :ordering-independent})
 
+(def extended-claims
+  (conj phase-6-claims :pro-rata-fairness))
+
 (def representative-fixtures
   [{:slash-obligation 11
     :slash-policy {:policy/id :test-policy}
@@ -67,14 +70,14 @@
      :claims/evaluation-context true}))
 
 (defn- evaluate-claims-from-input
-  "Evaluate all pro-rata claims from a raw allocation input, building
+  "Evaluate Phase 6 pro-rata claims from a raw allocation input, building
    evidence nodes and passing through claims.engine/evaluate-claims."
   [allocation-input]
   (let [node (build-claim-evaluation-node allocation-input)
         requests (mapv (fn [claim-id]
                          {:claim-id claim-id
                           :evidence-references [(:node-hash node)]})
-                       (claims/registered-claim-ids))
+                       phase-6-claims)
         {:keys [claim-results]}
         (claims-engine/evaluate-claims
          requests [node]
@@ -82,8 +85,8 @@
     (into {} (map (juxt :claim-id identity) claim-results))))
 
 (deftest registered-claims-cover-phase-6-contract
-  (testing "the passive claim registry exposes the phase 6 claim set"
-    (is (= phase-6-claims (set (claims/registered-claim-ids))))))
+  (testing "the evaluator registry exposes the phase 6 claim set plus extensions"
+    (is (= extended-claims (set (claims/registered-claim-ids))))))
 
 (deftest all-phase-6-claims-pass-on-representative-fixtures
   (testing "claim evaluators pass on representative fixtures via claims engine"
@@ -118,3 +121,47 @@
       (is (= :conservation (:claim-id (first claim-results))))
       (is (true? (:holds? (first claim-results))))
       (is (:valid? validation)))))
+
+(deftest pro-rata-fairness-passes-on-proportional-allocation
+  (testing "pro-rata-fairness passes when all claimants have same fill ratio"
+    (let [allocations [{:id :a :paid 20 :owed 40}
+                       {:id :b :paid 30 :owed 60}]
+          result (claims/evaluate-claim
+                  :pro-rata-fairness
+                  {:evidence-nodes [{:result {:claims/direct-result {:allocations allocations}
+                                              :claims/projection-result {:allocations allocations}
+                                              :claims/projection-artifact {:projection-hash "h1"}
+                                              :claims/projection-artifact-again {:projection-hash "h1"}}}]})]
+      (is (true? (:holds? result)))
+      (is (empty? (:violations result))))))
+
+(deftest pro-rata-fairness-fails-on-non-proportional-allocation
+  (testing "pro-rata-fairness fails when fill ratios differ"
+    (let [allocations [{:id :a :paid 10 :owed 40}
+                       {:id :b :paid 40 :owed 60}]
+          result (claims/evaluate-claim
+                  :pro-rata-fairness
+                  {:evidence-nodes [{:result {:claims/direct-result {:allocations allocations}
+                                              :claims/projection-result {:allocations allocations}
+                                              :claims/projection-artifact {:projection-hash "h1"}
+                                              :claims/projection-artifact-again {:projection-hash "h1"}}}]})]
+      (is (false? (:holds? result)))
+      (is (seq (:violations result))))))
+
+(deftest pro-rata-fairness-passes-with-single-claimant
+  (testing "pro-rata-fairness passes trivially with fewer than 2 claimants"
+    (let [allocations [{:id :a :paid 20 :owed 40}]
+          result (claims/evaluate-claim
+                  :pro-rata-fairness
+                  {:evidence-nodes [{:result {:claims/direct-result {:allocations allocations}
+                                              :claims/projection-result {:allocations allocations}
+                                              :claims/projection-artifact {:projection-hash "h1"}
+                                              :claims/projection-artifact-again {:projection-hash "h1"}}}]})]
+      (is (true? (:holds? result)))
+      (is (empty? (:violations result))))))
+
+(deftest pro-rata-fairness-missing-evidence
+  (testing "pro-rata-fairness fails when evidence content is missing"
+    (let [result (claims/evaluate-claim :pro-rata-fairness {:evidence-nodes []})]
+      (is (false? (:holds? result)))
+      (is (= [{:type :missing-evidence-content}] (:violations result))))))

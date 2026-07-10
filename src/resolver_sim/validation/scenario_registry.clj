@@ -10,8 +10,8 @@
    validation exercises the same protocol inference, dispatcher selection,
    scenario-id checks, and metadata normalization used during actual scenario
    execution."
-  (:require [clojure.java.io :as io]
-            [clojure.string :as str]
+  (:require [clojure.string :as str]
+            [resolver-sim.io.resource-path :as rp]
             [resolver-sim.io.scenario-runner :as sr]
             [resolver-sim.io.scenarios :as sc]
             [resolver-sim.protocols.registry :as preg]
@@ -93,7 +93,7 @@
 
 (defn- validate-suite-scenario-entry!
   [suite-key protocol-id path]
-  (when-not (.exists (io/file path))
+  (when-not (rp/path-exists? path)
     (throw (ex-info "File-backed suite registry references a missing scenario file"
                     {:suite/key         suite-key
                      :suite/protocol-id protocol-id

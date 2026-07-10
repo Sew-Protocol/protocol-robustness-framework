@@ -189,19 +189,6 @@
 ;;  Use in Clerk
 ;; ──────────────────────────────────────────────────────────────────────────────
 
-^{:nextjournal.clerk/visibility {:code :show :result :show}}
-;; 1. Load a scenario:
-;;    (init! "scenarios/edn/S65_spe-fork-event-id-inheritance.edn")
-;;
-;; 2. Get decision nodes (includes :fork-world from checkpoints):
-;;    (def nodes (decision-nodes))
-;;
-;; 3. Expand tree at a node (raw tail — same path as SPE evaluator):
-;;    (def branches (expand-at-node (first nodes)))
-;;
-;; 4. Compare utilities:
-;;    (utility-table branches "buyer")
-
 ^{:nextjournal.clerk/visibility {:code :hide :result :show}}
 [:div {:class "card" :style {:marginTop "32px"}}
  [:div {:class "card-title"} "Caveats"]

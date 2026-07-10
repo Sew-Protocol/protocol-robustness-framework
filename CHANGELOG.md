@@ -2,6 +2,68 @@
 
 ## [Unreleased]
 
+### Changed (2026-07-10)
+
+- **Truthful benchmark lifecycle:** Active benchmark validation now requires runnable, substantive claims for every advertised property type. Deferred PRF robustness and shortfall profiles are experimental; deterministic replay is explicitly scoped to its included Sew-backed workload. Claim results now distinguish `:not-exercised` from `:not-implemented`. (`src/resolver_sim/benchmark/coverage.clj`, `scripts/benchmarks_validate.clj`, `src/resolver_sim/commands/benchmark.clj`)
+
+- **Benchmark readiness enforcement:** Active benchmark execution now fails when a required claim does not pass, and pack capabilities declare whether they are demonstrated, partial, research, or roadmap. Demonstrated capabilities must resolve to active child benchmarks with runnable claims. (`src/resolver_sim/benchmark/cli.clj`, `src/resolver_sim/benchmark/coverage.clj`, `benchmarks/packs/prf-core/registry.edn`)
+
+- **Derived concept maturity:** Benchmark evidence now derives concept scenario mappings, registered claims, evaluator availability, active benchmark references, and gaps across the complete benchmark catalogue. (`src/resolver_sim/benchmark/coverage.clj`, `src/resolver_sim/benchmark/runner.clj`)
+
+### Added (2026-07-10)
+
+- **Evidence commitment root node:** Replaced `:evidence/chain-root` with `:evidence/commitment-root` — a proper post-hoc DAG anchor that references the execution node via `parent-hashes`, the evidence chain cursor via `bootstrap-roots`, and the bundle root hash via `outputs`. Uses typed references (`sha256:<hash>`, `evidence-chain:sha256:<hash>`). Preserves the distinction between commitment construction status (`:result :status`) and underlying execution status (`:outputs :execution/status`). (`src/resolver_sim/io/scenario_runner.clj:980-997`, `src/resolver_sim/definitions/passive_registries.clj:544-551`, `src/resolver_sim/evidence/node.clj:554-556`)
+
+- **Commitment root test suite:** 19 tests (integration + unit) covering creation order, parent resolution, evidence-chain bootstrap, bundle-root consistency, no-cycle guarantee, execution-node immutability, hash stability (identical content, changing parent, changing evidence cursor, ignoring timestamp), typed reference format, schema validity, unresolved parent rejection, and optional bundle-root-hash. (`test/resolver_sim/evidence/commitment_root_test.clj`)
+
+- **Notebook commitment root card:** Added a card to the EF Demo notebook that displays the commitment root node when available — shows node-hash, parent hash, bootstrap root, construction status, execution status, and optional bundle-root-hash. Gracefully falls back to a "not found" message when no commitment root is present. (`notebooks/ef_demo_dispute_refund.clj:305-335`)
+
+### Fixed (2026-07-10)
+
+- **S-DR-093-evidence-during-freeze timing:** `execute_fraud_slash` at t=1250 exceeded the appeal-window deadline (proposed at t=1130 + 60s = t=1190), causing the scenario to halt at seq 6 with `:invariant-violation`. Moved to t=1145 (within deadline). The scenario now processes all 11 events and passes all 75 invariants. Updated scenario notes to reflect actual protocol behavior (rotate_dispute_resolver is not yet wired — known limitation). (`scenarios/edn/S-DR-093-evidence-during-freeze.edn`)
+
+- **Bootstrap root format validation:** `validate-node` and `validate-node-dag` now enforce typed-reference format (`sha256:<64-hex>` or `evidence-chain:sha256:<64-hex>`) for `:bootstrap-roots`, rejecting arbitrary untyped strings. The fix is applied consistently across `validate-node`, `validate-node-dag` (graph edge pruning), `check-node-parents-resolvable`, `check-dag-single-root`, and `build-dag-index`. (`src/resolver_sim/evidence/node.clj`)
+
+- **Attestation validation before DAG node construction:** `build-attestation-dag-node` and `emit-attestation-dag-node!` now validate the attestation (nil-check + shape validation) before building the evidence node, using the existing `validate-attestation-shape` function. `validate-node` now also rejects `:attestations` entries that are nil, non-string, or not in typed-reference format (`attestation:sha256:<64-hex>`). (`src/resolver_sim/evidence/attestation_dag.clj:41-52`, `src/resolver_sim/evidence/node.clj:574-600`)
+
+- **Notebook namespace check in `bb validate`:** Added `(System/exit 0)` after require in the `validate` task's notebook namespace check. Clerk starts background threads (websocket, etc.) that prevent JVM exit, causing the check to time out. (`bb.edn`)
+
+- **Missing require in `escalation_economics.clj`:** Added `resolver-sim.protocols.sew.config` to the `ns` require vector. The file used a fully qualified var reference without requiring the namespace, causing `ClassNotFoundException` when loading `not-appealed` and `appeal-analysis` notebooks. (`protocols_src/resolver_sim/protocols/sew/research_models/escalation_economics.clj`)
+
+- **Missing `:pro-rata-fairness` claim definition:** Added `:pro-rata-fairness` to `claim-definitions` in the passive registry. The claim was defined as an evaluator in `yield/pro_rata_claims.clj` but was never registered as a claim definition, causing `"Unknown claim definition"` errors in `pro-rata-allocation-result` notebook. (`src/resolver_sim/definitions/passive_registries.clj`)
+
+- **Typed attestation references:** Evidence node `:attestations` entries now use typed references (`"attestation:sha256:<id>"`) instead of bare attestation IDs. This enables resolver dispatch, hash-algorithm clarity, object-type clarity, storage-independent resolution, and content verification after resolution. (`src/resolver_sim/evidence/attestation_dag.clj:107,141`)
+
+- **Attestation resolution system:** New `resolver-sim.evidence.attestation-resolver` namespace provides reference parsing, registry lookup, hash verification, type verification, and optional signature verification. Returns structured result maps with distinct error types (`:missing`, `:hash-mismatch`, `:unsupported-algorithm`, `:unparseable-reference`). `validate-node-detailed` now validates typed reference format in `:attestations` entries. (`src/resolver_sim/evidence/attestation_resolver.clj`, `src/resolver_sim/evidence/node.clj:688-700`)
+
+- **Attestation resolution test suite:** 19 tests covering reference parsing (valid format, bare IDs, short hashes, nil, empty, wrong prefix, unknown algorithm), resolution errors (unparseable, unsupported, missing with specific :missing error), resolution success (valid attestation, hash match, type verification), hash mismatch detection, signature verification (pass and fail), and throwing helper. (`test/resolver_sim/evidence/attestation_resolver_test.clj`)
+
+- **chain-attestation-dag-nodes preserves caller-supplied parents:** The chain builder now starts from `(:parent-hashes opts)` instead of `[]`, so external parent references passed as base options are preserved alongside chain links. (`src/resolver_sim/evidence/attestation_dag.clj:168`)
+
+### Cleanup (2026-07-10)
+
+- **Removed vim swap files:** Deleted 4 `.swp`/`.swo` crash-recovery files left in `protocols_src/` and `.ai/`. (`.sew.clj.swp`, `.accounting.clj.swp`, `.accounting.clj.swo`, `.project.md.swp`)
+
+- **Removed debug artifacts:** Deleted `dev/scratch.clj` (personal REPL scratch), `scenarios/debug-sweep.json` and `scenarios/dynamic-sweep.json` (debug scenario artifacts in deprecated JSON format), and `protocols_src/test/resolver_sim/protocols/sew/senior_pool_debug_test.clj` (println-based debug test).
+
+- **Removed commented-out code (10 sites):** Cleaned dead `(comment ...)` blocks and commented expressions from `dev/artifacts.clj`, `src/resolver_sim/io/event_evidence.clj`, `src/resolver_sim/stochastic/economics.clj`, `src/resolver_sim/notebook_support/subgame_counterfactual_workbench.clj`, `src/resolver_sim/evidence/diff.clj`, `protocols_src/resolver_sim/research/sew/economic/burst_concurrency.clj`, and `protocols_src/resolver_sim/research/sew/economic/dispute_clustering.clj`.
+
+- **Removed debug println:** Removed `(println "DEBUG: ...")` from `test/resolver_sim/scenario/equilibrium_test.clj:657`.
+
+- **Normalized comment style:** Changed `;;;;` to `;;` in section headers across `src/resolver_sim/sim/governance_delay.clj`, `src/resolver_sim/sim/governance_impact.clj`, and `protocols_src/resolver_sim/research/sew/economic/market_exit.clj`.
+
+- **Fixed archive notebook namespace:** Changed `notebooks.yield-shortfall-analysis` → `notebooks.archive.yield-shortfall-analysis` in `notebooks/archive/yield_shortfall_analysis.clj` (missed in prior cleanup).
+
+- **Removed stale documentation:** Cleaned up resolved `:build-clerk` remediation note in `.ai/project.md`.
+
+### Changed (2026-07-10)
+
+- **Parameter defaults moved to central config:** Removed hardcoded inline fallback values from `batch/run-batch`, `batch/run-batch-with-attribution`, and `batch/run-ring-batch`. Added the missing defaults (`:resolver-fee-bps`, `:appeal-bond-bps`, `:slash-multiplier`, `:appeal-probability-if-correct`, `:appeal-probability-if-wrong`, `:escrow-size`, `:slashing-detection-probability`, `:min-trials`) to `types/default-params` (the canonical defaults hub). Corrected `:appeal-probability-if-correct` from 0.5 to 0.05 and `:appeal-probability-if-wrong` from 0.5 to 0.40 to match baseline.edn. Added `:appeal-bond-bps` and `:slashing-detection-probability` to `protocol-params->mc-overrides` so scenarios can override them via `:protocol-params`. (`src/resolver_sim/stochastic/types.clj`, `src/resolver_sim/stochastic/params.clj`, `src/resolver_sim/sim/batch.clj`)
+
+- **Lint `--fail-level`:** Added `--fail-level "error"` to `:lint` and `:lint/core` aliases so clj-kondo only exits non-zero on errors, not warnings (414 pre-existing warnings, 0 errors). (`deps.edn`)
+
+- **Config policy note:** Added a policy section to `.ai/project.md` stating that parameter defaults must live in `types/default-params`, not in extraction sites, with rationale. (`.ai/project.md`)
+
 ### Fixed (2026-07-09)
 
 - **Namespace name mismatches in scripts/:** Fixed 14 script files under `scripts/scenarios/` that had namespace declarations not matching their file paths (e.g., `scripts.generate-core-docs` → `scripts.scenarios.generate-core-docs`). Updated corresponding `deps.edn` aliases. (`scripts/scenarios/*.clj`, `deps.edn`)
@@ -677,6 +739,48 @@
 ### Added
 - **Concepts integrated into benchmarks (Phase 1+2):** Added `:benchmark/concepts` key to 4 of 5 benchmark manifests linking protocol-level claims to stakeholder-facing domain concepts. Activated `enrich-report` in `benchmark/runner.clj:run-benchmark` — benchmark evidence bundles now include `:concept/section` with stakeholder summaries and risk annotations. Validates concept IDs against the concept registry (warns on stale/unknown references). (`benchmarks/packs/sew/escrow-dispute-v1.edn`, `benchmarks/packs/sew/dispute-liveness-v1.edn`, `benchmarks/packs/sew/resolver-slashing-v1.edn`, `benchmarks/packs/prf-core/deterministic-replay-v1.edn`, `src/resolver_sim/benchmark/runner.clj`)
 ## Unreleased
+
+### Added (2026-07-10)
+
+- **Closed-form game-theoretic validation of partial-fill (15 checks):** Extended `partial-fill-closed-form-checks` in `src/resolver_sim/yield/partial_fill.clj` with per-claim conservation (`:partial-fill/per-claim-conservation`), claim-key consistency (`:partial-fill/claim-key-consistency`), non-negative amounts (`:partial-fill/non-negative-amounts`), settlement-mode consistency (`:partial-fill/settlement-mode-consistency`), settlement-mode valid (`:partial-fill/settlement-mode-valid`), mode valid (`:partial-fill/mode-valid`), deferred-haircut overlap detection (`:partial-fill/deferred-haircut-overlap`), evidence self-consistency (`:partial-fill/evidence-self-consistency`), unrealized bucket validity (`:partial-fill/unrealized-bucket-valid`), and decision artifact format (`:partial-fill/decision-artifact-format`). Added batch validation (`validate-batch-decisions`) and artifact hash integrity verification (`validate-decision-artifact`). (`src/resolver_sim/yield/partial_fill.clj`)
+
+- **Mode-specific priority invariants for partial fill:** Added `:partial-fill/principal-first-priority` (yield zero-filled when principal not fully satisfied) and `:partial-fill/waterfall-priority` (lower-priority buckets zero-filled when higher bucket has unmet) to the closed-form check suite. (`src/resolver_sim/yield/partial_fill.clj:653-689`)
+
+- **Policy-aware rounding residual bound:** `:partial-fill/rounding-residual-bounded` now uses rounding-policy-specific bounds: floor-based methods (`:floor-and-carry`, `:floor`, `:principal-protective-floor`) retain the existing residual < max(1, count) bound, while `:largest-remainder` expects zero residual. Unrecognized policies return `:not-applicable`. (`src/resolver_sim/yield/partial_fill.clj:635-657`)
+
+- **Pro-rata fairness claims evaluator:** Added `:pro-rata-fairness` evaluator to `pro_rata_claims.clj` implementing cross-product equality check (`received[i] × owed[j] = received[j] × owed[i]`). Registered in the evaluator registry. Updated `benchmarks/mechanisms/shortfall-v1.edn` to map `mechanism/pro-rata-fairness` to `"pro-rata-fairness"` instead of `"ordering-independent"`. (`src/resolver_sim/yield/pro_rata_claims.clj:161-335`, `benchmarks/mechanisms/shortfall-v1.edn:29`)
+
+- **Iterative redistribution with cascading cap support:** Replaced single-pass capping in `allocate-pro-rata-with-redistribution` with multi-pass iterative redistribution (`max 10 passes`). Capped items release excess to remaining uncapped items across passes. Redistribution metadata changed from flat `:pass-1-*`/`:pass-2-*` keys to structured `:passes` vector. Added `merge-into-base` and `initial-cap-analysis` helpers. (`src/resolver_sim/economics/payoffs.clj:304-419`)
+
+- **Shortfall detection invariant (`:yield/shortfall-detected`):** Two-tier invariant: over-detection (shortfall basis-amount must not exceed position's total economic value) and under-detection (unwinding positions in shortfall liquidity mode must have `:shortfall` data). Registered in `check-fns` and `invariant_catalog.clj`. (`src/resolver_sim/yield/invariants.clj:125-162`, `src/resolver_sim/yield/invariant_catalog.clj:37-40`)
+
+- **Multi-party pro-rata shortfall scenario (Y06):** Added `Y06_multi-party-pro-rata-shortfall` with 2 competing claimants (Alice 1000 USDC, Bob 2000 USDC), shortfall at 60% available-ratio, and sequential withdrawal. Registered in `yield-provider-scenario-ids`. Replays with `:outcome :pass` and all yield invariants pass. (`scenarios/Y06_multi-party-pro-rata-shortfall.json`, `scenarios/edn/Y06_multi-party-pro-rata-shortfall.edn`)
+
+- **S82 shortfall-recovery-cycle integrated into benchmark pack:** Added `S82_shortfall-recovery-cycle` to `shortfall-scenario-ids` and `benchmarks/packs/prf-core/shortfall-allocation-v0.edn`. Updated descriptions from "3 scenarios" to "4 scenarios". Scenario exercises shortfall recovery with deferred yield claim. (`src/resolver_sim/scenario/suites.clj:149`, `benchmarks/packs/prf-core/shortfall-allocation-v0.edn`)
+
+- **Strategic claim catalog expansion:** Added 3 new strategic claims: `:claim/waterfall-fill-integrity`, `:claim/partial-fill-rounding-integrity`, `:claim/mode-validity`. All reference the existing `prf-core/shortfall-allocation-v0` benchmark pack with `:allocation/partial-fill` dimension. (`src/resolver_sim/benchmark/strategic_claim_validation.clj:32-55`)
+
+### Changed (2026-07-10)
+
+- **Shortfall-splits invariant includes haircut:** `check-shortfall-splits` now verifies `fulfilled + deferred + haircut = basis-amount` instead of `fulfilled + deferred = basis`. (`src/resolver_sim/yield/invariants.clj:60-68`)
+
+- **largest-remainder-alloc precondition guard:** Added non-negative amount precondition to `largest-remainder-alloc` rejecting claims with negative `:amount` values. (`src/resolver_sim/yield/exact_math.clj:249`)
+
+### Fixed (2026-07-10)
+
+- **Redistribution test metadata structure:** Updated `test-redistribution-pass-2-allocations` to match new `:passes` vector metadata format from iterative redistribution. (`test/resolver_sim/yield/partial_fill_test.clj:919`)
+
+- **Pro-rata claims registry parity:** Updated `pro_rata_claims_test.clj` to use `extended-claims` set reflecting the additional `:pro-rata-fairness` evaluator beyond the Phase 6 contract set. (`test/resolver_sim/yield/pro_rata_claims_test.clj`)
+
+### Tests
+
+- 78 partial-fill tests (206 assertions), 23 payoff redistribution tests (115 assertions), 9 pro-rata claims tests (25 assertions), 5 shortfall-detected invariant scenarios — all passing.
+
+### Benchmarks
+
+- `benchmarks/concepts/shortfall-allocation-v0.edn`: Updated concept description to reflect S82 integration.
+- `benchmarks/packs/prf-core/shortfall-allocation-v0.edn`: Added S82 scenario, updated all descriptions to "4 scenarios".
+- `benchmarks/mechanisms/shortfall-v1.edn`: Corrected mechanism/pro-rata-fairness to reference the correct `pro-rata-fairness` claim evaluator.
 
 - Extended the Sew held-custody ledger with ledger-first, replay-verified position tracking. `add-held` and `sub-held` now derive `:held/account`, `:held/position-id`, and optional `:owner/address`; maintain a materialized `:held-ledger/index`; and keep `:total-held` and `:held/positions` aligned as derived views of the append-only held-adjustment ledger. Replay invariants now verify `:held-ledger/index`, `:total-held`, and the compatibility position view against ledger replay. Added focused accounting regression coverage for the new position layer. (`protocols_src/resolver_sim/protocols/sew/accounting.clj`, `protocols_src/resolver_sim/protocols/sew/invariants.clj`, `protocols_src/test/resolver_sim/protocols/sew/accounting_test.clj`)
 - Expanded default forensic source-hash coverage for replay-critical non-code inputs: `PRF_SOURCE_ROOTS` and the Clojure source-hash default roots now include `benchmarks`, `data/concepts`, `scenarios`, `suites`, and `resources` in addition to `src` and `protocols_src`, with a regression test locking the default set and forensic runner docs updated to match. (`src/resolver_sim/forensic/source_hash.clj`, `test/resolver_sim/forensic/source_hash_test.clj`, `workspaces/forensic-runner/README.md`, `workspaces/forensic-runner/GUIDE.md`)

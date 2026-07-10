@@ -1,10 +1,7 @@
 (ns dev.artifacts
   (:require
-   [clojure.edn :as edn]
    [clojure.data.json :as json]
-   [clojure.java.io :as io]
-   [clojure.pprint :refer [pprint]]
-   [dev.repl :as repl]))
+   [clojure.java.io :as io]))
 
 (def default-artifact-root
   "results/test-artifacts")
@@ -15,12 +12,20 @@
     (json/read r :key-fn keyword)))
 
 (defn latest-run-dir
-  []
-  (->> (file-seq (io/file default-artifact-root))
-       (filter #(.isDirectory %))
-       (sort-by #(.lastModified %))
-       last
-       str))
+  "Return the most recently modified run directory, or nil if none exists.
+   Optionally filter by prefix (e.g., 'run-' for test runs)."
+  ([]
+   (latest-run-dir nil))
+  ([prefix]
+   (let [root (io/file default-artifact-root)]
+     (when (.exists root)
+       (->> (file-seq root)
+            (filter #(and (.isDirectory %)
+                         (or (nil? prefix)
+                             (.startsWith (.getName %) prefix))))
+            (sort-by #(.lastModified %) >)
+            first
+            str)))))
 
 (defn artifact-path
   ([filename]
@@ -49,12 +54,3 @@
    (let [summary (explain-registry path)]
      (tap> summary)
      summary)))
-
-;; domain-specific helpers:
-;; add for:
-;; (find-artifacts-by-importance "CORE")
-;; (find-artifacts-verifying :solvency)
-;; (find-dangling-dependencies)
-;; (find-evidence-for-event event-id)
-;; (explain-chain)
-;; (explain-attestation)

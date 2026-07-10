@@ -2,7 +2,6 @@
   "Deterministic auditable validation for strategic claims.
 
    This is intentionally narrow for v1:
-   - one claim only
    - deterministic replay only
    - explicit claim-to-scenario matching
    - level-scoped checks
@@ -27,7 +26,42 @@
                        :allocation/shortfall]
     :required-threat-tags #{"shortfall"}
     :match-dimensions #{:allocation/partial-fill
-                        :allocation/shortfall}}})
+                        :allocation/shortfall}}
+
+   :claim/waterfall-fill-integrity
+   {:claim/id :claim/waterfall-fill-integrity
+    :claim/title "Waterfall fill priority integrity"
+    :claim/description
+    "Partial-fill scenarios using waterfall mode should respect fill-order priority:
+     higher-priority buckets are filled to exhaustion before lower-priority buckets
+     receive any allocation."
+    :benchmark/manifest-path "benchmarks/packs/prf-core/shortfall-allocation-v0.edn"
+    :mechanism-levels [:allocation/partial-fill]
+    :required-threat-tags #{"shortfall"}
+    :match-dimensions #{:allocation/partial-fill}}
+
+   :claim/partial-fill-rounding-integrity
+   {:claim/id :claim/partial-fill-rounding-integrity
+    :claim/title "Partial-fill rounding residual integrity"
+    :claim/description
+    "Partial-fill decisions should respect rounding policy bounds under all modes:
+     residual amounts must fall within the defined acceptable range for the active
+     rounding policy."
+    :benchmark/manifest-path "benchmarks/packs/prf-core/shortfall-allocation-v0.edn"
+    :mechanism-levels [:allocation/partial-fill]
+    :required-threat-tags #{"shortfall"}
+    :match-dimensions #{:allocation/partial-fill}}
+
+   :claim/mode-validity
+   {:claim/id :claim/mode-validity
+    :claim/title "Partial-fill mode validity"
+    :claim/description
+    "Partial-fill decisions must declare a recognized fill mode: pro-rata,
+     principal-first, or waterfall. Unrecognized modes are rejected."
+    :benchmark/manifest-path "benchmarks/packs/prf-core/shortfall-allocation-v0.edn"
+    :mechanism-levels [:allocation/partial-fill]
+    :required-threat-tags #{"shortfall"}
+    :match-dimensions #{:allocation/partial-fill}}})
 
 (def ^:private artifact-kind :game-theoretic-validation)
 

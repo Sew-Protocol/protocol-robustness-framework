@@ -336,6 +336,200 @@
                                   checks))]
       (is (= :not-applicable (:status fairness))))))
 
+(deftest test-partial-fill-closed-form-checks-non-negative-violation
+  (testing "non-negative amounts catches negative values"
+    (let [decision {:settlement-mode :partial-fill
+                    :requested {:a 40 :b 60}
+                    :filled {:a 20 :b 30}
+                    :deferred {:a 20 :b 30}
+                    :haircut {:a -5}
+                    :policy {:mode :pro-rata}
+                    :evidence {:available-liquidity 50}}
+          checks (pf/partial-fill-closed-form-checks decision)
+          neg (first (filter #(= :partial-fill/non-negative-amounts
+                                 (:check/id %))
+                             checks))]
+      (is (= :fail (:status neg)))
+      (is (seq (get-in neg [:details :violations]))))))
+
+(deftest test-partial-fill-closed-form-checks-settlement-mode-consistency
+  (testing "settlement-mode-consistency catches full-fill with deferred"
+    (let [decision {:settlement-mode :full-fill
+                    :requested {:a 40 :b 60}
+                    :filled {:a 20 :b 30}
+                    :deferred {:a 20 :b 30}
+                    :haircut {}
+                    :policy {:mode :pro-rata}
+                    :evidence {:available-liquidity 50}}
+          checks (pf/partial-fill-closed-form-checks decision)
+          sm (first (filter #(= :partial-fill/settlement-mode-consistency
+                                (:check/id %))
+                            checks))]
+      (is (= :fail (:status sm)))
+      (is (seq (get-in sm [:details :violations]))))))
+
+(deftest test-partial-fill-closed-form-checks-full-fill-passes-clean
+  (testing "settlement-mode-consistency passes on clean full-fill"
+    (let [decision {:settlement-mode :full-fill
+                    :requested {:a 40 :b 60}
+                    :filled {:a 40 :b 60}
+                    :deferred {}
+                    :haircut {}
+                    :policy {:mode :pro-rata}
+                    :evidence {:available-liquidity 100}}
+          checks (pf/partial-fill-closed-form-checks decision)
+          sm (first (filter #(= :partial-fill/settlement-mode-consistency
+                                (:check/id %))
+                            checks))]
+      (is (= :pass (:status sm))))))
+
+(deftest test-partial-fill-closed-form-checks-mode-valid-violation
+  (testing "mode-valid catches invalid mode"
+    (let [decision {:settlement-mode :partial-fill
+                    :requested {:a 40}
+                    :filled {:a 20}
+                    :deferred {:a 20}
+                    :haircut {}
+                    :policy {:mode :unknown-mode}
+                    :evidence {:available-liquidity 20}}
+          checks (pf/partial-fill-closed-form-checks decision)
+          mv (first (filter #(= :partial-fill/mode-valid
+                                (:check/id %))
+                            checks))]
+      (is (= :fail (:status mv)))
+      (is (seq (get-in mv [:details :violations]))))))
+
+(deftest test-partial-fill-closed-form-checks-per-claim-deferred-bound
+  (testing "per-claim-bound catches deferred exceeding requested"
+    (let [decision {:settlement-mode :partial-fill
+                    :requested {:a 40 :b 60}
+                    :filled {:a 20 :b 30}
+                    :deferred {:a 20 :b 70}
+                    :haircut {}
+                    :policy {:mode :pro-rata}
+                    :evidence {:available-liquidity 50}}
+          checks (pf/partial-fill-closed-form-checks decision)
+          pc (first (filter #(= :partial-fill/per-claim-bound
+                                (:check/id %))
+                            checks))]
+      (is (= :fail (:status pc)))
+      (is (seq (get-in pc [:details :violations]))))))
+
+(deftest test-partial-fill-closed-form-checks-per-claim-haircut-bound
+  (testing "per-claim-bound catches haircut exceeding requested"
+    (let [decision {:settlement-mode :partial-fill
+                    :requested {:a 40 :b 60}
+                    :filled {:a 20 :b 30}
+                    :deferred {:a 20 :b 30}
+                    :haircut {:b 70}
+                    :policy {:mode :pro-rata}
+                    :evidence {:available-liquidity 50}}
+          checks (pf/partial-fill-closed-form-checks decision)
+          pc (first (filter #(= :partial-fill/per-claim-bound
+                                (:check/id %))
+                            checks))]
+      (is (= :fail (:status pc)))
+      (is (seq (get-in pc [:details :violations]))))))
+
+(deftest test-partial-fill-closed-form-checks-deferred-haircut-overlap
+  (testing "deferred-haircut-overlap catches same key in both buckets"
+    (let [decision {:settlement-mode :partial-fill
+                    :requested {:a 40 :b 60}
+                    :filled {:a 20 :b 30}
+                    :deferred {:a 20 :b 10}
+                    :haircut {:b 50}
+                    :policy {:mode :pro-rata}
+                    :evidence {:available-liquidity 50}}
+          checks (pf/partial-fill-closed-form-checks decision)
+          overlap (first (filter #(= :partial-fill/deferred-haircut-overlap
+                                     (:check/id %))
+                                 checks))]
+      (is (= :fail (:status overlap)))
+      (is (seq (get-in overlap [:details :violations]))))))
+
+(deftest test-partial-fill-closed-form-checks-deferred-haircut-overlap-passes
+  (testing "deferred-haircut-overlap passes when keys do not overlap"
+    (let [decision {:settlement-mode :partial-fill
+                    :requested {:a 40 :b 60}
+                    :filled {:a 20 :b 30}
+                    :deferred {:a 20}
+                    :haircut {:b 30}
+                    :policy {:mode :pro-rata}
+                    :evidence {:available-liquidity 50}}
+          checks (pf/partial-fill-closed-form-checks decision)
+          overlap (first (filter #(= :partial-fill/deferred-haircut-overlap
+                                     (:check/id %))
+                                 checks))]
+      (is (= :pass (:status overlap))))))
+
+(deftest test-partial-fill-closed-form-checks-evidence-shortage-mismatch
+  (testing "evidence-self-consistency catches shortage mismatch"
+    (let [decision {:settlement-mode :partial-fill
+                    :requested {:a 40 :b 60}
+                    :filled {:a 20 :b 30}
+                    :deferred {:a 20 :b 30}
+                    :haircut {}
+                    :policy {:mode :pro-rata}
+                    :evidence {:available-liquidity 50
+                               :shortage 0}}
+          checks (pf/partial-fill-closed-form-checks decision)
+          ec (first (filter #(= :partial-fill/evidence-self-consistency
+                                (:check/id %))
+                            checks))]
+      (is (= :fail (:status ec)))
+      (is (seq (get-in ec [:details :violations]))))))
+
+(deftest test-partial-fill-closed-form-checks-evidence-fill-mode-mismatch
+  (testing "evidence-self-consistency catches fill-mode mismatch"
+    (let [decision {:settlement-mode :partial-fill
+                    :requested {:a 40 :b 60}
+                    :filled {:a 20 :b 30}
+                    :deferred {:a 20 :b 30}
+                    :haircut {}
+                    :policy {:mode :pro-rata}
+                    :evidence {:available-liquidity 50
+                               :shortage 50
+                               :fill-mode :waterfall}}
+          checks (pf/partial-fill-closed-form-checks decision)
+          ec (first (filter #(= :partial-fill/evidence-self-consistency
+                                (:check/id %))
+                            checks))]
+      (is (= :fail (:status ec)))
+      (is (seq (get-in ec [:details :violations]))))))
+
+(deftest test-partial-fill-closed-form-checks-settlement-mode-valid-violation
+  (testing "settlement-mode-valid catches invalid settlement-mode"
+    (let [decision {:settlement-mode :invalid-mode
+                    :requested {:a 40}
+                    :filled {:a 20}
+                    :deferred {:a 20}
+                    :haircut {}
+                    :policy {:mode :pro-rata}
+                    :evidence {:available-liquidity 20}}
+          checks (pf/partial-fill-closed-form-checks decision)
+          smv (first (filter #(= :partial-fill/settlement-mode-valid
+                                 (:check/id %))
+                             checks))]
+      (is (= :fail (:status smv)))
+      (is (seq (get-in smv [:details :violations]))))))
+
+(deftest test-partial-fill-closed-form-checks-unrealized-phantom-key
+  (testing "unrealized-bucket-valid catches phantom key in unrealized"
+    (let [decision {:settlement-mode :partial-fill
+                    :requested {:a 40 :b 60}
+                    :filled {:a 20 :b 30}
+                    :deferred {:a 20 :b 30}
+                    :haircut {}
+                    :unrealized {:c 10}
+                    :policy {:mode :pro-rata}
+                    :evidence {:available-liquidity 50}}
+          checks (pf/partial-fill-closed-form-checks decision)
+          ub (first (filter #(= :partial-fill/unrealized-bucket-valid
+                                (:check/id %))
+                            checks))]
+      (is (= :fail (:status ub)))
+      (is (seq (get-in ub [:details :violations]))))))
+
 (deftest test-largest-remainder-policy
   (testing "Largest-remainder rounding policy for partial fill"
     (let [policy {:mode :pro-rata
@@ -722,18 +916,22 @@
       (is (some? detail) "allocation-detail present in principal-first evidence"))))
 
 (deftest test-redistribution-pass-2-allocations
-  (testing "redistribution metadata includes pass-2-allocations for traceability"
+  (testing "redistribution metadata includes per-pass records for traceability"
     (let [policy {:mode :pro-rata}
           decision (pf/calculate-fulfillment 80 base-position policy
                                              {:rows [{:key :a :owed 100 :weight 100 :cap 30}
                                                      {:key :b :owed 100 :weight 100 :cap nil}]})
           redist (get-in decision [:evidence :redistribution])]
-      (is (contains? redist :pass-2-allocations)
-          "redistribution includes pass-2-allocations")
-      (is (vector? (:pass-2-allocations redist))
-          "pass-2-allocations is a vector")
-      (is (every? #(contains? % :id) (:pass-2-allocations redist))
-          "each pass-2 allocation has :id"))))
+      (is (contains? redist :passes)
+          "redistribution includes :passes")
+      (is (vector? (:passes redist))
+          ":passes is a vector")
+      (is (every? #(contains? % :pass) (:passes redist))
+          "each pass record has :pass")
+      (is (every? #(contains? % :capped-ids) (:passes redist))
+          "each pass record has :capped-ids")
+      (is (every? #(contains? % :excess) (:passes redist))
+          "each pass record has :excess"))))
 
 (deftest test-waterfall-rows-produces-evidence
   (testing "waterfall with rows produces allocation-rows and bucket-redistributions evidence"
@@ -770,3 +968,95 @@
                                                      {:key :realized-yield :owed 500 :weight 500 :cap 500}]})]
       (is (some? (get-in decision [:evidence :allocation-rows]))
           "allocation-rows present even on full-fill with caps"))))
+
+;; ── Batch and artifact validation tests ──────────────────────────────────
+
+(deftest test-validate-batch-decisions
+  (testing "validate-batch-decisions runs checks on each decision"
+    (let [d1 {:settlement-mode :full-fill
+              :requested {:a 40}
+              :filled {:a 40}
+              :deferred {}
+              :haircut {}
+              :policy {:mode :pro-rata}
+              :evidence {:available-liquidity 40}}
+          d2 {:settlement-mode :partial-fill
+              :requested {:a 40}
+              :filled {:a 20}
+              :deferred {:a 20}
+              :haircut {}
+              :policy {:mode :pro-rata}
+              :evidence {:available-liquidity 20}}
+          result (pf/validate-batch-decisions [d1 d2])]
+      (is (true? (:batch/valid? result)))
+      (is (= 2 (get-in result [:batch/summary :total-decisions])))
+      (is (= 2 (get-in result [:batch/summary :passed-count])))
+      (is (empty? (get-in result [:batch/summary :failed-decisions]))))))
+
+(deftest test-validate-batch-decisions-detects-failure
+  (testing "validate-batch-decisions detects failing decisions"
+    (let [d1 {:settlement-mode :full-fill
+              :requested {:a 40}
+              :filled {:a 40}
+              :deferred {:a 10}
+              :haircut {}
+              :policy {:mode :pro-rata}
+              :evidence {:available-liquidity 40}}
+          result (pf/validate-batch-decisions [d1])]
+      (is (false? (:batch/valid? result)))
+      (is (= 0 (get-in result [:batch/summary :failed-decisions 0 :decision-index]))))))
+
+(deftest test-decision-artifact-format-valid
+  (testing "decision-artifact-format passes for well-formed artifact"
+    (let [decision {:settlement-mode :partial-fill
+                    :requested {:a 40}
+                    :filled {:a 20}
+                    :deferred {:a 20}
+                    :haircut {}
+                    :policy {:mode :pro-rata}
+                    :evidence {:available-liquidity 20}
+                    :decision/hash (str "sha256:" (apply str (repeat 64 "a")))
+                    :decision/id "partial-fill-aaaa"}
+          checks (pf/partial-fill-closed-form-checks decision)
+          fmt (first (filter #(= :partial-fill/decision-artifact-format (:check/id %)) checks))]
+      (is (= :pass (:status fmt))))))
+
+(deftest test-decision-artifact-format-invalid-hash
+  (testing "decision-artifact-format catches malformed hash"
+    (let [decision {:settlement-mode :partial-fill
+                    :requested {:a 40}
+                    :filled {:a 20}
+                    :deferred {:a 20}
+                    :haircut {}
+                    :policy {:mode :pro-rata}
+                    :evidence {:available-liquidity 20}
+                    :decision/hash "not-a-valid-hash"}
+          checks (pf/partial-fill-closed-form-checks decision)
+          fmt (first (filter #(= :partial-fill/decision-artifact-format (:check/id %)) checks))]
+      (is (= :fail (:status fmt)))
+      (is (seq (get-in fmt [:details :violations]))))))
+
+(deftest test-validate-decision-artifact
+  (testing "validate-decision-artifact verifies content-addressed hash"
+    (let [position (pos/normalize-position
+                    {:owner/id "user1" :module/id :test-mod :token "USDC"
+                     :principal 10000 :shares 10000 :entry-index 1
+                     :realized-yield 500 :unrealized-yield 300
+                     :deferred-yield 200 :haircut-yield 0 :status :active})
+          decision (pf/calculate-fulfillment 20000 position)
+          artifact (pf/decision-artifact position decision)
+          result (pf/validate-decision-artifact position artifact)]
+      (is (= :pass (:status result))))))
+
+(deftest test-validate-decision-artifact-tampered
+  (testing "validate-decision-artifact detects tampered hash"
+    (let [position (pos/normalize-position
+                    {:owner/id "user1" :module/id :test-mod :token "USDC"
+                     :principal 10000 :shares 10000 :entry-index 1
+                     :realized-yield 500 :unrealized-yield 300
+                     :deferred-yield 200 :haircut-yield 0 :status :active})
+          decision (pf/calculate-fulfillment 20000 position)
+          artifact (assoc (pf/decision-artifact position decision)
+                          :decision/hash "sha256:0000000000000000000000000000000000000000000000000000000000000000")
+          result (pf/validate-decision-artifact position artifact)]
+      (is (= :fail (:status result))))))

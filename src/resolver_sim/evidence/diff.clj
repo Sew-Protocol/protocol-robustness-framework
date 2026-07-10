@@ -304,9 +304,6 @@
 ;; :invariants-ok?.  This module extracts them and produces an index that can
 ;; be merged into the evidence registry's :indexes map.
 ;;
-;; Usage:
-;;   (build-invariant-links trace)  ? {:by-event-index {...} :by-invariant-id {...}}
-
 (defn trace-has-invariants?
   "Check if a trace entry carries invariant results."
   [trace-entry]

@@ -2,7 +2,7 @@
  :suite-id :suites/equilibrium-validation,
  :trace-id "eq-v12-spe-fail-slashed-resolver",
  :final-state-hash
- "702f8a06bbabb83d17a9a99f8a7e878c67e4b8caade09bdf4d1652dda3a9fce8",
+ "dfca620dcd2e0459b77c443b5b931197facd250b4c0b07b350644b3bec2a0da4",
  :metrics
  {:yield/escrow-unrealized 0,
   :yield/position-status nil,

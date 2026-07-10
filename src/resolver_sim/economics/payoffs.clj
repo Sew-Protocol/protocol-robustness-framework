@@ -301,9 +301,38 @@
               :ordering-policy ordering-policy
               :total-weight total-weight}}))
 
+(def ^:private max-redistribution-passes 10)
+
+(defn- merge-into-base
+  "Merge additional allocations into a base-allocations map (id -> map).
+   Sums :allocated for matching ids, adds new entries for unknown ids.
+   Returns a vector of merged allocations."
+  [base-map additional-allocs]
+  (vec (vals (reduce (fn [acc a]
+                       (if-let [existing (get acc (:id a))]
+                         (update acc (:id a) update :allocated + (:allocated a))
+                         (assoc acc (:id a) a)))
+                     base-map
+                     additional-allocs))))
+
+(defn- initial-cap-analysis
+  "Analyze first-pass allocation for caps hit and redistributable excess.
+   Returns {:capped-ids set :excess n :base-map {id -> alloc}}."
+  [base-result items id-fn]
+  (let [base-allocations (:allocations base-result)
+        capped-ids (set (keep (fn [a]
+                                (when (and (:cap a) (>= (:allocated a) (:cap a)))
+                                  (:id a)))
+                              base-allocations))
+        excess (+ (:total-unmet base-result) (:remainder base-result))]
+    {:capped-ids capped-ids
+     :excess excess
+     :base-map (into {} (map (fn [a] [(:id a) a]) base-allocations))}))
+
 (defn allocate-pro-rata-with-redistribution
   "Like allocate-pro-rata, but when an item hits its cap the excess
-   is redistributed to remaining uncapped items via a second pass.
+   is redistributed to remaining uncapped items iteratively until no
+   new caps are hit or the iteration limit is reached.
 
    Items shape: {:id <kw> :weight <int> :cap <int-or-nil>}
    Nil cap means unlimited (no cap applied).
@@ -311,54 +340,83 @@
    When no item has a cap, or no item hits its cap, the result is
    identical to allocate-pro-rata with the same parameters.
 
-   Same return shape as allocate-pro-rata."
+   Same return shape as allocate-pro-rata.
+   Adds :redistribution metadata with per-pass records."
   [{:keys [amount items id-fn weight-fn cap-fn rounding]
     :or {id-fn :id
          weight-fn :weight
          cap-fn :cap
          rounding :floor-with-largest-remainder}}]
-  (let [initial (allocate-pro-rata {:amount amount
-                                    :items items
-                                    :id-fn id-fn
-                                    :weight-fn weight-fn
-                                    :cap-fn cap-fn
-                                    :rounding rounding
-                                    :remainder-policy :unallocated})
-        capped-ids (set (keep (fn [a]
-                                (when (and (:cap a) (>= (:allocated a) (:cap a)))
-                                  (:id a)))
-                              (:allocations initial)))
-        excess (+ (:total-unmet initial) (:remainder initial))]
+  (let [base-result (allocate-pro-rata {:amount amount
+                                        :items items
+                                        :id-fn id-fn :weight-fn weight-fn :cap-fn cap-fn
+                                        :rounding rounding
+                                        :remainder-policy :unallocated})
+        {:keys [capped-ids excess base-map]}
+        (initial-cap-analysis base-result items id-fn)]
     (if (or (zero? excess) (empty? capped-ids) (= (count capped-ids) (count items)))
-      initial
-      (let [uncapped (remove (fn [item] (contains? capped-ids (id-fn item))) items)
-            redistributed (allocate-pro-rata {:amount excess
-                                              :items uncapped
-                                              :id-fn id-fn
-                                              :weight-fn weight-fn
-                                              :cap-fn cap-fn
-                                              :rounding rounding
-                                              :remainder-policy :unallocated})
-            capped-alloc (filter (fn [a] (contains? capped-ids (:id a)))
-                                 (:allocations initial))
-            uncapped-alloc (:allocations redistributed)]
-        {:allocations (vec (concat capped-alloc uncapped-alloc))
-         :total-requested amount
-         :total-allocated (+ (:total-allocated initial) (:total-allocated redistributed))
-         :total-unmet (:total-unmet redistributed)
-         :remainder (:remainder redistributed)
-         :policy (:policy initial)
-         :redistribution {:pass-1-capped-ids (vec capped-ids)
-                          :pass-1-excess excess
-                          :pass-2-allocated (:total-allocated redistributed)
-                          :pass-2-items (count uncapped)
-                          :pass-2-allocations (mapv (fn [a]
-                                                      {:id (:id a)
-                                                       :allocated (:allocated a)
-                                                       :weight (:weight a)})
-                                                    (:allocations redistributed))}}))))
-
-(def default-pro-rata-allocation-result-kind :pro-rata-allocation)
+      base-result
+      (loop [remaining-excess excess
+             uncapped-items (remove (fn [item] (contains? capped-ids (id-fn item))) items)
+             acc-base-map base-map
+             acc-capped-ids capped-ids
+             pass-num 1
+             pass-records [{:pass 0
+                            :capped-ids (vec capped-ids)
+                            :excess excess}]]
+        (if (>= pass-num max-redistribution-passes)
+          (let [all-allocs (vec (vals acc-base-map))
+                total-allocated (reduce +' 0 (map :allocated all-allocs))]
+            {:allocations all-allocs
+             :total-requested amount
+             :total-allocated total-allocated
+             :total-unmet 0
+             :remainder remaining-excess
+             :policy (:policy base-result)
+             :redistribution {:passes (vec pass-records)
+                              :total-passes (inc pass-num)
+                              :iteration-limit-reached? true}})
+          (let [pass-result (allocate-pro-rata {:amount remaining-excess
+                                                :items uncapped-items
+                                                :id-fn id-fn :weight-fn weight-fn :cap-fn cap-fn
+                                                :rounding rounding
+                                                :remainder-policy :unallocated})
+                merged (merge-into-base acc-base-map (:allocations pass-result))
+                newly-capped (filterv (fn [a] (and (some? (:cap a))
+                                                   (>= (:allocated a) (:cap a))))
+                                      merged)
+                newly-capped-ids (set (map :id newly-capped))]
+            (if (empty? newly-capped)
+              (let [total-allocated (reduce +' 0 (map :allocated merged))]
+                {:allocations merged
+                 :total-requested amount
+                 :total-allocated total-allocated
+                 :total-unmet (:total-unmet pass-result)
+                 :remainder (:remainder pass-result)
+                 :policy (:policy base-result)
+                 :redistribution {:passes (vec pass-records)
+                                  :total-passes (inc pass-num)}})
+              (let [next-excess (+ (:total-unmet pass-result) (:remainder pass-result))
+                    all-capped (into acc-capped-ids newly-capped-ids)
+                    next-uncapped (remove (fn [item] (contains? all-capped (id-fn item))) items)]
+                (if (or (zero? next-excess) (empty? next-uncapped))
+                  (let [total-allocated (reduce +' 0 (map :allocated merged))]
+                    {:allocations merged
+                     :total-requested amount
+                     :total-allocated total-allocated
+                     :total-unmet 0
+                     :remainder next-excess
+                     :policy (:policy base-result)
+                     :redistribution {:passes (vec pass-records)
+                                      :total-passes (inc pass-num)}})
+                  (recur next-excess
+                         next-uncapped
+                         (into {} (map (fn [a] [(:id a) a]) merged))
+                         all-capped
+                         (inc pass-num)
+                         (conj pass-records {:pass pass-num
+                                             :capped-ids (vec newly-capped-ids)
+                                             :excess next-excess}))))))))))) (def default-pro-rata-allocation-result-kind :pro-rata-allocation)
 (def default-pro-rata-allocation-result-version 1)
 (def default-pro-rata-allocation-result-artifact-kind :pro-rata/allocation-result)
 

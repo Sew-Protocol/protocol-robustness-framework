@@ -9,8 +9,8 @@
             [resolver-sim.stochastic.rng :as rng]
             [clojure.set]))
 
-;;;; ============================================================================
-;;;; MULTI-EPOCH WITH GOVERNANCE DELAYS
+;; ============================================================================
+;; MULTI-EPOCH WITH GOVERNANCE DELAYS
 
 (defn- next-int
   "Seeded [0,n) integer using stochastic RNG."
@@ -211,9 +211,9 @@
      :governance-metrics gov-metrics
      :aggregated-stats final-stats}))
 
-;;;; ============================================================================
-;;;; COMPARISON: Phase J (Instant) vs Phase M (Delayed)
-;;;; ============================================================================
+;; ============================================================================
+;; COMPARISON: Phase J (Instant) vs Phase M (Delayed)
+;; ============================================================================
 
 (defn compare-governance-delays
   "Compare system behavior with different governance response delays

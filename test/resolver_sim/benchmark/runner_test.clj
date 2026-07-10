@@ -28,12 +28,12 @@
 
 (deftest test-suite-resolution
   (testing "Pack suite keywords resolve to scenario paths"
-    (is (= 44 (count (suites/suite-paths :suite/sew-dispute-safety-v1)))
-        ":suite/sew-dispute-safety-v1 should resolve to 44 dispute-resolution scenarios")
+    (is (= 53 (count (suites/suite-paths :suite/sew-dispute-safety-v1)))
+        ":suite/sew-dispute-safety-v1 should resolve to 53 dispute-resolution scenarios")
     (is (= 15 (count (suites/suite-paths :suite/sew-yield-safety-v1)))
         ":suite/sew-yield-safety-v1 should resolve to 15 yield scenarios")
-    (is (= 44 (count (suites/suite-paths :suite/prf-replay-v1)))
-        ":suite/prf-replay-v1 should resolve to 44 core replay scenarios")
+    (is (= 53 (count (suites/suite-paths :suite/prf-replay-v1)))
+        ":suite/prf-replay-v1 should resolve to 53 core replay scenarios")
     (is (nil? (suites/suite-paths :suite/non-existent))
         "Unknown suite keyword should return nil")))
 
@@ -41,15 +41,15 @@
   (testing "Canonical pack manifests load and reference registered suites"
     (doseq [[path expected-suite expected-count]
             [["benchmarks/packs/sew/escrow-dispute-v1.edn"
-              :suite/sew-dispute-safety-v1 44]
+              :suite/sew-dispute-safety-v1 53]
              ["benchmarks/packs/sew/dispute-liveness-v1.edn"
-              :suite/sew-dispute-safety-v1 44]
+              :suite/sew-dispute-safety-v1 53]
              ["benchmarks/packs/sew/yield-shortfall-v1.edn"
               :suite/sew-yield-safety-v1 15]
              ["benchmarks/packs/sew/resolver-slashing-v1.edn"
-              :suite/sew-dispute-safety-v1 44]
+              :suite/sew-dispute-safety-v1 53]
              ["benchmarks/packs/prf-core/deterministic-replay-v1.edn"
-              :suite/prf-replay-v1 44]]]
+              :suite/prf-replay-v1 53]]]
       (let [manifest (edn/read-string (slurp path))
             suite-kw (:benchmark/scenario-suite manifest)
             paths (suites/suite-paths suite-kw)]
@@ -74,7 +74,7 @@
 
 (deftest test-benchmark-run-basic
   (testing "Can run a benchmark (old format) and generate evidence"
-    (let [manifest-path "benchmarks/dispute-liveness.edn"
+    (let [manifest-path "benchmarks/packs/sew/dispute-liveness-v1.edn"
           evidence (runner/run-benchmark manifest-path)]
       (is (contains? evidence :benchmark))
       (is (contains? evidence :repo))
@@ -102,8 +102,8 @@
     (let [manifest (edn/read-string (slurp "benchmarks/packs/sew/escrow-dispute-v1.edn"))
           adapter runner/default-adapter
           scenarios (adapter/load-scenarios adapter manifest)]
-      (is (= 44 (count scenarios))
-          "Adapter should resolve :suite/sew-dispute-safety-v1 to 44 scenarios")
+      (is (= 53 (count scenarios))
+          "Adapter should resolve :suite/sew-dispute-safety-v1 to 53 scenarios")
       (is (every? #(instance? java.io.File %) scenarios)
           "All scenarios should be java.io.File objects")))
 
@@ -157,15 +157,15 @@
       (let [evidence (runner/run-benchmark "benchmarks/packs/prf-core/deterministic-replay-v1.edn")
             claim-results (:claim-results evidence)
             claim-outcomes (into {} (map (juxt :claim/id :claim/outcome)) claim-results)]
-        (is (= 88 (count (:results evidence)))
-            "Deterministic replay benchmark should execute 44 scenarios twice")
+        (is (= 106 (count (:results evidence)))
+            "Deterministic replay benchmark should execute 53 scenarios twice")
         (is (= #{1 2} (into #{} (map :benchmark/run-index) (:results evidence))))
         (is (= #{2} (into #{} (map :benchmark/run-count) (:results evidence))))
-        (is (= 88 (get-in evidence [:metrics :execution-count])))
-        (is (= 44 (get-in evidence [:metrics :unique-scenario-count])))
+        (is (= 106 (get-in evidence [:metrics :execution-count])))
+        (is (= 53 (get-in evidence [:metrics :unique-scenario-count])))
         (is (= 2 (get-in evidence [:metrics :declared-run-count])))
-        (is (= 88 (get-in evidence [:run/manifest :execution-count])))
-        (is (= 44 (get-in evidence [:run/manifest :unique-scenario-count])))
+        (is (= 106 (get-in evidence [:run/manifest :execution-count])))
+        (is (= 53 (get-in evidence [:run/manifest :unique-scenario-count])))
         (is (= 2 (get-in evidence [:run/manifest :declared-run-count])))
         (is (= :pass (get claim-outcomes :claim/replay-identical-results)))
         (is (= :pass (get claim-outcomes :claim/hash-consistency-across-runs)))

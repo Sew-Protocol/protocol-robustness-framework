@@ -21,6 +21,7 @@
   (:require [nextjournal.clerk :as clerk]
             [clojure.java.io :as io]
             [clojure.data.json :as json]
+            [clojure.edn :as edn]
             [resolver-sim.protocols.sew.types :as t]
             [resolver-sim.io.scenarios :as io-sc]
             [resolver-sim.hash.canonical :as hc]))
@@ -169,27 +170,39 @@
   (let [locations [(when-let [d (find-latest-run-dir "run-")]
                      [(io/file d "event-evidence")
                       (io/file d "chain-cursor-final.json")
-                      (io/file d "evidence-registry.json")])
+                      (io/file d "evidence-registry.json")
+                      (io/file d "evidence-nodes")])
                    [(io/file "results/test-artifacts/event-evidence")
                     (io/file "results/test-artifacts/chain-cursor-final.json")
-                    (io/file "results/test-artifacts/evidence-registry.json")]]
+                    (io/file "results/test-artifacts/evidence-registry.json")
+                    (io/file "results/test-artifacts/evidence-nodes")]]
         ;; Check each location for S03 evidence
-        s03-pattern #"s03" ]
+        s03-pattern #"s03"]
     (loop [locs locations]
       (when (seq locs)
-        (let [[ev-dir cc-path reg-path] (first locs)]
+        (let [[ev-dir cc-path reg-path evn-dir] (first locs)]
           (if (and ev-dir (.exists ev-dir))
             (let [all-files (sort (.listFiles ev-dir))
-                  s03-files (filter #(re-find s03-pattern (.getName %)) all-files)]
+                  s03-files (filter #(re-find s03-pattern (.getName %)) all-files)
+                  ;; Load evidence-nodes and find commitment root
+                  commitment-root (when (and evn-dir (.exists evn-dir))
+                                    (let [node-files (.listFiles evn-dir)]
+                                      (some (fn [f]
+                                              (let [node (edn/read-string (slurp f))]
+                                                (when (= :evidence/commitment-root
+                                                         (get-in node [:execution :execution-id]))
+                                                  node)))
+                                            (vec node-files))))]
               (if (seq s03-files)
-                {                :run-dir (str (.getParentFile (.getParentFile ev-dir)))
+                {                 :run-dir (str (.getParentFile (.getParentFile ev-dir)))
                  :event-evidence-dir (.getPath ev-dir)
                  :chain-cursor (when (.exists cc-path) (load-json (.getPath cc-path)))
                  :registry (when (.exists reg-path) (load-json (.getPath reg-path)))
                  :evidence-root (when (and (.exists cc-path) cc-path)
                                   (get (load-json (.getPath cc-path)) :cursor/final-self-hash))
                  :evidence-count (count s03-files)
-                 :event-evidence-files (mapv load-json (map #(.getPath %) s03-files))}
+                 :event-evidence-files (mapv load-json (map #(.getPath %) s03-files))
+                 :commitment-root commitment-root}
                 (recur (rest locs))))
             (recur (rest locs))))))))
 
@@ -287,7 +300,39 @@
            [:div {:style {:gridColumn "1 / -1"}}
             [:span {:style {:color "#64748b"}} "final-self-hash: "
              [:span {:style {:color "#22c55e" :fontFamily "monospace" :fontSize "11px"}}
-               (:cursor/final-self-hash cc)]]]]])])]))
+               (:cursor/final-self-hash cc)]]]]])
+
+       ;; Commitment root
+       [:div {:style {:marginTop "16px"
+                      :background "#0f172a" :border "1px solid #334155"
+                      :borderRadius "6px" :padding "12px"}}
+        [:h4 {:style {:color "#7ADDDC" :marginTop 0 :marginBottom "8px" :fontSize "14px"}}
+         "Commitment Root"]
+        (if-let [cr (:commitment-root ev)]
+          [:div {:style {:fontSize "12px" :display "grid" :gridTemplateColumns "1fr 1fr" :gap "6px"}}
+           [:div {:style {:color "#64748b"}}
+            "node-hash: " [:span {:style {:color "#22c55e" :fontFamily "monospace" :fontSize "11px"}}
+                           (str (subs (:node-hash cr "") 0 16) "...")]]
+           [:div {:style {:color "#64748b"}}
+            "parent: " [:span {:style {:color "#e2e8f0" :fontFamily "monospace" :fontSize "11px"}}
+                        (-> cr :parent-hashes first (subs 0 24) (str "..."))]]
+           [:div {:style {:color "#64748b"}}
+            "bootstrap: " [:span {:style {:color "#e2e8f0" :fontFamily "monospace" :fontSize "11px"}}
+                           (-> cr :bootstrap-roots first (subs 0 30) (str "..."))]]
+           [:div {:style {:color "#64748b"}}
+            "status (construction): " [:span {:style {:color "#fbbf24"}}
+                                       (str (get-in cr [:result :status]))]]
+           [:div {:style {:color "#64748b" :gridColumn "1 / -1"}}
+            "execution-status: " [:span {:style (if (= :pass (get-in cr [:outputs :execution/status]))
+                                                  {:color "#22c55e"}
+                                                  {:color "#ef4444"})}
+                                  (str (get-in cr [:outputs :execution/status]))]]
+           (when-let [br (get-in cr [:outputs :bundle/root-hash])]
+             [:div {:style {:color "#64748b" :gridColumn "1 / -1"}}
+              "bundle-root-hash: " [:span {:style {:color "#e2e8f0" :fontFamily "monospace" :fontSize "11px"}}
+                                     br]])]
+          [:div {:style {:color "#64748b" :fontSize "13px" :padding "4px 0"}}
+           "No commitment root found. Run the scenario with evidence-node emission to generate one."])]])]))
 
 ;; ===========================================================================
 ;; 4. Canonical Hashing Explanation

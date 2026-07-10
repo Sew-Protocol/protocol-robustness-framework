@@ -121,12 +121,14 @@
   :lint
   {:extra-deps {clj-kondo/clj-kondo {:mvn/version "2025.04.07"}}
    :main-opts ["-m" "clj-kondo.main"
-               "--lint" "src:notebooks:test:dev"]}
+                "--lint" "src:notebooks:test:dev"
+                "--fail-level" "error"]}
 
   :lint/core
   {:extra-deps {clj-kondo/clj-kondo {:mvn/version "2025.04.07"}}
    :main-opts ["-m" "clj-kondo.main"
-               "--lint" "src:test"]}
+                "--lint" "src:test"
+                "--fail-level" "error"]}
 
   :regenerate-goldens
   {:extra-paths ["scripts"]

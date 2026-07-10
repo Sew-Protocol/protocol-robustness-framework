@@ -223,8 +223,9 @@
        {:guard/error error-kw
         :guard/context (dissoc ctx :world)}
        nil
-       {:world-before (:world ctx)
-        :world-after (:world ctx)}))
+       (when (:world ctx)
+         {:world-before (:world ctx)
+          :world-after (:world ctx)})))
     result))
 
 (defn- handle-reversal-slashing
@@ -286,7 +287,7 @@
                           (make-reversal-slash-entry slash-id prev-resolver prev-stake slash-bps
                                                      slash-amt token workflow-id :pending now
                                                      (+ now appeal-window) reversal-prob))
-                (-> (reg/slash-resolver-stake world prev-resolver slash-amt challenger bounty-bps workflow-id)
+                (-> (reg/slash-resolver-stake world prev-resolver slash-amt challenger bounty-bps workflow-id true)
                     :world
                     (assoc-in [:pending-fraud-slashes slash-id]
                               (make-reversal-slash-entry slash-id prev-resolver prev-stake

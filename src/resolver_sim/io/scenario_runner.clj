@@ -971,24 +971,32 @@
                       (populate-forensic-claims!)
                       (write-run-links! run-id dispatch protocol-id tsa-url canonical?)
 
-                      ;; Emit a minimal evidence-root execution node that parents the
-                      ;; main execution node, anchoring the DAG to the evidence chain.
-                      ;; This gives the DAG a single root with parent-hashes: [].
+                      ;; Emit a post-hoc evidence commitment root node that anchors
+                      ;; the execution DAG to the evidence chain.
+                      ;; This is the externally meaningful evidence anchor for a run.
+                      ;; parent-hashes references the execution node; bootstrap-roots
+                      ;; references the evidence-chain cursor hash.
+                      ;; Runners and selectors will later point at this node.
                       (try
-                        (let [evidence-root (chain/evidence-root-hash)]
-                          (when (and evidence-root execution-node)
+                        (let [evidence-root (chain/evidence-root-hash)
+                              exec-hash (:node-hash execution-node)
+                              exec-status (get-in execution-node [:result :status])
+                              bundle-root-hash (some-> execution-node
+                                                       :policy-output :visible :outputs :bundle/root-hash)]
+                          (when (and evidence-root exec-hash)
                             (ev-node/emit-execution-node!
-                             {:execution-id :evidence/chain-root
+                             {:execution-id :evidence/commitment-root
                               :policy-id :evidence-policy/computed
-                              :parent-hashes []
-                              :bootstrap-roots [(str "evidence:" evidence-root)]
-                              :timestamp (str (java.time.Instant/now))
+                              :parent-hashes [(str "sha256:" exec-hash)]
+                              :bootstrap-roots [(str "evidence-chain:sha256:" evidence-root)]
                               :status :pass
-                              :inputs {:evidence/root evidence-root}
-                              :outputs {:child-node-hash (:node-hash execution-node)
-                                        :child-content-hash (:content-hash execution-node)}})))
+                              :inputs {:execution/node-hash (str "sha256:" exec-hash)
+                                       :evidence/chain-cursor-hash (str "sha256:" evidence-root)}
+                              :outputs {:bundle/root-hash (when bundle-root-hash
+                                                            (str "sha256:" bundle-root-hash))
+                                        :execution/status exec-status}})))
                         (catch Exception e
-                          (log-event :warn :evidence-root-node-failed
+                          (log-event :warn :commitment-root-node-failed
                                      :error (.getMessage e))))
 
             ;; Execution DAG (best-effort, lazy-loaded)
@@ -1012,13 +1020,13 @@
                         (write-result-json output-path enriched-root))
                       {:exit-code (:exit-code thunk-result)
                        :bundle-root enriched-root
-                       :execution-node execution-node}))))
+                       :execution-node execution-node})))))
           ;; Top-level catch: produce minimal output on complete failure
-              (catch Throwable t
-                (log-event :error :run-failed :error (.getMessage t) :exception (str (class t)))
-                (let [minimal-root (build-minimal-error-root dispatch protocol-id source-provenance t)]
-                  (when-let [output-path (:output-file dispatch)]
-                    (write-result-json output-path minimal-root))
-                  {:exit-code 1
-                   :bundle-root minimal-root
-                   :execution-node nil})))))))))
+            (catch Throwable t
+              (log-event :error :run-failed :error (.getMessage t) :exception (str (class t)))
+              (let [minimal-root (build-minimal-error-root dispatch protocol-id source-provenance t)]
+                (when-let [output-path (:output-file dispatch)]
+                  (write-result-json output-path minimal-root))
+                {:exit-code 1
+                 :bundle-root minimal-root
+                 :execution-node nil}))))))))

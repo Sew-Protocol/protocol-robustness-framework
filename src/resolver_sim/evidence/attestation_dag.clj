@@ -23,7 +23,8 @@
 
      ;; Chain multiple attestations
      (adag/build-attestation-dag-node a2 {:parent-hashes [(:node-hash node1)]})"
-  (:require [resolver-sim.evidence.node :as node]))
+  (:require [resolver-sim.evidence.attestation :as att]
+            [resolver-sim.evidence.node :as node]))
 
 ;; ── Constants ────────────────────────────────────────────────────────────────
 
@@ -34,6 +35,21 @@
 (def ^:const default-policy-id
   "Default evidence policy for attestation DAG nodes."
   :evidence-policy/computed)
+
+;; ── Validation ───────────────────────────────────────────────────────────────
+
+(defn- validate-or-throw
+  "Validate an attestation before building a DAG node.
+   Throws if nil or structurally invalid."
+  [attestation]
+  (when (nil? attestation)
+    (throw (ex-info "Cannot build attestation DAG node: attestation is nil"
+                    {:error :attestation/nil})))
+  (let [{:keys [valid? errors]} (att/validate-attestation-shape attestation)]
+    (when-not valid?
+      (throw (ex-info "Cannot build attestation DAG node: attestation failed shape validation"
+                      {:error :attestation/invalid-shape
+                       :errors errors})))))
 
 ;; ── DAG Node Builder ─────────────────────────────────────────────────────────
 
@@ -74,9 +90,11 @@
                     :timestamp        — ISO-8601 timestamp (default: now)
                     :extensions       — extra data to include in the node
 
-   Returns the full evidence node map as built by build-execution-node."
+   Returns the full evidence node map as built by build-execution-node.
+   Throws if attestation is nil or fails shape validation."
   [attestation & [{:keys [parent-hashes bootstrap-roots policy-id timestamp extensions]
                    :or {policy-id default-policy-id}}]]
+  (validate-or-throw attestation)
   (node/build-execution-node
    {:execution-id attestation-execution-id
     :policy-id policy-id
@@ -86,7 +104,7 @@
     :status :pass
     :inputs (attestation-inputs attestation)
     :outputs (attestation-outputs attestation)
-    :attestations [(:attestation/id attestation)]
+    :attestations [(str "attestation:sha256:" (:attestation/id attestation))]
     :extensions (merge {:attestation/type :attestation-dag}
                        (or extensions {}))
     :execution-kind :attestation
@@ -110,6 +128,7 @@
    Returns the node result from emit-execution-node!"
   [attestation & [{:keys [parent-hashes bootstrap-roots policy-id timestamp extensions]
                    :or {policy-id default-policy-id}}]]
+  (validate-or-throw attestation)
   (node/emit-execution-node!
    {:execution-id attestation-execution-id
     :policy-id policy-id
@@ -119,7 +138,7 @@
     :status :pass
     :inputs (attestation-inputs attestation)
     :outputs (attestation-outputs attestation)
-    :attestations [(:attestation/id attestation)]
+    :attestations [(str "attestation:sha256:" (:attestation/id attestation))]
     :extensions (merge {:attestation/type :attestation-dag}
                        (or extensions {}))
     :execution-kind :attestation
@@ -146,7 +165,7 @@
         (let [a (first remaining)
               node (build-attestation-dag-node
                     a (assoc opts :parent-hashes
-                             (cond-> []
+                             (cond-> (vec (or (:parent-hashes opts) []))
                                prev-hash (conj prev-hash))))]
           (recur (next remaining) (:node-hash node) (conj results node)))
         results))))

@@ -40,7 +40,7 @@
 (deftest dag-node-captures-attestation-id
   (let [a (build-a)
         node (adag/build-attestation-dag-node a)]
-    (is (= (:attestation/id a)
+    (is (= (str "attestation:sha256:" (:attestation/id a))
            (first (:attestations node))))
     (is (string? (get-in node [:evidence :inputs-hash])))
     (is (= 64 (count (get-in node [:evidence :inputs-hash]))))))
@@ -85,6 +85,18 @@
   (let [node (adag/build-attestation-dag-node (build-a))]
     (is (= :attestation-emitter (get-in node [:execution :runner])))))
 
+(deftest dag-node-rejects-nil-attestation
+  (is (thrown-with-msg? clojure.lang.ExceptionInfo
+                        #"attestation is nil"
+                        (adag/build-attestation-dag-node nil))))
+
+(deftest dag-node-rejects-malformed-attestation
+  (is (thrown-with-msg? clojure.lang.ExceptionInfo
+                        #"failed shape validation"
+                        (adag/build-attestation-dag-node {:some :map
+                                                          :without :required
+                                                          :attestation/fields nil}))))
+
 ;; ── chain-attestation-dag-nodes ──────────────────────────────────────────────
 
 (deftest chain-links-consecutive-nodes
@@ -104,3 +116,15 @@
   (let [nodes (adag/chain-attestation-dag-nodes [(build-a)])]
     (is (= 1 (count nodes)))
     (is (= [] (:parent-hashes (first nodes))))))
+
+(deftest chain-preserves-external-parent-hashes
+  (let [external "sha256:abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789"
+        a1 (build-a :signed-at "2025-01-01T00:00:00Z")
+        a2 (build-a :signed-at "2025-01-02T00:00:00Z")
+        nodes (adag/chain-attestation-dag-nodes [a1 a2]
+                                                {:parent-hashes [external]})]
+    (is (= 2 (count nodes)))
+    (is (= [external] (:parent-hashes (nth nodes 0)))
+        "First node must preserve external parent from opts")
+    (is (= [external (:node-hash (nth nodes 0))] (:parent-hashes (nth nodes 1)))
+        "Second node must have external parent + chain link")))

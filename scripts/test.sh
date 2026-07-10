@@ -482,7 +482,7 @@ run_yield_scenarios() {
 run_generators() {
   require_clojure || return $?
   echo "Running generator regression tests (pinned seeds, parallel)..."
-  clojure -M:test -m scripts.parallel-test-runner \
+  clojure -M:test:with-sew -m scripts.parallel-test-runner \
     resolver-sim.generators.equilibrium-test \
     resolver-sim.generators.fixtures-test \
     resolver-sim.properties.invariants-test

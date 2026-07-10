@@ -98,3 +98,51 @@
                      result (get-in scenario [:expectations :invariants]))]
       (is (= :pass (:outcome result)) path)
       (is (:ok? inv-check) (str path " " (:violations inv-check))))))
+
+(deftest shortfall-detected-passes-on-valid-shortfall
+  (testing "shortfall-detected passes when basis does not exceed position value"
+    (let [world {:yield/positions {"u1" {:module/id :m :token :t :status :unwinding
+                                         :principal 1000 :realized-yield 0 :unrealized-yield 0
+                                         :shortfall {:basis-amount 800
+                                                     :fulfilled-amount 400
+                                                     :deferred-amount 400
+                                                     :haircut-amount 0}}}
+                 :yield/risk {:m {:t {:liquidity-mode :shortfall}}}
+                 :yield/market-state {:m {:t {:available-ratio 0.5}}}}]
+      (is (inv/holds? :yield/shortfall-detected world)))))
+
+(deftest shortfall-detected-fails-on-over-detection
+  (testing "shortfall-detected fails when basis exceeds position value"
+    (let [world {:yield/positions {"u1" {:module/id :m :token :t :status :unwinding
+                                         :principal 100 :realized-yield 0 :unrealized-yield 0
+                                         :shortfall {:basis-amount 500
+                                                     :fulfilled-amount 50
+                                                     :deferred-amount 450
+                                                     :haircut-amount 0}}}
+                 :yield/risk {:m {:t {:liquidity-mode :shortfall}}}
+                 :yield/market-state {:m {:t {:available-ratio 0.5}}}}]
+      (is (not (inv/holds? :yield/shortfall-detected world))))))
+
+(deftest shortfall-detected-fails-on-under-detection
+  (testing "shortfall-detected fails when unwinding position has no shortfall during shortfall"
+    (let [world {:yield/positions {"u1" {:module/id :m :token :t :status :unwinding
+                                         :principal 1000 :realized-yield 0 :unrealized-yield 0}}
+                 :yield/risk {:m {:t {:liquidity-mode :shortfall}}}
+                 :yield/market-state {:m {:t {:available-ratio 0.5}}}}]
+      (is (not (inv/holds? :yield/shortfall-detected world))))))
+
+(deftest shortfall-detected-passes-when-no-shortfall-mode
+  (testing "shortfall-detected passes when module is not in shortfall mode"
+    (let [world {:yield/positions {"u1" {:module/id :m :token :t :status :unwinding
+                                         :principal 1000 :realized-yield 0 :unrealized-yield 0}}
+                 :yield/risk {:m {:t {:liquidity-mode :available}}}
+                 :yield/market-state {:m {:t {:available-ratio 1.0}}}}]
+      (is (inv/holds? :yield/shortfall-detected world)))))
+
+(deftest shortfall-detected-passes-on-active-position-during-shortfall
+  (testing "shortfall-detected passes for active positions during shortfall (no withdrawal yet)"
+    (let [world {:yield/positions {"u1" {:module/id :m :token :t :status :active
+                                         :principal 1000 :realized-yield 0 :unrealized-yield 0}}
+                 :yield/risk {:m {:t {:liquidity-mode :shortfall}}}
+                 :yield/market-state {:m {:t {:available-ratio 0.5}}}}]
+      (is (inv/holds? :yield/shortfall-detected world)))))

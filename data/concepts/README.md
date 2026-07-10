@@ -24,6 +24,24 @@ they explicitly declare `:concept/shadows-global? true`.
 Concept enrichment is added **after** all protocol computation and
 hashing are complete. It is a cosmetic overlay on reports.
 
+## Maturity And Coverage
+
+Concept maturity is derived from the benchmark catalogue, not asserted by
+concept prose. Benchmark evidence records each included concept's scenario
+mappings, claim IDs, evaluator-backed claim IDs, active benchmark IDs, known
+gaps, and strongest maturity:
+
+| Maturity | Meaning |
+|---|---|
+| `:defined` | Meaning and motivation are documented. |
+| `:mapped` | Connected to a scenario or workload. |
+| `:claimed` | Referenced by registered benchmark claims. |
+| `:evaluated` | At least one referenced claim has a runnable evaluator. |
+| `:benchmarked` | Included in an active benchmark whose required claims have runnable evaluators. |
+
+Maturity is not a score and does not claim complete coverage across adapters,
+workloads, or threat models.
+
 ## Concept Types
 
 | Type | Layer | Directory | Description |

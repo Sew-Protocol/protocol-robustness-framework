@@ -220,10 +220,14 @@
     (let [{:keys [score-fn]} rule
           all-pass? (every? #(= :pass (:claim/outcome %)) claim-results)
           any-fail? (some #(= :fail (:claim/outcome %)) claim-results)
-          any-inconclusive? (some #(= :inconclusive (:claim/outcome %)) claim-results)]
+          any-inconclusive? (some #(= :inconclusive (:claim/outcome %)) claim-results)
+          any-not-exercised? (some #(= :not-exercised (:claim/outcome %)) claim-results)
+          any-not-implemented? (some #(= :not-implemented (:claim/outcome %)) claim-results)]
       {:classification-label (cond
                                all-pass? "Mechanical claims passed"
                                any-fail? "Mechanical claims failed"
+                               any-not-exercised? "Required claim not exercised"
+                               any-not-implemented? "Claim evaluator not implemented"
                                any-inconclusive? "Semantic claims deferred"
                                :else "Partial mechanical verification")
        :scoring/summary (or score-fn "N/A")})))

@@ -200,7 +200,15 @@
      :bond-mix-min-stable-bps 8000
      :escalation-bond-bps 1000
      :minimum-challenge-bond 100
-     :max-dispute-level 2}))
+     :max-dispute-level 2
+     :resolver-fee-bps 150
+     :appeal-bond-bps 700
+     :slash-multiplier 2.5
+     :appeal-probability-if-correct 0.05
+     :appeal-probability-if-wrong 0.40
+     :escrow-size 10000
+     :slashing-detection-probability 0.10
+     :min-trials 10}))
 
 (defn validate-scenario
   "Validate scenario params against schema. Throws if invalid."

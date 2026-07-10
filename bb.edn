@@ -483,7 +483,8 @@ cli-args (cond-> ["-M:run:with-sew" "--invariants" "--scenario" scenario]
                              "resolver-sim.evidence.attestation-registry-test"
                              "resolver-sim.evidence.attestation-policy-test"
                              "resolver-sim.evidence.timestamping-test"
-                             "resolver-sim.evidence.revocation-test")}
+                             "resolver-sim.evidence.revocation-test"
+                             "resolver-sim.evidence.commitment-root-test")}
 
   test:generators {:doc "Run canonical generator/property regression target"
                    :task (shell "./scripts/test.sh generators")}
@@ -579,7 +580,7 @@ cli-args (cond-> ["-M:run:with-sew" "--invariants" "--scenario" scenario]
                                 (println (if ok "PASS" "FAIL"))
                                 ok))
                           lint-ok (ok? "Lint (src:test)" (fn [] (shell "clj" "-M:lint/core")))
-                          nb-ok   (ok? "Notebook namespace check" (fn [] (shell "scripts/with-test-artifact-lock.sh" "clojure" "-M:with-sew" "-e" "(require (quote [resolver-sim.notebook-support.checks])) (require (quote [notebooks.report]))")))
+                          nb-ok   (ok? "Notebook namespace check" (fn [] (shell "scripts/with-test-artifact-lock.sh" "clojure" "-M:with-sew" "-e" "(require (quote [resolver-sim.notebook-support.checks]) (quote [notebooks.report])) (System/exit 0)")))
                          all-nb-ok (ok? "All notebooks load" (fn [] (shell "bb" "test:notebooks")))
                          speds-ok (ok? "SPEDS tests" (fn [] (shell "bb" "test:speds")))]
                      (if (and lint-ok nb-ok all-nb-ok speds-ok)

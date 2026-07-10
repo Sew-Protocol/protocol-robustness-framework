@@ -77,6 +77,16 @@
 (def ^:const schema-version 1)
 (def ^:const default-policy-id :evidence-policy/computed)
 
+(def ^:private bootstrap-root-pattern
+  #"^(?:evidence-chain:)?sha256:[0-9a-f]{64}$")
+
+(defn- valid-bootstrap-root?
+  [s]
+  (boolean (re-matches bootstrap-root-pattern s)))
+
+(def ^:private attestation-ref-pattern
+  #"^attestation:sha256:[0-9a-f]{64}$")
+
 (declare canonical-hashable-value
          validate-node
          validate-node-dag
@@ -549,14 +559,44 @@
         valid-status? (contains? #{:pass :fail :error} (get-in node [:result :status]))
         recomputed (compute-node-hash node)
         hash-valid? (= recomputed (:node-hash node))
+        resolve-ref #(if-let [stripped (second (re-find #"^sha256:(.+)" %))]
+                       stripped
+                       %)
         parent-set (set (:parent-hashes node))
-        bootstrap-set (set (:bootstrap-roots node))
-        missing-parents (vec (remove #(or (contains? known-parent-hashes %)
-                                          (contains? bootstrap-set %))
+        valid-bootstrap-roots (vec (filter #(re-matches bootstrap-root-pattern %)
+                                           (:bootstrap-roots node)))
+        invalid-bootstrap-roots (vec (remove #(re-matches bootstrap-root-pattern %)
+                                             (:bootstrap-roots node)))
+        valid-bootstrap-set (set valid-bootstrap-roots)
+        missing-parents (vec (remove #(or (contains? known-parent-hashes (resolve-ref %))
+                                          (contains? valid-bootstrap-set %))
                                      parent-set))
+        attestations (:attestations node)
+        invalid-attestation-entries (when (vector? attestations)
+                                      (vec (keep-indexed (fn [i a]
+                                                           (cond
+                                                             (nil? a) {:index i :value a :reason :nil}
+                                                             (not (string? a)) {:index i :value a :reason :not-string}
+                                                             (not (re-matches attestation-ref-pattern a))
+                                                             {:index i :value a :reason :untyped-ref}
+                                                             :else nil))
+                                                         attestations)))
         errors (cond-> []
                  (seq missing-top-level)
                  (conj {:error :node/missing-fields :missing missing-top-level})
+
+                 (seq invalid-bootstrap-roots)
+                 (conj {:error :node/invalid-bootstrap-root
+                        :invalid-bootstrap-roots invalid-bootstrap-roots})
+
+                 (and attestations (not (vector? attestations)))
+                 (conj {:error :node/invalid-attestations
+                        :reason "Expected vector for :attestations"
+                        :actual-type (type attestations)})
+
+                 (seq invalid-attestation-entries)
+                 (conj {:error :node/invalid-attestations
+                        :invalid-entries invalid-attestation-entries})
 
                  (not= schema-version (:schema-version node))
                  (conj {:error :node/unsupported-schema-version
@@ -595,9 +635,10 @@
         node-map (into {} (map (juxt :node-hash identity) nodes))
         known-hashes (set (keys node-map))
         per-node (mapv #(validate-node % :known-parent-hashes known-hashes) nodes)
+        valid-bootstraps (fn [bs] (set (filter valid-bootstrap-root? bs)))
         graph (into {}
                     (map (fn [{:keys [node-hash parent-hashes bootstrap-roots]}]
-                           [node-hash (vec (remove (set bootstrap-roots) parent-hashes))])
+                           [node-hash (vec (remove (valid-bootstraps bootstrap-roots) parent-hashes))])
                          nodes))
         cycle (when strict-dag?
                 (some #(cycle-path graph %) (keys graph)))
@@ -644,20 +685,26 @@
       {:check/id :node-inputs-present :check/status :pass})))
 
 (defn- check-node-attestations-present
-  "Link check: :attestations must be a vector (may be empty)."
+  "Link check: :attestations must be a vector (may be empty).
+   Each entry must be a typed reference matching attestation-ref-pattern."
   [node]
   (let [attestations (:attestations node)]
-    (if (vector? attestations)
-      {:check/id :node-attestations-present :check/status :pass}
+    (cond
+      (not (vector? attestations))
       {:check/id :node-attestations-present :check/status :fail
-       :reason (str "Expected vector for :attestations, got " (type attestations))})))
+       :reason (str "Expected vector for :attestations, got " (type attestations))}
+      (seq (remove #(re-matches attestation-ref-pattern %) attestations))
+      {:check/id :node-attestations-present :check/status :fail
+       :reason "Attestation entries must be typed references (attestation:sha256:<64-hex>)"}
+      :else
+      {:check/id :node-attestations-present :check/status :pass})))
 
 (defn- check-node-parents-resolvable
   "Link check: all :parent-hashes must be resolvable from bootstrap-roots
    or from known-parent-hashes (passed via opts)."
   [node known-parent-hashes]
   (let [parent-hashes (set (:parent-hashes node))
-        bootstrap-roots (set (:bootstrap-roots node))
+        bootstrap-roots (set (filter valid-bootstrap-root? (:bootstrap-roots node)))
         missing (vec (remove #(or (contains? known-parent-hashes %)
                                   (contains? bootstrap-roots %))
                              parent-hashes))]
@@ -673,7 +720,7 @@
    In addition to all checks from validate-node, runs:
    - node-id equals node-hash
    - inputs-hash and outputs-hash present
-   - attestations is a vector
+   - attestations is a vector with typed references (attestation:sha256:<64-hex>)
    - parent hashes are resolvable
 
    Returns {:valid? ... :errors [...] :checks [...] :summary {...}}."
@@ -717,7 +764,7 @@
   (if (empty? nodes)
     {:check/id :dag-single-root :check/status :pass :node-count 0}
     (let [all-parents (set (mapcat :parent-hashes nodes))
-          all-bootstrap (set (mapcat :bootstrap-roots nodes))
+          all-bootstrap (set (filter valid-bootstrap-root? (mapcat :bootstrap-roots nodes)))
           effective-parents (apply disj all-parents all-bootstrap)
           roots (remove #(contains? effective-parents (:node-hash %)) nodes)
           root-count (count roots)]
@@ -816,7 +863,7 @@
   [nodes]
   (let [entries (mapv node-summary-entry nodes)
         node-hashes (set (map :node-hash nodes))
-        bootstrap-set (set (mapcat :bootstrap-roots nodes))
+        bootstrap-set (set (filter valid-bootstrap-root? (mapcat :bootstrap-roots nodes)))
         by-hash (into {} (map (juxt :node-hash identity) entries))
         children (fn [parent-hash]
                    (vec (keep (fn [e]

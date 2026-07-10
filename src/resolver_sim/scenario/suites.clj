@@ -53,7 +53,8 @@
    "Y02_vault-shortfall-partial-withdraw"
    "Y03_vault-risk-override-schedule-shadowing"
    "Y04_vault-recovery-claim-deferred"
-   "Y05_auto-generated-shortfall"])
+   "Y05_auto-generated-shortfall"
+   "Y06_multi-party-pro-rata-shortfall"])
 
 (def ^:private dispute-resolution-scenario-ids
   ["S-DR-001-basic-release-ruling"
@@ -147,6 +148,7 @@
 
 (def ^:private shortfall-scenario-ids
   ["S-DR-043-payout-shortfall-deferred"
+   "S82_shortfall-recovery-cycle"
    "S103_negative-yield-shortfall-cascade"
    "S104_resolver-stake-shortfall"])
 

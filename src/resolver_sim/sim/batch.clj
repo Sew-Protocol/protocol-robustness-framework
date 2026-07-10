@@ -2,6 +2,7 @@
   "Batch runner: aggregate N trials into summary statistics."
   (:require [resolver-sim.stochastic.detection :as detection]
             [resolver-sim.stochastic.dispute :as dispute]
+            [resolver-sim.stochastic.types :as types]
             [resolver-sim.protocols.sew.research-models.resolver-ring :as ring]
             [resolver-sim.sim.batch-integration :as integration]
             [resolver-sim.sim.common-kwargs :refer [common-kwargs]]))
@@ -118,10 +119,11 @@
 (defn run-batch
   "Run N trials with given parameters and return aggregated stats with early-stopping."
   [rng n-trials params]
-  (let [base-strategy (or (:force-strategy params) (:strategy params :honest))
+  (let [params        (merge types/default-params params)
+        base-strategy (or (:force-strategy params) (:strategy params :honest))
         strategy      (integration/adjust-strategy-for-bribery base-strategy params)
         params        (assoc params :adjusted-strategy strategy)
-        min-trials    (get params :min-trials 10)
+        min-trials    (:min-trials params)
         pass-threshold 0.8]
     (loop [i 0
            results []
@@ -136,7 +138,7 @@
             (assoc agg :early-stop? true :trials-run i)
             agg))
         (let [res (apply dispute/resolve-dispute
-                         rng (:escrow-size params 10000)
+                         rng (:escrow-size params)
                          (:resolver-fee-bps params)
                          (:appeal-bond-bps params)
                          (:slash-multiplier params)
@@ -155,13 +157,14 @@
    Returns {:aggregate <same map as run-batch>
             :trials    [{per-trial result map} ...]}"
   [rng n-trials params]
-  (let [base-strategy (or (:force-strategy params) (:strategy params :honest))
+  (let [params        (merge types/default-params params)
+        base-strategy (or (:force-strategy params) (:strategy params :honest))
         strategy      (integration/adjust-strategy-for-bribery base-strategy params)
         params        (assoc params :adjusted-strategy strategy)
         trials
         (vec (repeatedly n-trials
                          #(apply dispute/resolve-dispute
-                                 rng (:escrow-size params 10000)
+                                 rng (:escrow-size params)
                                  (:resolver-fee-bps params)
                                  (:appeal-bond-bps params)
                                  (:slash-multiplier params)
@@ -182,7 +185,8 @@
    :fixed-or, escalation assumptions, and bribery params are forwarded
    to ring/simulate-ring-dispute."
   [rng n-trials params ring-spec]
-  (let [kw-args       (common-kwargs params)
+  (let [params        (merge types/default-params params)
+        kw-args       (common-kwargs params)
 
         ;; Initialize the ring
         initial-ring (ring/create-ring ring-spec)
@@ -194,7 +198,7 @@
            (let [dispute-result
                  (apply ring/simulate-ring-dispute
                         rng ring-state
-                        (:escrow-size params 10000)
+                        (:escrow-size params)
                         (:resolver-fee-bps params)
                         (:appeal-bond-bps params)
                         (:slash-multiplier params)

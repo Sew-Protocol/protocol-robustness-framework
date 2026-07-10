@@ -1,6 +1,7 @@
 (ns resolver-sim.benchmark.cli
   (:require [resolver-sim.benchmark.sharing :as sharing]
             [resolver-sim.benchmark.registry :as registry]
+            [resolver-sim.benchmark.coverage :as coverage]
             [resolver-sim.benchmark.signing :as signing]
             [resolver-sim.benchmark.validation :as validation]
             [resolver-sim.benchmark.game-theory-validation :as gt]
@@ -166,7 +167,12 @@
                                       :evidence/signature sig
                                       :evidence/public-key-path (if (.exists (io/file pub-path)) pub-path key-path)))
                              evidence)
-            passed? (= (get-in evidence [:metrics :passed]) (get-in evidence [:metrics :total]))]
+            scenarios-passed? (= (get-in evidence [:metrics :passed]) (get-in evidence [:metrics :total]))
+            required-claims-passed? (or (not= :active (get-in evidence [:benchmark :benchmark/status]))
+                                        (coverage/required-claims-passed?
+                                         (:benchmark evidence)
+                                         (:claim-results evidence)))
+            passed? (and scenarios-passed? required-claims-passed?)]
         {:exit-code (if passed? 0 1)
          :evidence final-evidence
          :output-path output-path

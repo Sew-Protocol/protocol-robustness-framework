@@ -1,5 +1,6 @@
 {:benchmark/id              :benchmark/sew-dispute-liveness-v1
   :benchmark/version         1
+  :benchmark/status          :active
   :benchmark/domain          :domain/escrow-dispute-resolution
   :benchmark/protocol        :protocol/sew
    :benchmark/scenario-suite  :suite/sew-dispute-safety-v1
@@ -11,6 +12,9 @@
  :benchmark/evidence-policy :evidence-policy/forensic-standard-v1
    :benchmark/scoring-rule    :scoring/binary-claims-v1
    :benchmark/property-types  #{:liveness :safety}
+   :benchmark/property-claims {:liveness [:claim/dispute-liveness
+                                          :claim/bounded-resolution-time]
+                               :safety [:claim/slashing-conservation]}
     :benchmark/description
    "A lens over :suite/sew-dispute-safety-v1 focusing on dispute liveness:
     timely resolution under adversarial load, bounded resolution time, and
@@ -45,4 +49,3 @@
                               :claim/role :supporting
                               :claim/rationale "Slashing during dispute resolution must conserve value."
                               :claim/failure-meaning "Slashing violated conservation rules."}]}
-

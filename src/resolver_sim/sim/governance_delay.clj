@@ -5,9 +5,9 @@
 (ns resolver-sim.sim.governance-delay
   (:require [clojure.math :refer [round]]))
 
-;;;; ============================================================================
-;;;; GOVERNANCE RESPONSE TIME MODEL
-;;;; ============================================================================
+;; ============================================================================
+;; GOVERNANCE RESPONSE TIME MODEL
+;; ============================================================================
 
 (defn initialize-pending-slashes
   "Create empty pending slashes queue at start of epoch"
@@ -91,9 +91,9 @@
   [pending-state resolver-id]
   (not (empty? (get-pending-slashes-for-resolver pending-state resolver-id))))
 
-;;;; ============================================================================
-;;;; VULNERABILITY WINDOW ANALYSIS
-;;;; ============================================================================
+;; ============================================================================
+;; VULNERABILITY WINDOW ANALYSIS
+;; ============================================================================
 
 (defn calculate-fraudster-vulnerability-window
   "Calculate how many epochs fraudster can continue earning before slash executes
@@ -172,9 +172,9 @@
      :break-even-daily-profit (/ (+ slash-amount opportunity-cost) 10)
      :margin-of-safety (- fraud-profit total-cost)}))
 
-;;;; ============================================================================
-;;;; INTEGRATION WITH MULTI-EPOCH SIMULATION
-;;;; ============================================================================
+;; ============================================================================
+;; INTEGRATION WITH MULTI-EPOCH SIMULATION
+;; ============================================================================
 
 (defn apply-governance-delays-to-epoch
   "Process one epoch of simulation with governance delay mechanics
@@ -203,9 +203,9 @@
      :updated-governance-state pending-state
      :slashes-to-execute executable-slashes}))
 
-;;;; ============================================================================
-;;;; METRICS & REPORTING
-;;;; ============================================================================
+;; ============================================================================
+;; METRICS & REPORTING
+;; ============================================================================
 
 (defn summarize-governance-delay-metrics
   "Generate summary statistics about governance delays during simulation

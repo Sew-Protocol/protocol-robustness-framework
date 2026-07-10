@@ -89,7 +89,13 @@
       (assoc :timeout-detection-probability (:timeout-detection-probability pp))
 
       (:reversal-detection-probability pp)
-      (assoc :reversal-detection-probability (:reversal-detection-probability pp)))))
+      (assoc :reversal-detection-probability (:reversal-detection-probability pp))
+
+      (:appeal-bond-bps pp)
+      (assoc :appeal-bond-bps (:appeal-bond-bps pp))
+
+      (:slashing-detection-probability pp)
+      (assoc :slashing-detection-probability (:slashing-detection-probability pp)))))
 
 (defn scenario->mc-params
   "Build a complete MC param map from a scenario's :protocol-params

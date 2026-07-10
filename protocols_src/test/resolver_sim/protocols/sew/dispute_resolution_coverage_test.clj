@@ -703,7 +703,8 @@
     :invalid-resolver-addr :slash-resolver-mismatch
     :slash-exceeds-max-per-offense :slash-epoch-cap-exceeded
     :timelock-not-expired :workflow-not-slashable
-    :missing-caller-context :invalid-new-resolver})
+    :missing-caller-context :invalid-new-resolver
+    :force-authorisation-already-executed})
 
 (deftest test-error-code-coverage-audit
   (testing "All t/fail error codes are classified in the error code sets"

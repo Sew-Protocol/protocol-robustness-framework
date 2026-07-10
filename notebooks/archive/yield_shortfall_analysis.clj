@@ -1,5 +1,5 @@
 ^{:nextjournal.clerk/visibility {:code :show :result :show}}
-(ns notebooks.yield-shortfall-analysis
+(ns notebooks.archive.yield-shortfall-analysis
   "General analysis notebook for yield module shortfall resilience.
    
    This notebook demonstrates how to instrument and analyze liquidity

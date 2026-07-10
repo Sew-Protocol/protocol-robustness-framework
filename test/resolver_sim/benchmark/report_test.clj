@@ -274,7 +274,7 @@
 (deftest build-report-severity-weighted-sew-classifies-correctly
   (let [ev (make-evidence "benchmarks/packs/sew/escrow-dispute-v1.edn"
                           []
-                          :metrics {:total 44 :passed 44}
+                          :metrics {:total 53 :passed 53}
                           :claim-results
                           [{:claim/id :evidence-root-present
                             :claim/scope :scenario
@@ -295,7 +295,7 @@
 (deftest build-report-severity-weighted-all-claims-pass
   (let [ev (make-evidence "benchmarks/packs/sew/escrow-dispute-v1.edn"
                           []
-                          :metrics {:total 44 :passed 44}
+                          :metrics {:total 53 :passed 53}
                           :claim-results
                           [{:claim/id :evidence-root-present
                             :claim/scope :scenario

@@ -557,6 +557,14 @@
    - :partial-fill/per-claim-bound
    - :partial-fill/per-claim-conservation
    - :partial-fill/claim-key-consistency
+   - :partial-fill/non-negative-amounts
+   - :partial-fill/settlement-mode-consistency
+   - :partial-fill/settlement-mode-valid
+   - :partial-fill/mode-valid
+   - :partial-fill/deferred-haircut-overlap
+   - :partial-fill/evidence-self-consistency
+   - :partial-fill/unrealized-bucket-valid
+   - :partial-fill/decision-artifact-format
    - :partial-fill/pro-rata-cross-product
    - :partial-fill/principal-first-priority
    - :partial-fill/waterfall-priority
@@ -585,9 +593,15 @@
         per-claim-violations
         (->> positive-claims
              (keep (fn [[k claim]]
-                     (let [f (long (get filled k 0))]
-                       (when (> f (long claim))
-                         {:claim k :claim-amount (long claim) :filled f}))))
+                     (let [r (long claim)
+                           f (long (get filled k 0))
+                           d (long (get deferred k 0))
+                           h (long (get haircut k 0))
+                           fv (when (> f r) {:claim k :kind :filled-exceeds-requested :requested r :filled f})
+                           dv (when (> d r) {:claim k :kind :deferred-exceeds-requested :requested r :deferred d})
+                           hv (when (> h r) {:claim k :kind :haircut-exceeds-requested :requested r :haircut h})]
+                       (seq (remove nil? [fv dv hv])))))
+             (apply concat)
              vec)
         per-claim-conservation-violations
         (->> (set (concat (keys requested) (keys filled) (keys deferred) (keys haircut)))
@@ -686,7 +700,71 @@
                               :higher-filled higher-filled
                               :lower-bucket lower
                               :lower-filled lower-filled}))))
-                 vec)))]
+                 vec)))
+        valid-modes #{:pro-rata :principal-first :waterfall}
+        mode-violations
+        (when (not (contains? valid-modes mode))
+          [{:mode mode :valid-modes (vec valid-modes)}])
+        settlement-mode (:settlement-mode decision)
+        valid-settlement-modes #{:full-fill :partial-fill}
+        settlement-mode-valid-violations
+        (when (not (contains? valid-settlement-modes settlement-mode))
+          [{:settlement-mode settlement-mode :valid-settlement-modes (vec valid-settlement-modes)}])
+        settlement-mode-violations
+        (if (= :full-fill settlement-mode)
+          (cond-> []
+            (some (fn [[_ v]] (pos? (long v))) deferred)
+            (conj {:reason "deferred non-empty during full-fill" :deferred (into {} (filter (fn [[_ v]] (pos? (long v))) deferred))})
+            (some (fn [[_ v]] (pos? (long v))) haircut)
+            (conj {:reason "haircut non-empty during full-fill" :haircut (into {} (filter (fn [[_ v]] (pos? (long v))) haircut))})
+            (not= total-filled total-requested)
+            (conj {:reason "total-filled != total-requested during full-fill" :total-requested total-requested :total-filled total-filled}))
+          [])
+        unrealized (:unrealized decision)
+        negative-amount-violations
+        (->> (concat
+              (map (fn [[k v]] {:kind :requested :key k :value (long v)}) requested)
+              (map (fn [[k v]] {:kind :filled :key k :value (long v)}) filled)
+              (map (fn [[k v]] {:kind :deferred :key k :value (long v)}) deferred)
+              (map (fn [[k v]] {:kind :haircut :key k :value (long v)}) haircut)
+              (map (fn [[k v]] {:kind :unrealized :key k :value (long v)}) unrealized))
+             (keep (fn [entry]
+                     (when (neg? (:value entry))
+                       entry)))
+             vec)
+        deferred-haircut-overlap-violations
+        (->> (keys deferred)
+             (filter (fn [k] (and (contains? haircut k)
+                                  (pos? (long (get deferred k 0)))
+                                  (pos? (long (get haircut k 0))))))
+             (mapv (fn [k] {:claim k :deferred (long (get deferred k 0)) :haircut (long (get haircut k 0))})))
+        evidence (:evidence decision)
+        evidence-violations
+        (let [computed-shortage (max 0 (- total-requested available))]
+          (cond-> []
+            (and (contains? evidence :shortage)
+                 (not= (long (:shortage evidence 0)) computed-shortage))
+            (conj {:kind :shortage-mismatch :evidence-value (long (:shortage evidence 0)) :computed computed-shortage})
+            (and (contains? evidence :fill-mode)
+                 (not= (:fill-mode evidence) mode))
+            (conj {:kind :fill-mode-mismatch :evidence-value (:fill-mode evidence) :computed mode})
+            (and (contains? evidence :total-requested)
+                 (not= (long (:total-requested evidence 0)) total-requested))
+            (conj {:kind :total-requested-mismatch :evidence-value (long (:total-requested evidence 0)) :computed total-requested})))
+        unrealized-violations
+        (->> (keys unrealized)
+             (keep (fn [k]
+                     (when (not (contains? requested k))
+                       {:key k :value (long (get unrealized k 0))})))
+             vec)
+        decision-artifact-violations
+        (let [dhash (:decision/hash decision)
+              did (:decision/id decision)]
+          (cond-> []
+            (and (some? dhash) (not (re-matches #"sha256:[0-9a-f]{64}" dhash)))
+            (conj {:kind :invalid-hash-format :hash dhash})
+            (and (some? did) (not (re-matches #"partial-fill-[0-9a-f]{1,16}" did)))
+            (conj {:kind :invalid-id-format :id did})))]
     (let [conservation-ch (future
                             (check-result :partial-fill/conservation
                                           (if conservation-ok? :pass :fail)
@@ -748,9 +826,44 @@
                                          {:violations waterfall-violations})
                            (check-result :partial-fill/waterfall-priority
                                          :not-applicable
-                                         {:mode mode})))]
+                                         {:mode mode})))
+          non-negative-ch (future
+                            (check-result :partial-fill/non-negative-amounts
+                                          (if (empty? negative-amount-violations) :pass :fail)
+                                          {:violations negative-amount-violations}))
+          settlement-mode-ch (future
+                               (check-result :partial-fill/settlement-mode-consistency
+                                             (if (empty? settlement-mode-violations) :pass :fail)
+                                             {:violations settlement-mode-violations
+                                              :settlement-mode settlement-mode}))
+          mode-valid-ch (future
+                          (check-result :partial-fill/mode-valid
+                                        (if (empty? mode-violations) :pass :fail)
+                                        {:violations mode-violations}))
+          settlement-mode-valid-ch (future
+                                     (check-result :partial-fill/settlement-mode-valid
+                                                   (if (empty? settlement-mode-valid-violations) :pass :fail)
+                                                   {:violations settlement-mode-valid-violations}))
+          overlap-ch (future
+                       (check-result :partial-fill/deferred-haircut-overlap
+                                     (if (empty? deferred-haircut-overlap-violations) :pass :fail)
+                                     {:violations deferred-haircut-overlap-violations}))
+          evidence-ch (future
+                        (check-result :partial-fill/evidence-self-consistency
+                                      (if (empty? evidence-violations) :pass :fail)
+                                      {:violations evidence-violations}))
+          unrealized-ch (future
+                          (check-result :partial-fill/unrealized-bucket-valid
+                                        (if (empty? unrealized-violations) :pass :fail)
+                                        {:violations unrealized-violations}))
+          artifact-format-ch (future
+                               (check-result :partial-fill/decision-artifact-format
+                                             (if (empty? decision-artifact-violations) :pass :fail)
+                                             {:violations decision-artifact-violations}))]
       (mapv deref [conservation-ch capacity-ch per-claim-ch per-claim-conservation-ch
-                   claim-key-ch cross-product-ch principal-first-ch waterfall-ch
+                   claim-key-ch non-negative-ch settlement-mode-ch settlement-mode-valid-ch
+                   mode-valid-ch overlap-ch evidence-ch unrealized-ch artifact-format-ch
+                   cross-product-ch principal-first-ch waterfall-ch
                    residual-ch]))))
 
 (defn post-partial-fill-position
@@ -889,3 +1002,49 @@
                w (:position input) decision))
             world
             pairs)))
+
+(defn validate-batch-decisions
+  "Run partial-fill-closed-form-checks on each decision in a batch.
+   Returns aggregated validation results without modifying the decisions.
+
+   Returns:
+     {:batch/valid?        bool
+      :batch/summary      {:total-decisions n :passed n :failed [...]}
+      :batch/checks       [[decision check-results] ...]}"
+  [decisions]
+  (let [checks (mapv partial-fill-closed-form-checks decisions)
+        indexed (map-indexed (fn [i cs]
+                               {:decision-index i
+                                :pass? (every? #(#{:pass :not-applicable} (:status %)) cs)
+                                :failing-checks (filterv #(= :fail (:status %)) cs)})
+                             checks)
+        all-pass? (every? :pass? indexed)]
+    {:batch/valid? all-pass?
+     :batch/summary {:total-decisions (count decisions)
+                     :passed-count (count (filter :pass? indexed))
+                     :failed-decisions (vec (remove :pass? indexed))}
+     :batch/checks (mapv vector decisions checks)}))
+
+(defn validate-decision-artifact
+  "Verify a single decision artifact's content-addressed hash integrity.
+   Recomputes the artifact hash using decision-artifact and compares it
+   to the :decision/hash embedded in the decision.
+
+   Returns a check result map:
+     {:check/id :artifact/hash-integrity
+      :status   :pass | :fail | :not-applicable
+      :details  {...}}"
+  [position decision]
+  (let [expected (:decision/hash (decision-artifact position decision))
+        actual (:decision/hash decision)]
+    (if (nil? actual)
+      {:check/id :artifact/hash-integrity
+       :status :not-applicable
+       :details {:reason "no decision/hash present in decision"}}
+      (if (= actual expected)
+        {:check/id :artifact/hash-integrity
+         :status :pass
+         :details {:decision/hash actual}}
+        {:check/id :artifact/hash-integrity
+         :status :fail
+         :details {:expected expected :actual actual}}))))

@@ -134,10 +134,22 @@ Each active benchmark manifest SHOULD include:
 | `:benchmark/description` | Recommended | Concise scope/coverage summary |
 | `:benchmark/claims` | Required | Vector of claim ID keywords |
 | `:benchmark/concepts` | Recommended | Vector of concept keywords |
+| `:benchmark/property-claims` | Required for active benchmarks | Map from each advertised property type to executable claim IDs |
 
 `:benchmark/purpose` explains *why* someone would run the benchmark.
 `:benchmark/description` explains *what* it measures, its suite scope,
 and whether it is an independent benchmark or a lens over a shared suite.
+
+### Active benchmark invariant
+
+An active benchmark may be narrow, but each advertised property must map to at
+least one runnable claim evaluator. Active manifests may not contain deferred
+claims, unknown claims, claims without evaluators, or only mechanical pipeline
+checks such as evidence-root presence and scenario completion.
+
+Experimental manifests may retain deferred claims when their descriptions make
+clear that those properties are research coverage rather than evaluated
+assurance.
 
 ## Claims
 

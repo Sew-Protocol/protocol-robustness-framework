@@ -2,7 +2,8 @@
   "Benchmark validation commands.
    Port of scripts/benchmarks_validate.clj."
   (:require [clojure.edn :as edn]
-            [clojure.java.io :as io]))
+            [clojure.java.io :as io]
+            [resolver-sim.benchmark.coverage :as coverage]))
 
 (defn- validate-packs
   "Core validation. Returns {:errors []}."
@@ -24,6 +25,35 @@
     (catch Exception e
       (swap! errors conj (str "Registry parse failed: " (.getMessage e))))))
 
+(defn- read-edn-file [file]
+  (edn/read-string (slurp file)))
+
+(defn- validate-active-manifests
+  "Apply the lifecycle invariant used by the public benchmark catalogue.
+   This deliberately checks runnable evaluator dispatch, not just EDN shape."
+  [errors]
+  (try
+    (let [claim-registry (read-edn-file "benchmarks/claim-registry.edn")
+          known-claim-ids (set (map :claim/id (:claims claim-registry)))
+          registry (read-edn-file "benchmarks/registry.edn")]
+      (doseq [pack (:packs registry)
+              :let [pack-file (io/file "benchmarks" (:pack/registry pack))
+                    pack-registry (read-edn-file pack-file)
+                    pack-dir (.getParent pack-file)]
+              benchmark-ref (:benchmarks pack-registry)
+              :when (= :active (:benchmark/status benchmark-ref))]
+        (let [manifest-file (io/file pack-dir (:benchmark/file benchmark-ref))
+              manifest (read-edn-file manifest-file)
+              manifest-status (:benchmark/status manifest)]
+          (when (not= :active manifest-status)
+            (swap! errors conj (str "Active benchmark " (:benchmark/id benchmark-ref)
+                                    " must declare :benchmark/status :active in its manifest")))
+          (doseq [violation (coverage/active-benchmark-errors manifest known-claim-ids)]
+            (swap! errors conj (str "Active benchmark " (:benchmark/id benchmark-ref)
+                                    " lifecycle violation " violation))))))
+    (catch Exception e
+      (swap! errors conj (str "Active benchmark lifecycle validation failed: " (.getMessage e))))))
+
 (defn validate
   "Validate benchmark pack definitions and referenced resources."
   [{:keys [json?] :as opts}]
@@ -33,6 +63,8 @@
     (if-not (.exists registry-file)
       (println "  Benchmark registry not found: benchmarks/registry.edn")
       (validate-packs errors registry-file))
+    (when (.exists registry-file)
+      (validate-active-manifests errors))
     (let [exit-code (if (empty? @errors) 0 1)]
       (doseq [e @errors] (println (str "  ✗ " e)))
       (println (str "  " (count @errors) " error(s)"))

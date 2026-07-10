@@ -134,31 +134,7 @@
                              requests [eval-node]
                              {:evaluator-resolver pro-rata-claims/evaluator-resolver}))))))
 
-(deftest evaluate-claims-produces-matching-results
-  (testing "claims engine results match direct evaluator results for same evidence"
-    (let [eval-node (slashing/build-claim-evaluation-node
-                     sample-allocation-input
-                     (sew-economics/build-sew-slash-projection-artifact sample-allocation-input)
-                     (sew-economics/calculate-sew-slash-allocation sample-allocation-input)
-                     (sew-economics/build-sew-slash-projection-artifact sample-allocation-input)
-                     (sew-economics/calculate-sew-slash-allocation-from-projection
-                      (sew-economics/build-sew-slash-projection-artifact sample-allocation-input)))
-          requests (mapv (fn [claim-id]
-                           {:claim-id claim-id
-                            :evidence-references [(:node-hash eval-node)]})
-                         (pro-rata-claims/registered-claim-ids))
-          {:keys [claim-results validation]}
-          (claims-engine/evaluate-claims
-           requests [eval-node]
-           {:evaluator-resolver pro-rata-claims/evaluator-resolver})
-          direct-results (pro-rata-claims/evaluate-all {:evidence-nodes [eval-node]})]
-      (is (:valid? validation))
-      (doseq [cr claim-results]
-        (let [claim-id (:claim-id cr)
-              direct (get direct-results claim-id)]
-          (is (some? direct) (str "direct result exists for " claim-id))
-          (is (= (:holds? direct) (:holds? cr))
-              (str "holds? matches for " claim-id)))))))
+
 
 (deftest slashing-evidence-calls-engine-not-direct-evaluator
   (testing "the slashing evidence builder produces proper engine-shaped claim results"

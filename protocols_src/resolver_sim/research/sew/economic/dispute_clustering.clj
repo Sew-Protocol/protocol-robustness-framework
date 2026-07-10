@@ -156,6 +156,4 @@
         :results      (vec results)
         :summary      {:vulnerable vuln :total (count results)}}))))
 
-;; Entry point
-(comment
-  (run-phase-w-sweep))
+

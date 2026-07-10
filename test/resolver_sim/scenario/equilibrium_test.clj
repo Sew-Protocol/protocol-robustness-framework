@@ -654,7 +654,6 @@
     (let [proj (sb/spe-projection {:pre-wealth 100 :chosen-wealth 0 :regret-threshold 0})
           result (-> (eq/evaluate-equilibrium-concepts [:bounded-public-state-epsilon-spe] proj sew-eq/equilibrium-concept-validators)
                      :bounded-public-state-epsilon-spe)]
-      (println "DEBUG: result status:" (:status result) "offending:" (:offending result))
       (is (= :fail (:status result)))
       (is (seq (:offending result))))))
 

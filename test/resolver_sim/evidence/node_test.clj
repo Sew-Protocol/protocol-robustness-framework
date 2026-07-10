@@ -229,12 +229,12 @@
            (node/compute-node-hash changed-visible)))))
 
 (deftest validate-node-accepts-bootstrap-roots-and-rejects-missing-parents
-  (let [bootstrap-hash "bootstrap-root-hash"
+  (let [bootstrap-hash "sha256:abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789"
         valid-node (node/build-execution-node
                     (base-node-spec {:parent-hashes [bootstrap-hash]
                                      :bootstrap-roots [bootstrap-hash]}))
         invalid-node (node/build-execution-node
-                      (base-node-spec {:parent-hashes ["missing-parent"]}))]
+                      (base-node-spec {:parent-hashes ["sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"]}))]
     (is (:valid? (node/validate-node valid-node)))
     (is (not (:valid? (node/validate-node invalid-node))))
     (is (some #(= :node/missing-parents (:error %))
@@ -372,12 +372,36 @@
               (filter #(= :fail (:check/status %)) (:checks result))))))
 
 (deftest validate-node-detailed-accepts-bootstrap-roots-as-parents
-  (let [bootstrap "bootstrap-root"
+  (let [bootstrap "sha256:abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789"
         node (node/build-execution-node
               (base-node-spec {:parent-hashes [bootstrap]
                                :bootstrap-roots [bootstrap]}))
         result (node/validate-node-detailed node)]
     (is (:valid? result))))
+
+(deftest validate-node-accepts-evidence-chain-bootstrap-root
+  (let [bootstrap "evidence-chain:sha256:abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789"
+        node (node/build-execution-node
+              (base-node-spec {:parent-hashes [bootstrap]
+                               :bootstrap-roots [bootstrap]}))
+        result (node/validate-node node)]
+    (is (:valid? result))))
+
+(deftest validate-node-rejects-untyped-bootstrap-root
+  (let [node (node/build-execution-node
+              (base-node-spec {:bootstrap-roots ["untyped-bootstrap"]}))
+        result (node/validate-node node)]
+    (is (not (:valid? result)))
+    (is (some #(= :node/invalid-bootstrap-root (:error %))
+              (:errors result)))))
+
+(deftest validate-node-rejects-bad-hash-bootstrap-root
+  (let [node (node/build-execution-node
+              (base-node-spec {:bootstrap-roots ["sha256:not-a-hex-string"]}))
+        result (node/validate-node node)]
+    (is (not (:valid? result)))
+    (is (some #(= :node/invalid-bootstrap-root (:error %))
+              (:errors result)))))
 
 ;; ── validate-dag-detailed ────────────────────────────────────────────────────
 

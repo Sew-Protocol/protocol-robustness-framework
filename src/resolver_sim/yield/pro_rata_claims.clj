@@ -177,6 +177,37 @@
              :path :projection
              :mismatch-detail "Projection result allocations changed during reprocessing"}))))
 
+(defn- pro-rata-fairness-violations
+  [content]
+  (let [result (direct-result content)
+        allocations (result->allocations result)]
+    (if (< (count allocations) 2)
+      []
+      (let [entries (mapv (fn [alloc]
+                            {:id (:id alloc)
+                             :received (long (or (:paid alloc) (:allocated alloc) 0))
+                             :owed (long (or (:owed alloc) (:weight alloc) (:basis-amount alloc) 0))})
+                          allocations)
+            active (filterv #(and (pos? (:received %)) (pos? (:owed %))) entries)]
+        (if (< (count active) 2)
+          []
+          (vec (for [i (range (count active))
+                     j (range (inc i) (count active))
+                     :let [a (nth active i)
+                           b (nth active j)
+                           cross-i (* (:received a) (:owed b))
+                           cross-j (* (:received b) (:owed a))]
+                     :when (not= cross-i cross-j)]
+                 {:type :pro-rata-fairness-violation
+                  :left-id (:id a)
+                  :right-id (:id b)
+                  :left-received (:received a)
+                  :left-owed (:owed a)
+                  :right-received (:received b)
+                  :right-owed (:owed b)
+                  :expected-cross-product cross-i
+                  :actual-cross-product cross-j})))))))
+
 ;; ── Claim Evaluators ─────────────────────────────────────────────────────
 
 (defn check-projection-deterministic
@@ -288,6 +319,21 @@
                          :message (.getMessage e)
                          :class (.getName (class e))}]})))))
 
+(defn check-pro-rata-fairness
+  "No pair of claimants has a different fill ratio (cross-product equality).
+   Pro-rata fairness: received[i] / owed[i] = received[j] / owed[j] for all i, j.
+   Verified via cross-multiplication: received[i] * owed[j] = received[j] * owed[i]."
+  [{:keys [evidence-nodes]}]
+  (let [content (evidence-content evidence-nodes)]
+    (if-not content
+      {:holds? false :violations [{:type :missing-evidence-content}]}
+      (let [shadow-violations (shadow-equivalence-violations content)
+            fairness-violations (pro-rata-fairness-violations content)]
+        (if (and (empty? shadow-violations) (empty? fairness-violations))
+          {:holds? true}
+          {:holds? false
+           :violations (into shadow-violations fairness-violations)})))))
+
 ;; ── Evaluator resolver for claims engine ────────────────────────────────
 
 (def evaluator-registry
@@ -298,7 +344,8 @@
    :non-negative              check-non-negative
    :conservation              check-conservation
    :rounding-bounded          check-rounding-bounded
-   :ordering-independent      check-ordering-independent})
+   :ordering-independent      check-ordering-independent
+   :pro-rata-fairness         check-pro-rata-fairness})
 
 (defn evaluator-resolver
   "Resolve a claim-id to its evaluator function.
@@ -322,11 +369,4 @@
     (throw (ex-info "Unknown pro-rata claim" {:claim-id claim-id
                                               :known (registered-claim-ids)}))))
 
-(defn evaluate-all
-  "DEPRECATED: Use claims.engine/evaluate-claims instead.
-   Run all registered claim evaluators from evidence-node content.
-   Returns {claim-id {:holds? bool :violations [...]}}."
-  [ctx]
-  (into {}
-        (for [id (registered-claim-ids)]
-          [id (evaluate-claim id ctx)])))
+

@@ -167,11 +167,6 @@
    :pessimistic {:p-appeal-wrong 0.20  :p-l1-reversal 0.60  :has-kleros? true  :p-l2-escalation 0.40  :p-l2-reversal 0.80}
    :two-layer   {:p-appeal-wrong 0.40  :p-l1-reversal 0.85  :has-kleros? false :p-l2-escalation 0.0   :p-l2-reversal 0.0}})
 
-;;currently unused, gives a clean way to compare bands:
-;;(into {}
-;;      (map (fn [[band assumptions]]
-;;             [band (effective-correction-probability assumptions)]))
-;;      default-escalation-assumptions)
 (defn effective-correction-probability
   "Returns the probability that an incorrect lower-layer outcome is corrected
    through appeal and, if enabled, L2 escalation.

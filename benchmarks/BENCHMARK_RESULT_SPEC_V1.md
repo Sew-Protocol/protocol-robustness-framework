@@ -32,10 +32,24 @@
 
 ```clojure
 {:claim/id        <qualified-kw>     ;; claim identifier
- :claim/outcome   <keyword>          ;; :pass | :fail | :inconclusive
+ :claim/outcome   <keyword>          ;; :pass | :fail | :inconclusive | :not-exercised | :not-implemented
  :claim/severity  <keyword>          ;; :critical | :high | :medium | :low
  :claim/evidence  [<ref> ...]}       ;; evidence node references
 ```
+
+### Claim outcome taxonomy
+
+| Outcome | Meaning | May satisfy an active benchmark? |
+|---|---|---|
+| `:pass` | The evaluator ran and its required evidence passed. | Yes |
+| `:fail` | The evaluator ran and found a violation. | No |
+| `:inconclusive` | The evaluator ran but evidence was insufficient to decide. | No |
+| `:not-exercised` | An evaluator exists, but its required invariant or workload evidence was not produced. | No |
+| `:not-implemented` | No evaluator is registered for the claim. | No |
+
+`:deferred` is manifest metadata, not a positive claim result. Deferred claims
+are allowed only in experimental or deprecated manifests and never improve a
+score or readiness label.
 
 ## Scenario Result
 

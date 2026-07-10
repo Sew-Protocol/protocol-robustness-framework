@@ -1,5 +1,6 @@
 {:benchmark/id              :benchmark/sew-yield-shortfall-v1
   :benchmark/version         1
+  :benchmark/status          :active
   :benchmark/domain          :domain/protocol-value-conservation
   :benchmark/protocol        :protocol/sew
    :benchmark/scenario-suite  :suite/sew-yield-safety-v1
@@ -11,6 +12,10 @@
  :benchmark/evidence-policy :evidence-policy/forensic-standard-v1
   :benchmark/scoring-rule    :scoring/severity-weighted-robustness-v1
    :benchmark/property-types  #{:safety :fairness}
+   :benchmark/property-claims {:safety [:claim/yield-preserved-during-shortfall
+                                        :claim/no-leakage-beyond-shortfall]
+                               :fairness [:claim/partial-fill-fairness
+                                          :claim/cap-adherence]}
    :benchmark/description
   "Evaluates Sew yield shortfall behavior across 15 yield-integration
    scenarios: yield preservation during shortfall, partial fill fairness
@@ -38,6 +43,10 @@
                               :claim/role :primary
                               :claim/rationale "Shortfall allocation must be fair among claimants."
                               :claim/failure-meaning "Partial fill was not allocated fairly."}
+                             {:claim/id :claim/cap-adherence
+                              :claim/role :supporting
+                              :claim/rationale "Every allocation must respect per-recipient caps and preserve excess liquidity explicitly."
+                              :claim/failure-meaning "An allocation exceeded a recipient cap or silently distributed capped excess."}
                              {:claim/id :claim/no-leakage-beyond-shortfall
                               :claim/role :supporting
                               :claim/rationale "No value should leak beyond the declared shortfall bounds."

@@ -316,8 +316,6 @@ bb notebook:ci
 bb clerk-build
 ```
 
-Note: `:build-clerk` is now defined in `deps.edn` (resolved in Jul 2026 cleanup).
-
 For docs-only work:
 
 ```bash
@@ -356,4 +354,12 @@ A bare literal is acceptable only when:
 ### Enforcement
 
 After adding any new constant to config, update all call sites. After editing any Clojure source, run `bb validate`. If a lint or review flags a hardcoded literal that could reasonably be centralized, centralize it.
+
+### Parameter defaults must live in `types/default-params`, not in extraction sites
+
+Batch runners (`batch/run-batch`, `batch/run-batch-with-attribution`, `batch/run-ring-batch`) and other callers of `dispute/resolve-dispute` MUST NOT provide inline fallback values when extracting params. All defaults live in `resolver-sim.stochastic.types/default-params` and are merged by `stochastic.params/scenario->mc-params` before reaching the runner.
+
+If a new parameter is added to `resolve-dispute`, its default goes into `types/default-params`. If the parameter can be set from a scenario's `:protocol-params`, also add it to `protocol-params->mc-overrides` in `stochastic/params.clj`. If it comes from a ModuleSnapshot, add it to `snapshot->mc-keys`.
+
+Rationale: inline defaults are invisible — someone editing a scenario or notebook may not notice a hardcoded value is providing a fallback, and the stated default may be stale or inconsistent with the canonical value.
 

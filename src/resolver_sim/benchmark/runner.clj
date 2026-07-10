@@ -2,6 +2,7 @@
   (:require [resolver-sim.benchmark.repo :as repo]
             [resolver-sim.benchmark.adapter :as adapter]
             [resolver-sim.benchmark.claims :as benchmark-claims]
+            [resolver-sim.benchmark.coverage :as benchmark-coverage]
             [resolver-sim.concepts.benchmark :as benchmark-concepts]
             [resolver-sim.evidence.chain :as chain]
             [resolver-sim.hash.canonical :as hc]
@@ -229,6 +230,14 @@
                                (log/warn! "benchmark/concept-enrichment-failed"
                                           {:error (.getMessage e)})
                                nil)))
+         concept-coverage (when (seq concept-ids)
+                            (try
+                              (let [resolved (benchmark-concepts/resolve-benchmark-concepts concept-ids)]
+                                (benchmark-coverage/catalogue-coverage (:resolved-concepts resolved)))
+                              (catch Exception e
+                                (log/warn! "benchmark/concept-coverage-failed"
+                                           {:error (.getMessage e)})
+                                nil)))
 
          evidence {:benchmark      manifest
                    :repo           repo-meta
@@ -243,7 +252,8 @@
                                        :total-checks   total-inv-checks
                                        :passed-checks  passed-inv-checks
                                        :all-pass?      all-invariants-pass?}
-                   :concept/section concept-section}
+                   :concept/section concept-section
+                   :concept/coverage concept-coverage}
 
          hashable-evidence (dissoc evidence :timestamp)
          bundle-root-hash (hc/hash-with-intent {:hash/intent :bundle-root} hashable-evidence)

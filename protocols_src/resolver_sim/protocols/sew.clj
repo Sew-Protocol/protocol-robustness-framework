@@ -1215,10 +1215,11 @@
                          :capacity-context {:workflow-id wf
                                             :slash-bps bps}})]
         (attr/log-with-attr :debug "force-reversal-slash" {:workflow-id wf :slash-bps bps :caller addr})
-        (t/ok (res/force-reversal-slash world wf
-                                        :slash-bps bps
-                                        :track :immediate
-                                        :authorization-provenance provenance))))))
+        (let [result (t/ok (res/force-reversal-slash world wf
+                                                     :slash-bps bps
+                                                     :track :immediate
+                                                     :authorization-provenance provenance))]
+          (assoc result :extra {:authorization/provenance provenance}))))))
 
 (defmethod apply-action "set-yield-risk"
   [{:keys [agent-index] :as context} world event]

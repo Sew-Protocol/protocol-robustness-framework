@@ -3,6 +3,44 @@
 Canonical benchmark root. Protocol-agnostic benchmark infrastructure
 lives here; protocol-specific packs appear under `packs/<protocol>/`.
 
+## Public Showcase
+
+A concept or scenario mapping is not evidence by itself. A property is
+demonstrated only when an active benchmark executes its registered evaluator.
+
+| Capability | Runnable claims | Active benchmark | Status |
+|---|---|---|---|
+| Sew-backed deterministic replay | identical results, canonical hash consistency, no nondeterminism | `:benchmark/prf-deterministic-replay-v1` | Demonstrated for the included Sew workload only |
+| Sew yield shortfall handling | invariant-backed preservation, fairness, cap, and leakage checks | `:benchmark/sew-yield-shortfall-v1` | Demonstrated for its 15-scenario workload |
+| Escrow dispute and slashing invariants | named invariant-backed safety and liveness claims | Sew active benchmarks | Demonstrated within named suites |
+| Broad protocol robustness | deferred semantic claims | `:benchmark/prf-protocol-robustness-v0` | Experimental research profile |
+| PRF shortfall assurance profile | deferred scenario claims | `:benchmark/prf-shortfall-allocation-v0` | Experimental, not semantic assurance |
+| Evidence-reference integrity | no active benchmark claim yet | None | Roadmap |
+
+### First Run
+
+```bash
+bb benchmark:run :benchmark/prf-deterministic-replay-v1 -o results/sew-replay-showcase.edn
+bb benchmark:verify results/sew-replay-showcase.edn
+bb benchmark:share-summary results/sew-replay-showcase.edn
+```
+
+The evidence bundle contains scenario results, claim outcomes, configuration,
+derived concept coverage, and an evidence hash. This result demonstrates only
+the declared Sew-backed workload and runner configuration.
+
+### Hierarchy
+
+- **Concept:** Stakeholder-facing property or assurance objective.
+- **Claim:** Machine-evaluable proposition with a registered evaluator.
+- **Scenario/workload:** Behavior used to exercise a claim.
+- **Benchmark:** Workload, executable claims, scoring rule, and evidence criteria.
+- **Pack:** Curated catalogue of benchmarks; it does not itself prove a capability.
+
+Concept maturity is derived as `:defined`, `:mapped`, `:claimed`,
+`:evaluated`, or `:benchmarked`. Only `:benchmarked` means the concept is in
+an active manifest whose required claims resolve to runnable evaluators.
+
 ## Directory Layout
 
 ```

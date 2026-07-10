@@ -19,14 +19,14 @@
    "required-sources"
    [{"source" "claim/id"
      "ids" ["conservation"]}]}
-  {"mechanism/id" "mechanism/pro-rata-fairness"
-   "mechanism/name" "Pro-rata fairness"
-   "mechanism/domain" "mechanism.domain/allocation"
-   "mechanism/version" "v1"
-   "concept/ids" ["allocation/pro-rata-fairness"]
-   "required-sources"
-   [{"source" "claim/id"
-     "ids" ["ordering-independent"]}]}
+   {"mechanism/id" "mechanism/pro-rata-fairness"
+    "mechanism/name" "Pro-rata fairness"
+    "mechanism/domain" "mechanism.domain/allocation"
+    "mechanism/version" "v1"
+    "concept/ids" ["allocation/pro-rata-fairness"]
+    "required-sources"
+    [{"source" "claim/id"
+      "ids" ["pro-rata-fairness"]}]}
   {"mechanism/id" "mechanism/evidence-integrity"
    "mechanism/name" "Evidence integrity"
    "mechanism/domain" "mechanism.domain/assurance"

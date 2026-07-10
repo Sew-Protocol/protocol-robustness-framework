@@ -417,7 +417,15 @@
            :evaluation {:type :permutation-test
                         :policy :multi-set-equality}
            :outputs [:passed? :violations]}
-           ;; Protocol-specific claim definitions are registered dynamically
+          {:id :pro-rata-fairness
+           :version 1
+           :category :invariant
+           :description "No pair of claimants has a different fill ratio (cross-product equality). Pro-rata fairness: received[i] / owed[i] = received[j] / owed[j] for all i, j. Verified via cross-multiplication."
+           :inputs [:projection-artifact :allocation-result]
+           :evaluation {:type :policy-check
+                        :policy :cross-multiplication-fairness}
+           :outputs [:holds? :violations]}
+            ;; Protocol-specific claim definitions are registered dynamically
            ;; by protocol implementation namespaces via register-claim-definitions!.
            ;; See protocols_src/resolver_sim/evidence/forensic_claims.clj for
             ;; the Sew forensic-grade claims (registry-hash-verifies,
@@ -541,14 +549,14 @@
     :execution/mode :inline
     :description "Pro-rata allocation execution evidence node — records the full pro-rata computation chain (projection, allocation, claims, artifact) as a DAG-verifiable evidence node."
     :claims #{:allocation-complete :non-negative :conservation :rounding-bounded :ordering-independent}}
-   {:id :evidence/chain-root
+   {:id :evidence/commitment-root
     :version 1
-    :kind :evidence-root
+    :kind :commitment-root
     :runner :scenario-runner
     :entry 'resolver-sim.io.scenario-runner/run-and-report
-    :execution/type :evidence-root
+    :execution/type :commitment-root
     :execution/mode :inline
-    :description "Evidence chain root node — a minimal anchor that parents all other DAG nodes and links to the chain cursor evidence root hash."
+    :description "Evidence commitment root node — post-hoc DAG anchor committing to the execution node, evidence chain cursor, and bundle root hash. This is the externally meaningful evidence anchor for a run."
     :claims #{}}])
 
 (def execution-registry

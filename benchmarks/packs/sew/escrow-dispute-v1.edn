@@ -1,5 +1,6 @@
 {:benchmark/id              :benchmark/sew-escrow-dispute-v1
   :benchmark/version         1
+  :benchmark/status          :active
   :benchmark/domain          :domain/escrow-dispute-resolution
   :benchmark/protocol        :protocol/sew
    :benchmark/scenario-suite  :suite/sew-dispute-safety-v1
@@ -11,6 +12,12 @@
  :benchmark/evidence-policy :evidence-policy/forensic-standard-v1
    :benchmark/scoring-rule    :scoring/severity-weighted-robustness-v1
    :benchmark/property-types  #{:safety :liveness}
+   :benchmark/property-claims {:safety [:claim/no-unauthorized-release
+                                        :claim/funds-conserved
+                                        :claim/slashing-conservation
+                                        :claim/governance-non-interference
+                                        :claim/solvency-status]
+                               :liveness [:claim/dispute-liveness]}
     :benchmark/description
    "A lens over :suite/sew-dispute-safety-v1 focusing on end-to-end
     dispute safety: unauthorized release prevention, fund conservation,
@@ -60,4 +67,3 @@
                                :claim/role :supporting
                                :claim/rationale "Escrow solvency is maintained across all dispute resolution transitions."
                                :claim/failure-meaning "Solvency invariant failed — escrow total-held did not equal liabilities."}]}
-

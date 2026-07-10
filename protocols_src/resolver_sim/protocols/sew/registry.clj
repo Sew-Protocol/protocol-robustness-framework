@@ -168,6 +168,8 @@
   ([world resolver-addr amount challenger bounty-bps]
    (slash-resolver-stake world resolver-addr amount challenger bounty-bps nil))
   ([world resolver-addr amount challenger bounty-bps workflow-id]
+   (slash-resolver-stake world resolver-addr amount challenger bounty-bps workflow-id false))
+  ([world resolver-addr amount challenger bounty-bps workflow-id skip-sub-held?]
    (let [current (get-stake world resolver-addr)
          actual  (math/to-canonical (min (double current) (double amount)))
          token   (if workflow-id
@@ -184,7 +186,10 @@
          from-stake (- actual from-coverage)
           ;; Reduce held only when slash amount is backed by on-hand custody (avoids underflow
           ;; after settlement has already drained :total-held for this token).
-         sub-held?      (and (pos? actual)
+          ;; Reversal slashes (skip-sub-held?=true) bypass sub-held because the penalty
+          ;; comes from resolver stakes, not from escrow total-held.
+         sub-held?      (and (not skip-sub-held?)
+                             (pos? actual)
                              (>= held-available actual))
          world'  (-> world
                      (cond-> (and senior-addr (pos? from-coverage))

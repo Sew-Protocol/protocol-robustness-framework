@@ -319,3 +319,83 @@
           "unmet = remainder from caps")
       (is (nil? (:redistribution result))
           "no redistribution when all capped"))))
+
+;; ── Redistribution characterization tests ──────────────────────────────
+
+(deftest redistribution-multi-level-cascading-caps
+  (testing "multi-level cascading caps: excess from capped items flows to remaining uncapped"
+    (let [items [{:id :a :weight 100 :cap 10}
+                 {:id :b :weight 100 :cap 10}
+                 {:id :c :weight 100 :cap nil}]
+          result (payoffs/allocate-pro-rata-with-redistribution
+                  {:amount 100 :items items
+                   :id-fn :id :weight-fn :weight :cap-fn :cap
+                   :rounding :floor-with-largest-remainder})]
+      (is (= 100 (:total-allocated result))
+          "100% of available allocated")
+      (is (= 0 (:total-unmet result))
+          "no unmet after full redistribution")
+      (is (= 10 (get (into {} (map (fn [a] [(:id a) (:allocated a)]) (:allocations result))) :a))
+          "item a capped at 10")
+      (is (= 10 (get (into {} (map (fn [a] [(:id a) (:allocated a)]) (:allocations result))) :b))
+          "item b capped at 10")
+      (is (= 80 (get (into {} (map (fn [a] [(:id a) (:allocated a)]) (:allocations result))) :c))
+          "item c receives all excess")
+      (is (some? (:redistribution result))
+          "redistribution metadata present"))))
+
+(deftest redistribution-all-capped-excess-remains
+  (testing "when all items hit caps, single-pass result is returned with no redistribution"
+    (let [items [{:id :a :weight 100 :cap 30}
+                 {:id :b :weight 100 :cap 30}
+                 {:id :c :weight 100 :cap 30}]
+          result (payoffs/allocate-pro-rata-with-redistribution
+                  {:amount 100 :items items
+                   :id-fn :id :weight-fn :weight :cap-fn :cap
+                   :rounding :floor-with-largest-remainder})]
+      (is (= 90 (:total-allocated result))
+          "total capped at sum of caps")
+      (is (every? #(= 30 (:allocated %)) (:allocations result))
+          "every item gets exactly its cap")
+      (is (nil? (:redistribution result))
+          "no redistribution pass when every item is capped"))))
+
+(deftest redistribution-single-item-capped
+  (testing "single capped item's excess flows to uncapped"
+    (let [items [{:id :a :weight 100 :cap 10}
+                 {:id :b :weight 100 :cap nil}]
+          result (payoffs/allocate-pro-rata-with-redistribution
+                  {:amount 100 :items items
+                   :id-fn :id :weight-fn :weight :cap-fn :cap
+                   :rounding :floor-with-largest-remainder})]
+      (is (= 100 (:total-allocated result))
+          "100% allocated")
+      (is (= 10 (get (into {} (map (fn [a] [(:id a) (:allocated a)]) (:allocations result))) :a))
+          "item a capped at 10")
+      (is (= 90 (get (into {} (map (fn [a] [(:id a) (:allocated a)]) (:allocations result))) :b))
+          "item b gets remaining 90")
+      (is (some? (:redistribution result))
+          "redistribution metadata present"))))
+
+(deftest redistribution-conservation
+  (testing "conservation holds across all redistribution scenarios"
+    (doseq [items [[{:id :a :weight 100 :cap 30}
+                    {:id :b :weight 100 :cap nil}
+                    {:id :c :weight 100 :cap nil}]
+                   [{:id :a :weight 100 :cap 10}
+                    {:id :b :weight 100 :cap 10}
+                    {:id :c :weight 100 :cap nil}]
+                   [{:id :a :weight 100 :cap 5}
+                    {:id :b :weight 200 :cap 20}
+                    {:id :c :weight 300 :cap nil}]]]
+      (let [result (payoffs/allocate-pro-rata-with-redistribution
+                    {:amount 200 :items items
+                     :id-fn :id :weight-fn :weight :cap-fn :cap
+                     :rounding :floor-with-largest-remainder})]
+        (is (<= (+ (:total-allocated result) (:total-unmet result) (:remainder result))
+                200)
+            "total does not exceed available")
+        (is (>= (:total-allocated result) 0)
+            "non-negative allocations")
+        (is (every? #(>= (:allocated %) 0) (:allocations result))
+            "no negative per-item allocations")))))

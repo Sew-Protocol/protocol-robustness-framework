@@ -9,14 +9,15 @@
    
    Key insight: Sequential system makes attacker pay per level,
    not as one-shot like panel voting."
-  (:require [resolver-sim.stochastic.rng :as rng]))
+  (:require [resolver-sim.protocols.sew.config :as sew-config]
+            [resolver-sim.stochastic.rng :as rng]))
 
 ;; ============ Bond and Stake Configuration ============
 
 (def DEFAULT_ESCALATION_CONFIG
   "Default configuration for appeal bonds and resolver stakes.
    Centralized in resolver-sim.protocols.sew.config."
-  resolver-sim.protocols.sew.config/DEFAULT_ESCALATION_CONFIG)
+  sew-config/DEFAULT_ESCALATION_CONFIG)
 
 ;; ============ Cost Calculations ============
 

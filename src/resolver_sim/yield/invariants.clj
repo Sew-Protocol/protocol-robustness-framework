@@ -56,14 +56,15 @@
     (every? #(contains? allowed (:status %)) (vals (:yield/positions world {})))))
 
 (defn check-shortfall-splits
-  "When :shortfall exists, fulfilled + deferred = basis."
+  "When :shortfall exists, fulfilled + deferred + haircut = basis."
   [world]
   (every? (fn [pos]
             (if-let [sf (:shortfall pos)]
               (let [f (long (or (:fulfilled-amount sf) 0))
                     d (long (or (:deferred-amount sf) 0))
+                    h (long (or (:haircut-amount sf) 0))
                     b (long (or (:basis-amount sf) 0))]
-                (= (+ f d) b))
+                (= (+ f d h) b))
               true))
           (vals (:yield/positions world {}))))
 
@@ -122,6 +123,50 @@
               true))
           (vals (:yield/positions world {}))))
 
+(defn check-shortfall-detected
+  "Verify shortfall detection correctness:
+
+   1. Over-detection: no position's shortfall basis-amount exceeds its
+      total economic value (principal + realized-yield + max(0, unrealized-yield)).
+      A basis larger than the position means the shortfall was over-counted.
+
+   2. Under-detection: when a module/token is in shortfall liquidity mode
+      with available-ratio < 1.0, any position in :unwinding status that
+      has not yet withdrawn must have :shortfall data. If the system is
+      processing a withdrawal during shortfall but failed to record it,
+      this check catches the gap."
+  [world]
+  (let [positions (:yield/positions world {})]
+    (every? (fn [[oid pos]]
+              (let [mid (:module/id pos)
+                    tok (:token pos)
+                    status (:status pos)
+                    sf (:shortfall pos)
+                    risk (get-in world [:yield/risk mid tok] {})
+                    liquidity-mode (risk/effective-liquidity-mode risk)
+                    market-state (get-in world [:yield/market-state mid tok])
+                    available-ratio (double (or (:available-ratio market-state) 1.0))
+                    principal (long (:principal pos 0))
+                    realized (long (:realized-yield pos 0))
+                    unrealized (long (:unrealized-yield pos 0))
+                    total-value (+ principal realized (max 0 unrealized))
+                    shortfall-mode? (and (= liquidity-mode :shortfall)
+                                         (< available-ratio 1.0))]
+                (cond
+                  ;; Over-detection: shortfall basis must not exceed position value
+                  (and sf (pos? (:basis-amount sf 0))
+                       (> (long (:basis-amount sf 0)) total-value))
+                  false
+
+                  ;; Under-detection: unwinding during shortfall must have :shortfall
+                  (and shortfall-mode?
+                       (#{:unwinding} status)
+                       (nil? sf))
+                  false
+
+                  :else true)))
+            positions)))
+
 (defn position-custody-need
   [world pos]
   (let [risk (get-in world [:yield/risk (:module/id pos) (:token pos)] {})
@@ -158,6 +203,7 @@
   {:yield/position-consistency check-position-consistency
    :yield/exposure             check-provider-exposure
    :yield/shortfall-splits     check-shortfall-splits
+   :yield/shortfall-detected   check-shortfall-detected
    :yield/status-fsm           check-status-fsm
    :yield/realized-non-negative check-realized-non-negative
    :yield/partial-liquidity-principal check-partial-liquidity-principal

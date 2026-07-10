@@ -1,5 +1,6 @@
 {:benchmark/id              :benchmark/sew-resolver-slashing-v1
   :benchmark/version         1
+  :benchmark/status          :active
   :benchmark/domain          :domain/protocol-value-conservation
   :benchmark/protocol        :protocol/sew
    :benchmark/scenario-suite  :suite/sew-dispute-safety-v1
@@ -11,6 +12,10 @@
  :benchmark/evidence-policy :evidence-policy/forensic-standard-v1
    :benchmark/scoring-rule    :scoring/severity-weighted-robustness-v1
    :benchmark/property-types  #{:safety}
+   :benchmark/property-claims {:safety [:claim/slashing-conservation
+                                        :claim/waterfall-coverage-correct
+                                        :claim/no-over-slashing
+                                        :claim/appeal-bond-adequacy]}
     :benchmark/description
    "A lens over :suite/sew-dispute-safety-v1 focusing on resolver
     slashing mechanics: slashing conservation, waterfall coverage,

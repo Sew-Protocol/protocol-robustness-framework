@@ -13,9 +13,9 @@
             [resolver-sim.stochastic.economics :as econ]
             [resolver-sim.sim.engine      :as engine]))
 
-;;;; ============================================================================
-;;;; EXIT PROBABILITY & SIMULATION
-;;;; ============================================================================
+;; ============================================================================
+;; EXIT PROBABILITY & SIMULATION
+;; ============================================================================
 
 (def ^:private exit-prob-denominator
   "Normalizes profit shortfall to a per-epoch exit probability [0,1].
@@ -75,9 +75,9 @@
      :honest-ratio honest-ratio
      :remaining remaining}))
 
-;;;; ============================================================================
-;;;; SCENARIO TESTING
-;;;; ============================================================================
+;; ============================================================================
+;; SCENARIO TESTING
+;; ============================================================================
 
 (defn run-market-exit-cascade-scenario
   "Run one scenario over 10 epochs"
@@ -117,9 +117,9 @@
      :final-honest-ratio (:honest-ratio (last results))
      :final-pool-size (:pool-size (last results))}))
 
-;;;; ============================================================================
-;;;; PHASE O COMPLETE
-;;;; ============================================================================
+;; ============================================================================
+;; PHASE O COMPLETE
+;; ============================================================================
 
 (defn run-phase-o-complete
   "Run Phase O: Market Exit Cascade Analysis

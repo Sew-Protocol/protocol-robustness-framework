@@ -164,9 +164,13 @@
     (:evidence/type evidence) (assoc :artifact-kind (:evidence/type evidence))))
 
 (defn- validate-attribution!
-  "Log a warning if required attribution keys are missing."
+  "Log a warning if required attribution keys are missing.
+   Only warns when a scenario context is active (scenario-id present) —
+   direct function calls outside the scenario runner have no run-id."
   [resolved-attr]
-  (when (and (map? resolved-attr) (nil? (:ctx/run-id resolved-attr)))
+  (when (and (map? resolved-attr)
+             (:ctx/scenario-id resolved-attr)
+             (nil? (:ctx/run-id resolved-attr)))
     (log/warn! "capture-event-evidence! called without :ctx/run-id in attribution — evidence will be orphaned"
                {:resolved-attr (dissoc resolved-attr :ctx/scenario-id)})))
 
@@ -413,10 +417,6 @@
        (:degraded idx) (assoc :degraded true
                               :read-errors (:read-errors idx)
                               :read-error-paths (:read-error-paths idx))))))
-
-(comment
-  ;; (build-evidence-links-index "results/test-artifacts/event-evidence")
-  )
 
 (defn write-evidence-links-index-v1!
   "Build and persist the versioned evidence links index envelope to evidence-links.json.
