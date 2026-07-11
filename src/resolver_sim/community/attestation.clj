@@ -47,7 +47,7 @@
 (defn- compute-hash [body]
   (hc/domain-hash domain-tag (normalize-for-hash (canonical-body body))))
 
-(defn- parse-evidence-ref
+(defn parse-evidence-ref
   "Extract the sha256 hex from an evidence-node:sha256:<hex> ref.
    Returns nil if the ref is malformed."
   [s]
@@ -140,10 +140,16 @@
     (assoc body :attestation/id hash :attestation/hash hash :attestation/ref (attestation-ref hash))))
 
 (defn sign-attestation!
+  "Sign an attestation and record the public key path in its context.
+   The key-path allows independent verifiers to resolve the public key
+   and verify the signature without external coordination."
   [attestation private-key-path]
   (let [hash (:attestation/hash attestation)
         sig (signing/sign-hash hash private-key-path nil)]
-    (assoc attestation :attestation/signature sig)))
+    (assoc attestation
+           :attestation/signature sig
+           :context (assoc (:context attestation {})
+                           :key-path (str private-key-path ".pub")))))
 
 (defn verify-attestation-signature
   [attestation public-key-path]

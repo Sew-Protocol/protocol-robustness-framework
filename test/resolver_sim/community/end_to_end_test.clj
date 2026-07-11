@@ -34,7 +34,7 @@
           (let [t (task/build-task task-spec)]
             (is (task/valid-task? t))
             (mailbox/publish! (mailbox/build-message
-                              {:message/type :TASK_ANNOUNCEMENT :subject-task (:task/ref t) :sender "researcher-1"}))))
+                               {:message/type :TASK_ANNOUNCEMENT :subject-task (:task/ref t) :sender "researcher-1"}))))
         (testing "Runner executes"
           (let [a (att/build-execution-attestation
                    {:task/ref task-ref :runner/id "runner-alpha"
@@ -43,8 +43,8 @@
                     :bundle-root H2 :registry-snapshot-hash H5})]
             (att/persist-attestation! a artifact-dir)
             (mailbox/publish! (mailbox/build-message
-                              {:message/type :RUNNER_RESULT :subject-task task-ref :sender "runner-alpha"
-                               :attestation-ref (:attestation/ref a)}))))
+                               {:message/type :RUNNER_RESULT :subject-task task-ref :sender "runner-alpha"
+                                :attestation-ref (:attestation/ref a)}))))
         (testing "Reproducer agrees"
           (let [a (att/build-reproduction-attestation
                    {:task/ref task-ref :original-attestation-ref (str "attestation:sha256:" H1)
@@ -55,8 +55,8 @@
                     :comparison-policy :stable-projection-v0 :comparison-status :matched})]
             (att/persist-attestation! a artifact-dir)
             (mailbox/publish! (mailbox/build-message
-                              {:message/type :AGREEMENT :subject-task task-ref :sender "runner-beta"
-                               :attestation-ref (:attestation/ref a)}))))
+                               {:message/type :AGREEMENT :subject-task task-ref :sender "runner-beta"
+                                :attestation-ref (:attestation/ref a)}))))
         (testing "Mailbox integration"
           (let [msgs (mailbox/messages-for-task task-ref)]
             (is (= 3 (count msgs)))
@@ -88,8 +88,8 @@
                     :bundle-root H2 :registry-snapshot-hash H5})]
             (att/persist-attestation! a artifact-dir)
             (mailbox/publish! (mailbox/build-message
-                              {:message/type :RUNNER_RESULT :subject-task task-ref :sender "runner-alpha"
-                               :attestation-ref (:attestation/ref a)}))))
+                               {:message/type :RUNNER_RESULT :subject-task task-ref :sender "runner-alpha"
+                                :attestation-ref (:attestation/ref a)}))))
         (testing "Challenger detects mismatch"
           (let [challenge (att/build-challenge-attestation
                            {:task/ref task-ref :challenged-attestation-ref (str "attestation:sha256:" H1)
@@ -97,8 +97,8 @@
                             :challenge-type :result-mismatch})]
             (att/persist-attestation! challenge artifact-dir)
             (mailbox/publish! (mailbox/build-message
-                              {:message/type :CHALLENGE :subject-task task-ref :sender "runner-beta"
-                               :attestation-ref (:attestation/ref challenge)}))))
+                               {:message/type :CHALLENGE :subject-task task-ref :sender "runner-beta"
+                                :attestation-ref (:attestation/ref challenge)}))))
         (testing "Original result preserved, status challenged"
           (let [msgs (mailbox/messages-for-task task-ref)]
             (is (some #(= :RUNNER_RESULT (:message/type %)) msgs))

@@ -41,10 +41,14 @@
               (let [bench-path (rp/relative-to pack-reg-path (:benchmark/file b))
                     desc (or (load-benchmark-description bench-path)
                              (keyword->display-name (:benchmark/id b)))
+                    manifest (try (rp/edn-read bench-path) (catch Exception _ {}))
                     bm-id (str pack-name "/" (name (:benchmark/id b)))]
                 {:id bm-id
                  :benchmark/id (:benchmark/id b)
                  :description desc
+                 :status (:benchmark/status b)
+                 :claims (count (:benchmark/claims manifest))
+                 :coverage-status (:benchmark/coverage-status manifest)
                  :manifest bench-path}))
             (:benchmarks pack-reg)))
     (do (println "Pack registry not found:" pack-reg-path) [])))
@@ -93,6 +97,32 @@
 (defn- interactive-run?
   [passed? options]
   (and passed? (not (:non-interactive options))))
+
+(defn- hashable-evidence
+  [bundle]
+  (dissoc bundle :timestamp :evidence/hash :evidence/signature
+          :evidence/public-key-path))
+
+(defn- verify-bundle-hash
+  "Verify current bundles and pre-v2 bundles whose hash excluded post-hash
+   run metadata and certification."
+  [bundle]
+  (let [stored-hash (:evidence/hash bundle)
+        current-hash (hc/hash-with-intent {:hash/intent :bundle-root}
+                                           (hashable-evidence bundle))
+        legacy-hash (hc/hash-with-intent {:hash/intent :bundle-root}
+                                          (dissoc (hashable-evidence bundle)
+                                                  :run/manifest
+                                                  :benchmark-certification))]
+    (cond
+      (hc/intent-hash= current-hash stored-hash)
+      {:hash-ok? true :scheme :current :computed-hash current-hash}
+
+      (hc/intent-hash= legacy-hash stored-hash)
+      {:hash-ok? true :scheme :legacy-v1 :computed-hash legacy-hash}
+
+      :else
+      {:hash-ok? false :scheme nil :computed-hash current-hash})))
 
 (defn- interactive-ux [evidence output-path options]
   (println "\n" (apply str (repeat 40 "─")))
@@ -254,7 +284,8 @@
           (println "  Output:" f))
         (System/exit (:exit-code result)))
       (let [result (gt/run-equilibrium-validation
-                    :suite (when suite (keyword suite))
+                    :suite (when suite
+                             (keyword (str/replace-first suite #"^:" "")))
                     :format (or (keyword format) :both)
                     :out-dir (or out "./prf-out/game-theory"))]
         (println "\nGame-theoretic validation"
@@ -339,15 +370,18 @@
 
 ;; ── CLI option specs ────────────────────────────────────────────────────────────
 
+(def ^:private game-theory-options
+  [["-s" "--suite SUITE" "Equilibrium suite keyword (e.g. :suites/spe-validation)"]
+   [nil "--out DIR" "Output directory" :default "./prf-out/game-theory"]
+   ["-f" "--format FORMAT" "Output format: edn, json, or both" :default "both"]
+   [nil "--strategic" "Run strategic claim validation artifact generation"]
+   [nil "--claim-id CLAIM" "Strategic claim id keyword name" :default "claim/pro-rata-shortfall-conservation"]])
+
 (def subcommand-options
   "Additional option specs for subcommands that need more than the global flags."
   {"validate" []
-   "validate-game-theory"
-   [["-s" "--suite SUITE" "Equilibrium suite keyword (e.g. :equilibrium-validation)"]
-    ["-o" "--out DIR" "Output directory" :default "./prf-out/game-theory"]
-    ["-f" "--format FORMAT" "Output format: edn, json, or both" :default "both"]
-    [nil "--strategic" "Run strategic claim validation artifact generation"]
-    [nil "--claim-id CLAIM" "Strategic claim id keyword name" :default "claim/pro-rata-shortfall-conservation"]]
+   "validate-game-theory" game-theory-options
+   "game-theoretic-validation" game-theory-options
    "doctor"
    [[nil "--out DIR" "Output directory" :default "./prf-out/doctor"]]
    "verify-portability"
@@ -424,11 +458,25 @@
         (System/exit 0))
 
       (:list options)
-      (let [index (load-index)]
-        (println (format "%-30s %s" "ID" "Description"))
-        (println (apply str (repeat 60 "-")))
+      (let [index (load-index)
+            history (try (registry/get-history) (catch Exception _ []))
+            latest-by-id (into {}
+                               (map (fn [entry]
+                                      [(get-in entry [:benchmark :benchmark/id]) entry]))
+                               history)]
+        (println (format "%-38s %-13s %-7s %-18s %s"
+                         "ID" "Status" "Claims" "Latest scenarios" "Description"))
+        (println (apply str (repeat 120 "-")))
         (doseq [b (:benchmarks index)]
-          (println (format "%-30s %s" (:id b) (:description b))))
+          (let [latest (get latest-by-id (:benchmark/id b))
+                total (get-in latest [:metrics :total])
+                passed (get-in latest [:metrics :passed])
+                latest-summary (if (and (number? total) (number? passed))
+                                 (str passed "/" total)
+                                 "none")
+                status (name (or (:status b) :unknown))]
+            (println (format "%-38s %-13s %-7s %-18s %s"
+                             (:id b) status (:claims b) latest-summary (:description b)))))
         (System/exit 0))
 
       (:history options)
@@ -475,12 +523,12 @@
       (:verify options)
       (let [bundle-path (first arguments)
             bundle (rp/edn-read bundle-path)
-            hashable (dissoc bundle :timestamp :evidence/hash :evidence/signature)
-            computed-hash (hc/hash-with-intent {:hash/intent :bundle-root} hashable)
             stored-hash (:evidence/hash bundle)
-            hash-ok? (hc/intent-hash= computed-hash stored-hash)]
+            {:keys [hash-ok? scheme]} (verify-bundle-hash bundle)]
         (println "Verification for:" (or bundle-path "(stdin)"))
         (println "Hash match:" (if hash-ok? "yes" "no"))
+        (when (= :legacy-v1 scheme)
+          (println "Hash scheme: legacy-v1 (run metadata and certification were not hash-covered)"))
         (when (:evidence/signature bundle)
           (if-let [pub-key-path (:evidence/public-key-path bundle)]
             (let [sig-ok? (signing/verify-signature stored-hash (:evidence/signature bundle) pub-key-path)]
@@ -491,8 +539,8 @@
       (:hash-only options)
       (let [bundle-path (first arguments)
             bundle (rp/edn-read bundle-path)
-            hashable (dissoc bundle :timestamp :evidence/hash :evidence/signature)
-            computed-hash (hc/hash-with-intent {:hash/intent :bundle-root} hashable)]
+            computed-hash (hc/hash-with-intent {:hash/intent :bundle-root}
+                                                (hashable-evidence bundle))]
         (println computed-hash)
         (System/exit 0))
 

@@ -21,7 +21,7 @@ claims; it does not claim comprehensive protocol assurance.
 | Today | Scope |
 |---|---|
 | Sew-backed deterministic replay | The included Sew dispute workload produces matching canonical results and evidence roots across repeated PRF-runner executions. |
-| Sew yield shortfall checks | The named yield workload runs invariant-backed preservation, fairness, cap, and leakage claims. |
+| Sew yield shortfall checks | Experimental: the named yield workload now requires closed-form allocation artifacts before preservation, cap, or allocation correctness claims can be demonstrated. |
 | Sew dispute/slashing checks | Active Sew benchmarks run their declared invariant-backed safety and liveness claims. |
 
 Experimental profiles retain visible deferred claims for protocol robustness and
@@ -30,7 +30,8 @@ they do not count as evaluated coverage without a runnable claim evaluator.
 
 Start with the [benchmark showcase](benchmarks/README.md#public-showcase) for
 the capability matrix, lifecycle definitions, and evidence-inspection path.
-The recorded yield-shortfall run currently has 15/15 passing scenarios; its
+The recorded yield-shortfall run currently has 15/15 passing scenarios under
+the previous invariant-only mapping; its
 independent CLI verification is pending an unrelated execution-registry repair.
 
 ## Repository map
@@ -191,10 +192,12 @@ The framework has evolved to provide robust tools for audit, traceability, and d
 
 ## Current status
 
-* **Demonstrated benchmark catalogue**: Sew-backed replay, yield-shortfall, dispute, and slashing workloads with declared runnable claims.
+* **Demonstrated benchmark catalogue**: Sew-backed replay, dispute, and slashing workloads with declared runnable claims. Yield-shortfall is experimental pending closed-form artifact coverage.
 * **Experimental research profiles**: broad protocol-robustness and PRF shortfall profiles retain deferred semantic claims and are not readiness evidence.
 * **Framework capability**: an operational in-process deterministic runner and evidence/artifact infrastructure.
 * **Research tooling**: adversarial, equilibrium, and integration tools exist, but their presence does not imply they are covered by an active public benchmark.
+  Run the fixture-based game-theory research validator with
+  `bb benchmark:game-theory --suite :suites/spe-validation --out /tmp/prf-game-theory`.
 
 ## Registry Architecture
 

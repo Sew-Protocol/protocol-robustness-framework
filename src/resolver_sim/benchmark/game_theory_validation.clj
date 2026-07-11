@@ -25,7 +25,13 @@
     :description "12 traces covering budget-balance, dominant-strategy, incentive-compatibility, Nash, SPE, and collusion-resistance"}
    {:suite-key :suites/cancellation-equilibrium-validation
     :title "Cancellation equilibrium validation"
-    :description "9 traces covering mutual cancel, timeout auto-cancel, status leaks, and cancellation-time scenarios"}])
+    :description "9 traces covering mutual cancel, timeout auto-cancel, status leaks, and cancellation-time scenarios"}
+   {:suite-key :suites/spe-validation
+    :title "SPE proxy validation"
+    :description "5 traces covering rational and irrational disputes, escalations, and strategic-node coverage"}
+   {:suite-key :suites/spe-regression
+    :title "SPE regression validation"
+    :description "8 traces covering bounded SPE, backward induction, reputation, and profile-matrix regressions"}])
 
 ;; ── Equilibrium check catalog ───────────────────────────────────────────────
 
@@ -208,6 +214,10 @@
   (let [suites-to-run (if suite
                         (filter #(= (:suite-key %) suite) equilibrium-suites)
                         equilibrium-suites)
+        _ (when (and suite (empty? suites-to-run))
+            (throw (ex-info "Unknown game-theory validation suite"
+                            {:suite suite
+                             :known-suites (mapv :suite-key equilibrium-suites)})))
         suite-keys (mapv :suite-key suites-to-run)
         run-id (str "gt-" (java.time.Instant/now))
         effective-out-dir (str out-dir "/" run-id)

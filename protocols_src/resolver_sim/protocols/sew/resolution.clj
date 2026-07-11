@@ -921,7 +921,7 @@
 ;;   6. ACTION_NONE                  — no action
 ;;
 ;; Returns {:ok bool :world world' :action kw} where action is one of:
-;;   :execute-pending :auto-cancel-on-disputed :auto-cancel-disputed
+;;   :execute-pending :auto-cancel-disputed-auto-time :auto-cancel-disputed
 ;;   :auto-release :auto-cancel :none
 ;; ---------------------------------------------------------------------------
 
@@ -950,8 +950,7 @@
         (sm/auto-cancel-due-on-disputed? world workflow-id)
         (let [r (lc/auto-cancel-disputed-on-auto-time world workflow-id)]
           (if (:ok r)
-            (let [w (lc/cleanup-orphaned-slashes (:world r) workflow-id)]
-              (assoc (t/ok w) :action :auto-cancel-on-disputed))
+            (assoc r :action :auto-cancel-disputed-auto-time)
             r))
 
         ;; Priority 3: dispute liveness timeout
@@ -962,8 +961,7 @@
         (sm/dispute-timeout-exceeded? world workflow-id)
         (let [r (lc/auto-cancel-disputed-escrow world workflow-id)]
           (if (:ok r)
-            (let [w (lc/cleanup-orphaned-slashes (:world r) workflow-id)]
-              (assoc (t/ok w) :action :auto-cancel-disputed))
+            (assoc r :action :auto-cancel-disputed)
             r))
 
         ;; Priority 4: auto-release

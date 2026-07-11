@@ -1,5 +1,6 @@
 (ns resolver-sim.benchmark.sharing
   (:require [resolver-sim.benchmark.runner :as runner]
+            [resolver-sim.benchmark.coverage :as coverage]
             [resolver-sim.benchmark.repo :as repo]
             [resolver-sim.benchmark.signing :as signing]
             [resolver-sim.hash.canonical :as hc]
@@ -15,8 +16,17 @@
 (defn share-summary [evidence]
   (let [bm-id (get-in evidence [:benchmark :benchmark/id])
         protocol-commit (get-in evidence [:repo :repo :commit])
-        outcome (if (= (get-in evidence [:metrics :passed]) (get-in evidence [:metrics :total]))
-                  "PASS" "FAIL")
+        scenarios-pass? (= (get-in evidence [:metrics :passed])
+                            (get-in evidence [:metrics :total]))
+        active? (= :active (get-in evidence [:benchmark :benchmark/status]))
+        claims-pass? (coverage/required-claims-passed?
+                      (:benchmark evidence)
+                      (:claim-results evidence))
+        outcome (cond
+                  (not scenarios-pass?) "SCENARIOS FAILED"
+                  (and active? claims-pass?) "ACTIVE BENCHMARK PASS"
+                  active? "SCENARIOS PASS; REQUIRED CLAIMS INCOMPLETE"
+                  :else "EXPERIMENTAL: SCENARIOS PASS")
         evidence-hash (:evidence/hash evidence)
         signed? (contains? evidence :evidence/signature)]
     (str "Benchmark:\n" bm-id "\n\n"

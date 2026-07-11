@@ -270,6 +270,7 @@
                           :claim/dispute-liveness :claim/slashing-conservation
                           :claim/governance-non-interference :claim/bounded-resolution-time
                           :claim/yield-preserved-during-shortfall :claim/partial-fill-fairness
+                          :claim/partial-fill-decision-integrity
                           :claim/no-leakage-beyond-shortfall :claim/waterfall-coverage-correct
                           :claim/no-over-slashing :claim/appeal-bond-adequacy}
                         %) (concat evaluated-ids manifest-claim-ids))

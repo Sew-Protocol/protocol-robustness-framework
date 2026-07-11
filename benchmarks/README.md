@@ -10,12 +10,13 @@ demonstrated only when an active benchmark executes its registered evaluator.
 
 | Capability | Concept | Claims | Evaluator | Active benchmark | Status |
 |---|---|---|---|---|---|
-| Sew yield shortfall handling | shortfall, partial fill, pro-rata fairness | preservation, fairness, cap, and leakage | named Sew invariants | `:benchmark/sew-yield-shortfall-v1` | Primary showcase: demonstrated for its 15-scenario workload |
+| Sew yield shortfall handling | shortfall, partial fill | preservation, closed-form allocation correctness, cap bounds, and leakage | named Sew invariants plus closed-form partial-fill checks | none | Experimental until the workload emits and passes qualifying decision artifacts |
 | Sew-backed deterministic replay | evidence integrity | identical results, canonical hash consistency, no nondeterminism | benchmark consistency evaluators | `:benchmark/prf-deterministic-replay-v1` | Secondary showcase for the included Sew workload only |
 | Escrow dispute and slashing invariants | authority, liveness, conservation | named safety and liveness claims | named Sew invariants | Sew active benchmarks | Demonstrated within named suites |
 | Broad protocol robustness | accountability, adversarial liveness, fund safety | deferred semantic claims | none | none | Experimental research profile |
 | PRF shortfall assurance profile | allocation completeness and conservation | deferred scenario claims | none | none | Experimental, not semantic assurance |
 | Evidence-reference integrity | evidence DAG reference integrity | no active claim yet | none | none | Roadmap |
+| Game-theory validation | equilibrium, SPE, cancellation dominance | trace-end and bounded equilibrium checks | fixture-suite validators | none | Research validation; not active benchmark coverage |
 
 ### First Run
 
@@ -25,27 +26,40 @@ bb benchmark:verify results/sew-yield-shortfall-showcase.edn
 bb benchmark:share-summary results/sew-yield-shortfall-showcase.edn
 ```
 
+### Game-Theory Research Run
+
+```bash
+bb benchmark:game-theory --suite :suites/spe-validation --out /tmp/prf-game-theory
+```
+
+This emits a research-validation artifact for the selected fixture suite. It
+is not an active benchmark result and does not establish a full equilibrium
+proof.
+
 The evidence bundle contains scenario results, claim outcomes, configuration,
-derived concept coverage, and an evidence hash. This result demonstrates only
-the declared 15-scenario Sew yield-shortfall workload and runner configuration.
+derived concept coverage, and an evidence hash. The yield benchmark remains
+experimental until a completed run establishes all required closed-form claims.
 
-### Recorded Showcase Result
+### Historical Scenario Run
 
-The current completed local bundle is `results/evidence/latest.edn`:
+The existing local bundle is `results/evidence/latest.edn` and predates the
+closed-form claim evaluators:
 
 | Field | Value |
 |---|---|
 | Benchmark | `:benchmark/sew-yield-shortfall-v1` |
 | Scenario results | 15 / 15 passed |
-| Evaluated claim results | 45 passed |
-| Not exercised | 15 scenario-level checks whose invariant path did not occur in that workload execution |
-| Evidence hash | `e0e7b00b171104a632d78febdc80a80f5d5050bc817d274e2d1bb3c0e94f1b6f` |
+| Evaluated claim results | 45 passed under the previous invariant-only claim mapping |
+| Not exercised | 15 cap checks; this is why the bundle is not active semantic evidence |
+| Evidence hash | `3e04dd556d30d87016452f5e14df0e7d17b9a238cf5334510e9faa1d013cc8ad` |
 
-`bb benchmark:verify` and `bb benchmark:share-summary` are currently blocked
-before bundle processing by an execution-registry validation error:
-`:execution/community-benchmark` names the unregistered runner
-`:runner/local-clojure`. This is a repository startup-registry issue, not a
-claim that the recorded bundle has passed independent verification.
+`bb benchmark:verify results/evidence/latest.edn` accepts the recorded bundle
+through its explicit `legacy-v1` hash path. That confirms the historical hash
+under the old layout, where run metadata and certification were added after
+hashing; new bundles cover those fields in the bundle hash.
+
+`bb benchmark:share-summary results/evidence/latest.edn` reports this bundle
+as `EXPERIMENTAL: SCENARIOS PASS`, not a semantic benchmark pass.
 
 ### Hierarchy
 

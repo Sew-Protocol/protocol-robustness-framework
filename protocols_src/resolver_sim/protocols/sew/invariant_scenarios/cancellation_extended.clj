@@ -226,7 +226,7 @@
     ;; Dispute succeeds at t=1060 (PENDING → DISPUTED)
     {:seq 1 :time 1060 :agent "seller" :action "raise_dispute"
      :params {:workflow-id 0}}
-    ;; Auto-cancel at same timestamp — fires auto-cancel-on-disputed (the fix!)
+    ;; Auto-cancel at same timestamp — fires auto-cancel-disputed-auto-time (the fix!)
     ;; Both actions succeed: dispute briefly sets state to DISPUTED, then
     ;; auto-cancel-due-on-disputed? fires and refunds the buyer immediately.
     {:seq 2 :time 1060 :agent "keeper" :action "automate_timed_actions"
@@ -416,7 +416,7 @@
     ;; At t=1300: auto-cancel-time (2000) not yet passed, timeout not exceeded
     {:seq 2 :time 1300 :agent "keeper" :action "automate_timed_actions"
      :params {:workflow-id 0}}
-    ;; At t=2000: auto-cancel-time passed → auto-cancel-on-disputed fires
+    ;; At t=2000: auto-cancel-time passed → auto-cancel-disputed-auto-time fires
     {:seq 3 :time 2000 :agent "keeper" :action "automate_timed_actions"
      :params {:workflow-id 0}}]})
 

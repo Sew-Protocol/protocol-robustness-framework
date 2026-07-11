@@ -64,6 +64,13 @@
       (assoc-in [:escrow-transfers 0 :sender-status] :raise-dispute)
       (assoc-in [:dispute-timestamps 0] 1000)))
 
+(defn- world-disputed-with-auto-cancel-time
+  "World with escrow 0 in :disputed state with auto-cancel-time set."
+  ([] (world-disputed-with-auto-cancel-time 2000))
+  ([auto-cancel-time]
+   (-> (world-disputed)
+       (assoc-in [:escrow-transfers 0 :auto-cancel-time] auto-cancel-time))))
+
 ;; ---------------------------------------------------------------------------
 ;; create-escrow
 ;; ---------------------------------------------------------------------------
@@ -326,12 +333,13 @@
 ;; ---------------------------------------------------------------------------
 
 (deftest auto-cancel-disputed-on-auto-time-happy
-  (let [w (-> (world-disputed)
-              (assoc-in [:escrow-transfers 0 :auto-cancel-time] 1000)
+  (let [w (-> (world-disputed-with-auto-cancel-time 1000)
               (time-ctx/with-temporal-context {:block-ts 5000}))
         r (lc/auto-cancel-disputed-on-auto-time w 0)]
     (is (true? (:ok r)))
-    (is (= :refunded (t/escrow-state (:world r) 0)))))
+    (is (= :refunded (t/escrow-state (:world r) 0)))
+    (is (nil? (get-in (:world r) [:dispute-timestamps 0]))
+        "dispute timestamp cleared on auto-cancel")))
 
 (deftest auto-cancel-disputed-on-auto-time-not-disputed
   (let [w (-> (world-with-one-escrow)
@@ -342,8 +350,7 @@
 
 (deftest auto-cancel-disputed-on-auto-time-has-pending-settlement
   (let [pending {:exists true :is-release true :appeal-deadline 9999 :resolution-hash nil}
-        w       (-> (world-disputed)
-                    (assoc-in [:escrow-transfers 0 :auto-cancel-time] 1000)
+        w       (-> (world-disputed-with-auto-cancel-time)
                     (assoc :block-time 5000)
                     (assoc-in [:pending-settlements 0] pending))
         r       (lc/auto-cancel-disputed-on-auto-time w 0)]
@@ -351,8 +358,7 @@
     (is (= :has-pending-settlement (:error r)))))
 
 (deftest auto-cancel-disputed-on-auto-time-time-not-passed
-  (let [w (-> (world-disputed)
-              (assoc-in [:escrow-transfers 0 :auto-cancel-time] 3000)
+  (let [w (-> (world-disputed-with-auto-cancel-time 3000)
               (assoc :block-time 2000))
         r (lc/auto-cancel-disputed-on-auto-time w 0)]
     (is (false? (:ok r)))
@@ -405,6 +411,86 @@
           "slash distributed to protocol")
       (is (pos? (:retained-slash-reserves w 0))
           "slash distributed to retained reserves"))))
+
+;; ---------------------------------------------------------------------------
+;; auto-cancel-disputed — edge cases
+;; ---------------------------------------------------------------------------
+
+(deftest auto-cancel-disputed-no-resolver
+  "auto-cancel-disputed succeeds when escrow has no resolver assigned.
+   The resolver slash is skipped; escrow is refunded cleanly."
+  (let [w (-> (world-disputed)
+              (time-ctx/with-temporal-context {:block-ts 5000}))
+        r (lc/auto-cancel-disputed-escrow w 0)]
+    (is (true? (:ok r)) "auto-cancel should succeed without resolver")
+    (let [w' (:world r)]
+      (is (= :refunded (t/escrow-state w' 0)) "escrow refunded")
+      (is (nil? (get-in w' [:dispute-timestamps 0]))
+          "dispute timestamp cleared")
+      (is (not (neg? (get-in w' [:total-held usdc] 0)))
+          "total-held non-negative"))))
+
+(deftest auto-cancel-disputed-on-auto-time-no-resolver
+  "auto-cancel-disputed-on-auto-time succeeds when escrow has no resolver."
+  (let [w (-> (world-disputed-with-auto-cancel-time)
+              (time-ctx/with-temporal-context {:block-ts 5000}))
+        r (lc/auto-cancel-disputed-on-auto-time w 0)]
+    (is (true? (:ok r)) "auto-cancel should succeed without resolver")
+    (let [w' (:world r)]
+      (is (= :refunded (t/escrow-state w' 0)) "escrow refunded")
+      (is (nil? (get-in w' [:dispute-timestamps 0]))
+          "dispute timestamp cleared")
+      (is (not (neg? (get-in w' [:total-held usdc] 0)))
+          "total-held non-negative"))))
+
+(deftest auto-cancel-disputed-on-auto-time-zero-time
+  "auto-cancel-disputed-on-auto-time fails when auto-cancel-time is 0."
+  (let [w (-> (world-disputed)
+              (assoc-in [:escrow-transfers 0 :auto-cancel-time] 0)
+              (time-ctx/with-temporal-context {:block-ts 5000}))
+        r (lc/auto-cancel-disputed-on-auto-time w 0)]
+    (is (false? (:ok r)))
+    (is (= :auto-cancel-time-not-passed (:error r)))))
+
+(deftest auto-cancel-disputed-no-resolver-auto-time-zero
+  "auto-cancel-disputed succeeds when auto-cancel-time is 0 (uses dispute-timeout)."
+  (let [w (-> (world-disputed)
+              (assoc-in [:escrow-transfers 0 :auto-cancel-time] 0)
+              (time-ctx/with-temporal-context {:block-ts 5000}))
+        r (lc/auto-cancel-disputed-escrow w 0)]
+    (is (true? (:ok r)) "standard timeout path still works")
+    (let [w' (:world r)]
+      (is (= :refunded (t/escrow-state w' 0)) "escrow refunded"))))
+
+(deftest auto-cancel-disputed-with-fot-token
+  "auto-cancel-disputed-escrow handles fee-on-transfer tokens correctly.
+   The FoT fee is deducted from the gross amount before crediting the
+   refund recipient, and :total-fot-fees tracks the withheld amount."
+  (let [resolver "0xResolver"
+        fot-bps  100  ; 1% FoT
+        snap     (snap-fix/escrow-snapshot
+                  {:escrow-fee-bps            0
+                   :default-auto-release-delay 0
+                   :default-auto-cancel-delay  0
+                   :max-dispute-duration      3600
+                   :appeal-window-duration    0
+                   :appeal-bond-protocol-fee-bps 0})
+        sett     (t/make-escrow-settings
+                  {:custom-resolver resolver})
+        w0       (-> (t/empty-world 1000)
+                     (assoc-in [:token-fot-bps usdc] fot-bps))
+        {:keys [world workflow-id]} (lc/create-escrow w0 alice usdc bob 2000 sett snap)
+        w2       (reg/register-stake world resolver 5000)
+        w3       (:world (lc/raise-dispute w2 0 alice))
+        w4       (time-ctx/with-temporal-context w3 {:block-ts 5000})
+        r        (lc/auto-cancel-disputed-escrow w4 0)]
+    (is (true? (:ok r)) "auto-cancel with FoT token should succeed")
+    (let [w' (:world r)]
+      (is (= :refunded (t/escrow-state w' 0)) "escrow refunded")
+      (is (pos? (get-in w' [:total-fot-fees usdc] 0))
+          "FoT fee tracked in :total-fot-fees")
+      (is (not (neg? (get-in w' [:total-held usdc] 0)))
+          "total-held non-negative"))))
 
 ;; ---------------------------------------------------------------------------
 ;; Fork-finality: terminal mutation rejection

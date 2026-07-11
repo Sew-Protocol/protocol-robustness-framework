@@ -10,6 +10,23 @@
             [resolver-sim.scenario.suites]
             [resolver-sim.benchmark.game-theory-validation :as sut]))
 
+(def valid-partial-fill-decision
+  {:decision/id "partial-fill-0123456789abcdef"
+   :decision/hash "sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+   :requested {:principal 100}
+   :filled {:principal 60}
+   :deferred {:principal 40}
+   :haircut {}
+   :unrealized {}
+   :settlement-mode :partial-fill
+   :policy {:mode :waterfall
+            :rounding-policy :floor-and-carry
+            :fill-order [:principal]}
+   :evidence {:available-liquidity 60
+              :shortage 40
+              :total-requested 100
+              :fill-mode :waterfall}})
+
 (deftest strategic-claim-validation-emits-auditable-artifact
   (let [out-dir (str (System/getProperty "java.io.tmpdir")
                      "/prf-game-theory-validation-test")
@@ -41,6 +58,7 @@
                              :outcome :pass
                              :halt-reason nil
                              :scenario/evidence-root (apply str (repeat 64 "a"))
+                             :partial-fill-decisions [valid-partial-fill-decision]
                              :invariant-results [{:id :inv/a :result :pass}]}
                             {:file "resource:scenarios/edn/S103_negative-yield-shortfall-cascade.edn"
                              :simulator/scenario-path "resource:scenarios/edn/S103_negative-yield-shortfall-cascade.edn"
@@ -172,6 +190,14 @@
                (get json-artifact "kind")))
         (is (= "game-theoretic-validation.artifact.v1"
                (get json-artifact "version")))))))
+
+(deftest unknown-equilibrium-suite-is-rejected
+  (is (thrown-with-msg?
+       clojure.lang.ExceptionInfo
+       #"Unknown game-theory validation suite"
+       (sut/run-equilibrium-validation :suite :suites/not-registered
+                                       :out-dir (str (System/getProperty "java.io.tmpdir")
+                                                     "/prf-game-theory-invalid-suite")))))
 
 (deftest held-custody-closed-form-validation-emits-artifact
   (let [out-dir (str (System/getProperty "java.io.tmpdir")

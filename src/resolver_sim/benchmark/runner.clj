@@ -119,6 +119,12 @@
      :outcome (:outcome result)
      :halt-reason (:halt-reason result)
      :metrics (:metrics result)
+     ;; Preserve allocation artifacts required by closed-form benchmark claims,
+     ;; without embedding the complete final protocol world in the bundle.
+     :partial-fill-decisions (->> (get-in final-world [:yield/partial-fill-decisions] {})
+                                  vals
+                                  (sort-by :decision/id)
+                                  vec)
      :invariant-results inv-results
      :scenario/evidence-root scenario-evidence}))
 
@@ -239,6 +245,17 @@
                                            {:error (.getMessage e)})
                                 nil)))
 
+         run-manifest (build-run-manifest manifest-path manifest adapter results metrics)
+         certification {:benchmark-id      (or (:id manifest) "unknown")
+                        :scenario-count    (:total metrics)
+                        :all-invariants-pass all-invariants-pass?
+                        :final-state-hash  nil
+                        :evidence-chain-root nil
+                        :invariant-summary inv-summary}
+         certification (assoc certification
+                              :certification-hash
+                              (hc/hash-with-intent {:hash/intent :benchmark-certification}
+                                                   certification))
          evidence {:benchmark      manifest
                    :repo           repo-meta
                    :environment    {:os-name (System/getProperty "os.name")
@@ -253,31 +270,19 @@
                                        :passed-checks  passed-inv-checks
                                        :all-pass?      all-invariants-pass?}
                    :concept/section concept-section
-                   :concept/coverage concept-coverage}
+                   :concept/coverage concept-coverage
+                   :run/manifest run-manifest
+                   :benchmark-certification certification}
 
          hashable-evidence (dissoc evidence :timestamp)
          bundle-root-hash (hc/hash-with-intent {:hash/intent :bundle-root} hashable-evidence)
-
-           ;; Certification artifact using :benchmark-certification intent
-         certification {:benchmark-id      (or (:id manifest) "unknown")
-                        :scenario-count    (:total metrics)
-                        :all-invariants-pass all-invariants-pass?
-                        :final-state-hash  nil  ;; filled after scenario completes
-                        :evidence-chain-root nil  ;; filled by evidence chain
-                        :invariant-summary inv-summary}
-         cert-hash (hc/hash-with-intent {:hash/intent :benchmark-certification} certification)
-
-         final-evidence (assoc evidence
-                               :evidence/hash bundle-root-hash
-                               :benchmark-certification (assoc certification
-                                                               :certification-hash cert-hash))]
+         final-evidence (assoc evidence :evidence/hash bundle-root-hash)]
 
      (when-not passed?
        (log/warn! "benchmark/failed" {:passed (:passed metrics) :total (:total metrics)})
        (println "Benchmark FAILED:" (:passed metrics) "/" (:total metrics) "passed."))
 
-     (assoc final-evidence
-            :run/manifest (build-run-manifest manifest-path manifest adapter results metrics)))))
+     final-evidence)))
 
 ;; ── Evidence writer ─────────────────────────────────────────────────────────────
 

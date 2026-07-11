@@ -87,7 +87,7 @@
       (let [act (:auto-cancel-time et 0)]
         (when (pos? act)
           (when-not (dl/deadline-expired? now act)
-            (swap! results conj {:deadline-ts act :action :auto-cancel-on-disputed}))))
+            (swap! results conj {:deadline-ts act :action :auto-cancel-disputed-auto-time}))))
       ;; Priority 3: max-dispute-duration timeout
       (let [snap    (t/get-snapshot world wf)
             ts      (get-in world [:dispute-timestamps wf] 0)

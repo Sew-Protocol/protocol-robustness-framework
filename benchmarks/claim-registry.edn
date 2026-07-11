@@ -134,20 +134,20 @@
    :claim/invariants [:yield-exposure :shortfall-fidelity]
    :claim/evaluator :claim/yield-preserved-during-shortfall}
 
-  {:claim/id :claim/partial-fill-fairness
-   :claim/title "Partial fill fairness"
-   :claim/description "Shortfall is allocated fairly among claimants."
-   :claim/property-types #{:fairness}
+  {:claim/id :claim/partial-fill-decision-integrity
+   :claim/title "Partial-fill decision correctness"
+   :claim/description "Every emitted partial-fill decision satisfies closed-form conservation, bounds, integrity, and applicable allocation-mode checks."
+   :claim/property-types #{:safety}
    :claim/concepts #{:allocation/partial-fill :allocation/pro-rata-fairness}
-   :claim/invariants [:shortfall-fidelity]
-   :claim/evaluator :claim/partial-fill-fairness}
+   :claim/invariants []
+   :claim/evaluator :claim/partial-fill-decision-integrity}
 
    {:claim/id :claim/cap-adherence
     :claim/title "Per-claimant cap adherence"
-    :claim/description "No allocation exceeds the declared per-claimant cap. When all claimants hit their caps, excess liquidity remains unallocated rather than being silently distributed."
-    :claim/property-types #{:fairness :safety}
+    :claim/description "No emitted partial-fill decision exceeds its available liquidity or any requested claim bound."
+    :claim/property-types #{:safety}
     :claim/concepts #{:allocation/partial-fill :allocation/pro-rata-fairness}
-    :claim/invariants [:yield/value-conservation :yield/shortfall-splits]
+    :claim/invariants []
     :claim/evaluator :claim/cap-adherence}
 
    {:claim/id :claim/no-leakage-beyond-shortfall

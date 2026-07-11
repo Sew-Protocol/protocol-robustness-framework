@@ -226,20 +226,19 @@ To add a new validator: write a function matching the signature `[projection] â†
 
 | Claim ID | Mechanism Levels | Match Dimensions | Benchmarked |
 |----------|-----------------|------------------|-------------|
-| `:claim/pro-rata-shortfall-conservation` | `[:allocation/partial-fill :allocation/shortfall]` | `#{:allocation/partial-fill :allocation/shortfall}` | Yes (3 scenarios) |
-| `:claim/waterfall-fill-integrity` | `[:allocation/partial-fill]` | `#{:allocation/partial-fill}` | Yes (1 scenario) |
-| `:claim/partial-fill-rounding-integrity` | `[:allocation/partial-fill]` | `#{:allocation/partial-fill}` | Yes (1 scenario) |
-| `:claim/mode-validity` | `[:allocation/partial-fill]` | `#{:allocation/partial-fill}` | Yes (1 scenario) |
-| `:claim/shortfall-detection-validity` | `[:allocation/shortfall]` | `#{:allocation/shortfall}` | Yes (2 scenarios) |
-| `:claim/pro-rata-fairness-end-to-end` | `[:allocation/partial-fill]` | `#{:allocation/partial-fill}` | Yes (1 scenario) |
+| `:claim/pro-rata-shortfall-conservation` | `[:allocation/partial-fill :allocation/shortfall]` | `#{:allocation/partial-fill :allocation/shortfall}` | Research validation; partial-fill level runs closed-form conservation checks |
+| `:claim/waterfall-fill-integrity` | `[:allocation/partial-fill]` | `#{:allocation/partial-fill}` | Research validation; runs waterfall-priority check |
+| `:claim/partial-fill-rounding-integrity` | `[:allocation/partial-fill]` | `#{:allocation/partial-fill}` | Research validation; runs rounding-residual check |
+| `:claim/mode-validity` | `[:allocation/partial-fill]` | `#{:allocation/partial-fill}` | Research validation; runs mode-validity checks |
+| `:claim/shortfall-detection-validity` | `[:allocation/shortfall]` | `#{:allocation/shortfall}` | Research validation; invariant-backed only |
+| `:claim/pro-rata-fairness-end-to-end` | `[:allocation/partial-fill]` | `#{:allocation/partial-fill}` | Research validation; runs cross-product check when a pro-rata decision artifact exists |
 
 ### Running a Validation
 
 ```bash
-clojure -M -m resolver-sim.benchmark.game-theory-validation \
-  run-strategic-claim-validation \
-  :claim-id :claim/pro-rata-shortfall-conservation \
-  :out-dir ./prf-out/game-theory
+bb benchmark:game-theory --strategic \
+  --claim-id claim/pro-rata-shortfall-conservation \
+  --out ./prf-out/game-theory
 ```
 
 Or from Clojure:
@@ -265,6 +264,10 @@ The artifact contains:
 - Level verdicts (`:pass`, `:fail`, `:uncovered`)
 - Coverage gaps with reasons (`:no-declared-scenarios-for-level`, `:declared-scenarios-failed-match-basis`)
 - Summary with pass/fail/uncovered counts
+
+For a partial-fill mechanism level, an absent decision artifact produces an
+explicit `:no-partial-fill-decision-artifacts` coverage gap. It is not treated
+as evidence that the named closed-form property passed.
 
 ---
 

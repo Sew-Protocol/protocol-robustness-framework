@@ -3,6 +3,10 @@
  :pack/id :pack/sew
  :pack/description "Sew protocol benchmark pack"
  :pack/domain :domain/protocol-sew
+ :pack/capabilities
+ [{:capability/id :capability/game-theory-validation
+   :capability/status :research
+   :capability/benchmarks []}]
 
   :benchmarks
   [{:benchmark/id :benchmark/sew-escrow-dispute-v1
@@ -20,8 +24,8 @@
    {:benchmark/id :benchmark/sew-yield-shortfall-v1
     :benchmark/domain :domain/protocol-value-conservation
     :benchmark/file "yield-shortfall-v1.edn"
-    :benchmark/status :active
-    :benchmark/status-updated "2026-06-30"}
+    :benchmark/status :experimental
+    :benchmark/status-updated "2026-07-11"}
 
    {:benchmark/id :benchmark/sew-resolver-slashing-v1
      :benchmark/domain :domain/protocol-value-conservation

@@ -195,6 +195,16 @@
       (is (str/includes? summary "def"))
       (is (str/includes? summary "PASS")))))
 
+(deftest test-share-summary-rejects-scenario-only-active-readiness
+  (let [evidence {:benchmark {:benchmark/id :benchmark/test
+                              :benchmark/status :active
+                              :benchmark/claims [{:claim/id :claim/test}]}
+                  :metrics {:passed 1 :total 1}
+                  :claim-results [{:claim/id :claim/test
+                                   :claim/outcome :not-exercised}]}
+        summary (sharing/share-summary evidence)]
+    (is (str/includes? summary "REQUIRED CLAIMS INCOMPLETE"))))
+
 (deftest test-attestation
   (testing "Attestation structure"
     (let [evidence {:benchmark {:benchmark/id "test-bm" :commit "abc"}

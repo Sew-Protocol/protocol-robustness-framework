@@ -12,7 +12,8 @@
             [clojure.string :as str]
             [resolver-sim.benchmark.runner :as runner]
             [resolver-sim.io.scenarios :as io-sc]
-            [resolver-sim.scenario.suites :as suites]))
+            [resolver-sim.scenario.suites :as suites]
+            [resolver-sim.yield.partial-fill :as partial-fill]))
 
 (def strategic-claim-catalog
   {:claim/pro-rata-shortfall-conservation
@@ -24,6 +25,8 @@
     :benchmark/manifest-path "benchmarks/packs/prf-core/shortfall-allocation-v0.edn"
     :mechanism-levels [:allocation/partial-fill
                        :allocation/shortfall]
+    :closed-form-check-ids #{:partial-fill/conservation
+                             :partial-fill/per-claim-conservation}
     :required-threat-tags #{"shortfall"}
     :match-dimensions #{:allocation/partial-fill
                         :allocation/shortfall}}
@@ -37,6 +40,7 @@
      receive any allocation."
     :benchmark/manifest-path "benchmarks/packs/prf-core/shortfall-allocation-v0.edn"
     :mechanism-levels [:allocation/partial-fill]
+    :closed-form-check-ids #{:partial-fill/waterfall-priority}
     :required-threat-tags #{"shortfall"}
     :match-dimensions #{:allocation/partial-fill}}
 
@@ -49,6 +53,7 @@
      rounding policy."
     :benchmark/manifest-path "benchmarks/packs/prf-core/shortfall-allocation-v0.edn"
     :mechanism-levels [:allocation/partial-fill]
+    :closed-form-check-ids #{:partial-fill/rounding-residual-bounded}
     :required-threat-tags #{"shortfall"}
     :match-dimensions #{:allocation/partial-fill}}
 
@@ -60,6 +65,8 @@
      principal-first, or waterfall. Unrecognized modes are rejected."
     :benchmark/manifest-path "benchmarks/packs/prf-core/shortfall-allocation-v0.edn"
     :mechanism-levels [:allocation/partial-fill]
+    :closed-form-check-ids #{:partial-fill/mode-valid
+                             :partial-fill/settlement-mode-valid}
     :required-threat-tags #{"shortfall"}
     :match-dimensions #{:allocation/partial-fill}}
 
@@ -86,6 +93,7 @@
      compliance, and complete allocation reporting."
     :benchmark/manifest-path "benchmarks/packs/prf-core/shortfall-allocation-v0.edn"
     :mechanism-levels [:allocation/partial-fill]
+    :closed-form-check-ids #{:partial-fill/pro-rata-cross-product}
     :required-threat-tags #{"shortfall"}
     :match-dimensions #{:allocation/partial-fill}}})
 
@@ -191,9 +199,28 @@
        (filter #(not= :pass (:result %)))
        (mapv :id)))
 
+(defn- closed-form-check-results
+  [result check-ids]
+  (when (seq check-ids)
+    (let [decisions (:partial-fill-decisions result)]
+      (if (empty? decisions)
+        [{:check/id :partial-fill-decision-present
+          :status :not-exercised
+          :details {:reason :no-partial-fill-decision-artifacts}}]
+        (mapcat (fn [decision]
+                  (->> (partial-fill/partial-fill-closed-form-checks decision)
+                       (filter #(contains? check-ids (:check/id %)))
+                       (map (fn [check]
+                              (cond-> (assoc check :decision/id (:decision/id decision))
+                                (= :not-applicable (:status check))
+                                (assoc :status :not-exercised
+                                       :details (assoc (:details check)
+                                                       :reason :allocation-mode-not-exercised)))))))
+                decisions)))))
+
 (defn- scenario-check-results
-  [result]
-  [{:check/id :scenario-passed
+  [claim-spec mechanism-level result]
+  (into [{:check/id :scenario-passed
     :status (if (= :pass (:outcome result)) :pass :fail)
     :details {:outcome (:outcome result)
               :halt-reason (:halt-reason result)}}
@@ -202,10 +229,12 @@
     :details {:scenario/evidence-root (:scenario/evidence-root result)}}
    {:check/id :no-invariant-errors
     :status (if (empty? (invariant-failures result)) :pass :fail)
-    :details {:failed-invariants (invariant-failures result)}}])
+    :details {:failed-invariants (invariant-failures result)}}]
+        (when (= :allocation/partial-fill mechanism-level)
+          (closed-form-check-results result (:closed-form-check-ids claim-spec)))))
 
 (defn- level-verdict
-  [level matched-scenarios results]
+  [level matched-scenarios results claim-spec]
   (if (empty? matched-scenarios)
     {:mechanism-level level
      :verdict :uncovered
@@ -217,11 +246,17 @@
                                  (let [result (get results (:scenario/source-path match))]
                                    (map (fn [check]
                                           (assoc check :scenario/id (:scenario/id match)))
-                                        (scenario-check-results result))))
+                                        (scenario-check-results claim-spec level result))))
                                matched-scenarios)
-          verdict (if (every? #(= :pass (:status %)) level-checks) :pass :fail)]
+          not-exercised? (some #(= :not-exercised (:status %)) level-checks)
+          verdict (cond
+                    not-exercised? :uncovered
+                    (every? #(= :pass (:status %)) level-checks) :pass
+                    :else :fail)]
       {:mechanism-level level
        :verdict verdict
+       :uncovered-reason (when not-exercised?
+                           :no-partial-fill-decision-artifacts)
        :scenario-ids scenario-ids
        :check-results (vec level-checks)
        :evidence-references (vec (mapcat :evidence-references matched-scenarios))})))
@@ -255,16 +290,18 @@
         level-verdicts (mapv (fn [level]
                                (level-verdict level
                                               (get matched-by-level level [])
-                                              results-by-path))
+                                              results-by-path
+                                              claim-spec))
                              (:mechanism-levels claim-spec))
         coverage-gaps (->> level-verdicts
                            (filter #(= :uncovered (:verdict %)))
                            (mapv (fn [entry]
                                    (let [level (:mechanism-level entry)]
                                      {:mechanism-level level
-                                      :reason (if (seq (get declared-by-level level))
-                                                :declared-scenarios-failed-match-basis
-                                                :no-declared-scenarios-for-level)}))))
+                                      :reason (or (:uncovered-reason entry)
+                                                  (if (seq (get declared-by-level level))
+                                                    :declared-scenarios-failed-match-basis
+                                                    :no-declared-scenarios-for-level))}))))
         passed-level-count (count (filter #(= :pass (:verdict %)) level-verdicts))
         failed-level-count (count (filter #(= :fail (:verdict %)) level-verdicts))
         uncovered-level-count (count coverage-gaps)]
@@ -290,7 +327,8 @@
   [gap]
   (and (keyword? (:mechanism-level gap))
        (contains? #{:no-declared-scenarios-for-level
-                    :declared-scenarios-failed-match-basis}
+                    :declared-scenarios-failed-match-basis
+                    :no-partial-fill-decision-artifacts}
                   (:reason gap))))
 
 (defn- validate-artifact!

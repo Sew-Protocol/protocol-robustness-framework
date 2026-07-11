@@ -10,7 +10,8 @@
    semantic property is proxied by invariant results from check-all.
 
    See benchmarks/DESIGN_CLAIM_VERIFICATION.md for maturity level definitions."
-  (:require [resolver-sim.io.resource-path :as rp]))
+  (:require [resolver-sim.io.resource-path :as rp]
+            [resolver-sim.yield.partial-fill :as partial-fill]))
 
 ;; ── Claim ref normalization ───────────────────────────────────────────────────
 ;; Benchmark packs may declare claims as flat keywords or as maps with
@@ -75,6 +76,33 @@
       :else
       {:holds? (empty? failures)
        :violations (vec failures)})))
+
+(defn- partial-fill-decisions
+  [results]
+  (mapcat :partial-fill-decisions results))
+
+(defn- check-partial-fill-closed-forms
+  "Evaluate selected closed-form checks across every emitted partial-fill decision.
+   A workload with no decision artifact has not exercised this property."
+  [results check-ids]
+  (let [decisions (vec (partial-fill-decisions results))]
+    (if (empty? decisions)
+      {:outcome :not-exercised
+       :violations [{:type :missing-partial-fill-decision
+                     :message "workload produced no partial-fill decision artifact"}]}
+      (let [failures (->> decisions
+                          (mapcat (fn [decision]
+                                    (->> (partial-fill/partial-fill-closed-form-checks decision)
+                                         (filter #(and (contains? check-ids (:check/id %))
+                                                       (= :fail (:status %))))
+                                         (map (fn [check]
+                                                {:type :closed-form-failure
+                                                 :decision-id (:decision/id decision)
+                                                 :check-id (:check/id check)
+                                                 :details (:details check)})))))
+                          vec)]
+        {:holds? (empty? failures)
+         :violations failures}))))
 
 (defn- scenario-group-key
   [result]
@@ -368,15 +396,36 @@
     :check (fn [ctx]
              (check-invariants ctx [:yield-exposure :shortfall-fidelity]))}
 
-   :claim/partial-fill-fairness
-   {:scope :scenario
+   :claim/partial-fill-decision-integrity
+   {:scope :benchmark
     :check (fn [ctx]
-             (check-invariants ctx [:shortfall-fidelity]))}
+             (check-partial-fill-closed-forms
+              (:benchmark/results ctx)
+              #{:partial-fill/conservation
+                :partial-fill/capacity-bound
+                :partial-fill/per-claim-bound
+                :partial-fill/per-claim-conservation
+                :partial-fill/rounding-residual-bounded
+                :partial-fill/claim-key-consistency
+                :partial-fill/non-negative-amounts
+                :partial-fill/settlement-mode-consistency
+                :partial-fill/settlement-mode-valid
+                :partial-fill/mode-valid
+                :partial-fill/deferred-haircut-overlap
+                :partial-fill/evidence-self-consistency
+                :partial-fill/unrealized-bucket-valid
+                :partial-fill/decision-artifact-format
+                :partial-fill/pro-rata-cross-product
+                :partial-fill/principal-first-priority
+                :partial-fill/waterfall-priority}))}
 
    :claim/cap-adherence
-   {:scope :scenario
+   {:scope :benchmark
     :check (fn [ctx]
-             (check-invariants ctx [:yield/value-conservation :yield/shortfall-splits]))}
+             (check-partial-fill-closed-forms
+              (:benchmark/results ctx)
+              #{:partial-fill/capacity-bound
+                :partial-fill/per-claim-bound}))}
 
    :claim/no-leakage-beyond-shortfall
    {:scope :scenario

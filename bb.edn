@@ -776,8 +776,11 @@ cli-args (cond-> ["-M:run:with-sew" "--invariants" "--scenario" scenario]
   benchmark:verify {:doc "Verify evidence bundle integrity and signature. Usage: bb benchmark:verify [bundle-path]"
                     :task (apply clojure "-M:with-sew" "-m" "resolver-sim.benchmark.cli" "--verify" *command-line-args*)}
 
-   benchmark:hash {:doc "Compute and print hash of an evidence bundle. Usage: bb benchmark:hash [bundle-path]"
+  benchmark:hash {:doc "Compute and print hash of an evidence bundle. Usage: bb benchmark:hash [bundle-path]"
                     :task (apply clojure "-M:with-sew" "-m" "resolver-sim.benchmark.cli" "--hash-only" *command-line-args*)}
+
+   benchmark:game-theory {:doc "Run research game-theory validation. Usage: bb benchmark:game-theory [--suite :suites/spe-validation] [--out DIR]"
+                          :task (apply clojure "-M:with-sew" "-m" "resolver-sim.benchmark.cli" "validate-game-theory" *command-line-args*)}
 
    community:task:list {:doc "List registered community tasks from mailbox announcements."
                         :task (apply clojure "-M:with-sew" "-m" "resolver-sim.community.cli" "task:list" *command-line-args*)}

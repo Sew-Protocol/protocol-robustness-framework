@@ -103,3 +103,41 @@
       (is (= :fail (get-in by-id [:claim/no-nondeterminism :claim/outcome])))
       (is (= [:insufficient-replay-runs]
              (:claim/evidence (get by-id :claim/replay-identical-results)))))))
+
+(def partial-fill-manifest
+  {:benchmark/claims [{:claim/id :claim/partial-fill-decision-integrity}
+                      {:claim/id :claim/cap-adherence}]})
+
+(def valid-partial-fill-decision
+  {:decision/id "partial-fill-0123456789abcdef"
+   :decision/hash "sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+   :requested {:principal 100}
+   :filled {:principal 60}
+   :deferred {:principal 40}
+   :haircut {}
+   :unrealized {}
+   :settlement-mode :partial-fill
+   :policy {:mode :waterfall
+            :rounding-policy :floor-and-carry
+            :fill-order [:principal]}
+   :evidence {:available-liquidity 60
+              :shortage 40
+              :total-requested 100
+              :fill-mode :waterfall}})
+
+(deftest partial-fill-claims-run-closed-form-checks
+  (let [results [{:partial-fill-decisions [valid-partial-fill-decision]}]
+        outcomes (into {}
+                       (map (juxt :claim/id :claim/outcome))
+                       (claims/evaluate-manifest-claims partial-fill-manifest results))]
+    (is (= {:claim/partial-fill-decision-integrity :pass
+            :claim/cap-adherence :pass}
+           outcomes))))
+
+(deftest partial-fill-claims-require-an-emitted-decision
+  (let [outcomes (into {}
+                       (map (juxt :claim/id :claim/outcome))
+                       (claims/evaluate-manifest-claims partial-fill-manifest [{}]))]
+    (is (= {:claim/partial-fill-decision-integrity :not-exercised
+            :claim/cap-adherence :not-exercised}
+           outcomes))))
