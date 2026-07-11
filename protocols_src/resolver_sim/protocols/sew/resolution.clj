@@ -1334,29 +1334,34 @@
    - appeal-upheld? = false -> appeal is rejected; slash executes immediately.
    Mirrors: ResolverSlashingModuleV1.resolveAppeal
 
-   3-arity calls default slash-id to workflow-id (integer).  For reversal slashes
-   (which use level-scoped string slash-ids like \"0-reversal-0\"), the 4-arity
-   version with explicit slash-id MUST be used."
-  ([world workflow-id caller appeal-upheld?]
-   (resolve-appeal world workflow-id caller appeal-upheld? workflow-id))
-   ([world _workflow-id caller appeal-upheld? slash-id & {:keys [authorization-provenance]}]
-    (let [slash-id (resolve-reversal-slash-id world slash-id _workflow-id)
-          ctx (attr/make-context {:workflow-id _workflow-id :slash-id slash-id})
-          pending (get-in world [:pending-fraud-slashes slash-id])]
-      (attr/log-annotated! :debug "Resolving appeal" ctx {:appeal-upheld? appeal-upheld?})
-      (cond
-        (or (nil? caller) (= "" caller))
-        (t/fail :missing-caller-context)
+   `authorization-provenance` is REQUIRED for all calls — it enables forensic
+   tracing of who authorized the resolution.  Passing nil will fail with
+   `:missing-authorization-provenance`.
 
-        (nil? pending)
-        (t/fail :no-pending-slash)
+   For reversal slashes (which use level-scoped string slash-ids like
+   \"0-reversal-0\"), pass the explicit slash-id.  For primary (integer) slashes,
+   pass the workflow-id as slash-id."
+  [world _workflow-id caller appeal-upheld? slash-id & {:keys [authorization-provenance]}]
+  (let [slash-id (resolve-reversal-slash-id world slash-id _workflow-id)
+        ctx (attr/make-context {:workflow-id _workflow-id :slash-id slash-id})
+        pending (get-in world [:pending-fraud-slashes slash-id])]
+    (attr/log-annotated! :debug "Resolving appeal" ctx {:appeal-upheld? appeal-upheld?})
+    (cond
+      (nil? authorization-provenance)
+      (t/fail :missing-authorization-provenance)
 
-        (not= :appealed (:status pending))
-        (t/fail (case (:status pending)
-                  :executed :cannot-reverse-executed-slash
-                  :reversed :no-active-appeal
-                  :reversed-with-credit :no-active-appeal
-                  :no-active-appeal))
+      (or (nil? caller) (= "" caller))
+      (t/fail :missing-caller-context)
+
+      (nil? pending)
+      (t/fail :no-pending-slash)
+
+      (not= :appealed (:status pending))
+      (t/fail (case (:status pending)
+                :executed :cannot-reverse-executed-slash
+                :reversed :no-active-appeal
+                :reversed-with-credit :no-active-appeal
+                :no-active-appeal))
 
         :else
         (let [bond-held   (get-in world [:pending-fraud-slashes slash-id :appeal-bond-held] 0)
@@ -1392,15 +1397,16 @@
                                                  :slash-status slash-status
                                                  :appeal-bond-held 0}}
                      {:appeal-resolution/slash-id slash-id
-                      :appeal-resolution/workflow-id wf-id
-                      :appeal-resolution/resolver resolver
-                      :appeal-resolution/outcome outcome
-                      :appeal-resolution/slash-status slash-status
-                      :appeal-resolution/bond-forfeited? (and (pos? bond-held)
-                                                              (not= :reversed outcome))
-                      :appeal-resolution/bond-amount bond-held
-                      :appeal-resolution/bond-token bond-token}
-                     nil
+                       :appeal-resolution/workflow-id wf-id
+                       :appeal-resolution/resolver resolver
+                       :appeal-resolution/outcome outcome
+                       :appeal-resolution/slash-status slash-status
+                       :appeal-resolution/bond-forfeited? (and (pos? bond-held)
+                                                               (not= :reversed outcome))
+                       :appeal-resolution/bond-amount bond-held
+                       :appeal-resolution/bond-token bond-token
+                       :appeal-resolution/authorization-provenance authorization-provenance}
+                      nil
                      {:world-before world
                       :world-after world'}))
                   (t/ok world')))]
@@ -1481,7 +1487,7 @@
                 :reasoning (str "Governance " caller " rejected the appeal for slash " slash-id "; no bond to forfeit")
                 :caller caller
                 :workflow-id wf-id})
-              (emit-appeal-resolution! world' :rejected-no-bond))))))))
+              (emit-appeal-resolution! world' :rejected-no-bond)))))))
 
 (defn- resolve-reversal-slash-id
   "Fallback for reversal slash-ids: if slash-id is an integer workflow-id
