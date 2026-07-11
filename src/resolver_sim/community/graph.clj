@@ -50,7 +50,9 @@
       (add-edge (:finding/hash f) (:task/hash task) "reports"))
     (doseq [m (vec (or messages []))]
       (add-node (:message/hash m) (str "Mailbox: " (name (:message/type m))) m)
-      (add-edge (:message/hash m) (:subject-task m) "messages"))
+      (add-edge (:message/hash m)
+                (or (:task/hash task) (:subject-task m))
+                "messages"))
     (let [all-nodes @nodes
           all-edges @edges
           status (derive-task-status task messages)]
@@ -139,3 +141,85 @@
      :attestations attestations
      :findings findings
      :messages msgs}))
+
+(defn- node-layer
+  "Assign a display layer (y-row) based on node label prefix."
+  [label]
+  (cond
+    (.startsWith label "Research Task")      0
+    (.startsWith label "Execution Evidence")  1
+    (.startsWith label "Attestation:")        1
+    (.startsWith label "Mailbox:")            2
+    (.startsWith label "Finding:")            2
+    :else                                     3))
+
+(defn- layout-coordinates
+  "Assign deterministic x,y positions to graph nodes based on type layer.
+   Returns a map of node-id -> {:x N :y N}.
+   Nodes in the same layer are spread evenly across the width."
+  [nodes]
+  (let [by-layer (group-by (fn [n] (node-layer (:node/label n))) nodes)
+        layer-count (count by-layer)
+        per-layer (fn [layer layer-nodes]
+                    (let [count (count layer-nodes)
+                          spacing (max 1 (if (> count 1) (/ 500 (dec count)) 0))]
+                      (map-indexed
+                       (fn [i node]
+                         [(:node/id node)
+                          {:x (if (> count 1) (+ 50 (* i spacing)) 250)
+                           :y (+ 40 (* layer 140))
+                           :w 220 :h 40}])
+                       (vec layer-nodes))))
+        entries (mapcat (fn [layer] (per-layer layer (get by-layer layer [])))
+                       (sort (keys by-layer)))]
+    (into {} entries)))
+
+(defn export-graphml
+  "Export a task graph projection as GraphML XML for yEd.
+   Returns the XML string (does not write to disk).
+   Assigns deterministic coordinates based on node type layer
+   so nodes do not overlap."
+  [graph]
+  (let [sb (StringBuilder.)
+        esc (fn [s] (-> s (.replace "&" "&amp;") (.replace "\"" "&quot;") (.replace "<" "&lt;") (.replace ">" "&gt;")))
+        coords (layout-coordinates (:nodes graph))]
+    (.append sb "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n")
+    (.append sb "<graphml xmlns=\"http://graphml.graphdrawing.org/xmlns\"\n")
+    (.append sb "         xmlns:y=\"http://www.yworks.com/xml/graphml\">\n")
+    (.append sb "  <key id=\"label\" for=\"node\" attr.name=\"label\" attr.type=\"string\"/>\n")
+    (.append sb "  <key id=\"edge-label\" for=\"edge\" attr.name=\"label\" attr.type=\"string\"/>\n")
+    (.append sb "  <key id=\"d6\" for=\"node\" yfiles.type=\"nodegraphics\"/>\n")
+    (.append sb "  <key id=\"d9\" for=\"edge\" yfiles.type=\"edgegraphics\"/>\n")
+    (.append sb "  <graph id=\"G\" edgedefault=\"directed\">\n")
+    (doseq [node (:nodes graph)]
+      (let [nid (str "n" (subs (:node/id node) 0 12))
+            label (esc (:node/label node))
+            c (get coords (:node/id node) {:x 50 :y 50 :w 220 :h 40})]
+        (.append sb (str "    <node id=\"" nid "\">\n"))
+        (.append sb (str "      <data key=\"label\">" label "</data>\n"))
+        (.append sb (str "      <data key=\"d6\">\n"))
+        (.append sb "        <y:ShapeNode>\n")
+        (.append sb (str "          <y:Geometry height=\"" (:h c) ".0\" width=\"" (:w c) ".0\""
+                         " x=\"" (:x c) ".0\" y=\"" (:y c) ".0\"/>\n"))
+        (.append sb "          <y:Fill color=\"#E8F0FE\" transparent=\"false\"/>\n")
+        (.append sb "          <y:BorderStyle color=\"#1A73E8\" type=\"line\" width=\"1.0\"/>\n")
+        (.append sb (str "          <y:NodeLabel>" label "</y:NodeLabel>\n"))
+        (.append sb "        </y:ShapeNode>\n")
+        (.append sb "      </data>\n")
+        (.append sb "    </node>\n")))
+    (doseq [edge (:edges graph)]
+      (let [from (str "n" (subs (:edge/from edge) 0 12))
+            to (str "n" (subs (:edge/to edge) 0 12))
+            label (esc (:edge/label edge))]
+        (.append sb (str "    <edge id=\"e" from "-" to "\" source=\"" from "\" target=\"" to "\">\n"))
+        (.append sb (str "      <data key=\"edge-label\">" label "</data>\n"))
+        (.append sb "      <data key=\"d9\">\n")
+        (.append sb "        <y:PolyLineEdge>\n")
+        (.append sb (str "          <y:EdgeLabel>" label "</y:EdgeLabel>\n"))
+        (.append sb "          <y:Arrows source=\"none\" target=\"standard\"/>\n")
+        (.append sb "        </y:PolyLineEdge>\n")
+        (.append sb "      </data>\n")
+        (.append sb "    </edge>\n")))
+    (.append sb "  </graph>\n")
+    (.append sb "</graphml>\n")
+    (.toString sb)))

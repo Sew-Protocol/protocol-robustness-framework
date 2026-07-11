@@ -222,10 +222,20 @@
                 (>= held total-needed)))
             tokens)))
 
+(defn- resolver-owned-position?
+  "True when the position belongs to a resolver (backed by resolver-stakes, not total-held)."
+  [pos]
+  (let [oid (:owner/id pos)]
+    (and (vector? oid) (= (first oid) :sew/resolver))))
+
 (defn check-provider-exposure
+  "Yield exposure invariant: total-held must cover active yield positions.
+   Excludes resolver-owned positions since those are backed by resolver-stakes
+   (a separate economic layer outside total-held)."
   [world]
   (check-yield-exposure world
-                        (fn [_ pos] (= (:status pos) :active))
+                        (fn [_ pos] (and (= (:status pos) :active)
+                                         (not (resolver-owned-position? pos))))
                         #(held-for-token world %)))
 
 (def ^:private check-fns

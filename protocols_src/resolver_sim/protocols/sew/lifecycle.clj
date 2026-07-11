@@ -102,13 +102,23 @@
               dt       (- now last)
               tok      (if (keyword? token) token (keyword token))]
           (if (pos? dt)
-            (-> world
-                (yield-ops/apply-yield-op {:op/type :yield/accrue
-                                           :module/id module-id
-                                           :owner/id owner-id
-                                           :token tok
-                                           :dt dt})
-                (assoc-in [:resolver-yield-accrual-times resolver-addr] now))
+            (let [pos-before (get-in world [:yield/positions owner-id])
+                  world' (yield-ops/apply-yield-op
+                          world {:op/type :yield/accrue
+                                 :module/id module-id
+                                 :owner/id owner-id
+                                 :token tok
+                                 :dt dt})
+                  pos (get-in world' [:yield/positions owner-id])
+                  yield-before (+ (:unrealized-yield pos-before 0) (:realized-yield pos-before 0))
+                  yield-after  (+ (:unrealized-yield pos 0) (:realized-yield pos 0))
+                  yield-delta (- yield-after yield-before)]
+              (-> world'
+                  (cond-> (pos? yield-delta)
+                    (acct/add-held tok yield-delta {:action "accrue-resolver-yield" :owner/id owner-id})
+                    (neg? yield-delta)
+                    (acct/sub-held tok (- yield-delta) {:action "accrue-resolver-yield" :owner/id owner-id}))
+                  (assoc-in [:resolver-yield-accrual-times resolver-addr] now)))
             world))
         world))))
 
@@ -896,15 +906,16 @@
                    yield-delta (- (+ unrealized-after realized-after)
                                   (+ unrealized-before realized-before))
                    ;; Record yield delta through Sew accounting layer so
-                   ;; held-adjustments-cover-total-held-delta? and related
-                   ;; invariants see matching held-adjustment entries.
-                   world'' (cond-> world'
-                             (pos? yield-delta)
-                             (acct/add-held tok yield-delta {:action "yield-accrual" :workflow-id workflow-id})
-                             (neg? yield-delta)
-                             (acct/sub-held tok (- yield-delta) {:action "yield-accrual" :workflow-id workflow-id}))
+                    ;; held-adjustments-cover-total-held-delta? and related
+                    ;; invariants see matching held-adjustment entries.
+                    ;; NOTE: yield modules (fixed, liquid_lending) already update
+                    ;; total-yield-generated internally — do NOT double-count here.
+                    world'' (cond-> world'
+                              (pos? yield-delta)
+                              (acct/add-held tok yield-delta {:action "yield-accrual" :workflow-id workflow-id})
+                              (neg? yield-delta)
+                              (acct/sub-held tok (- yield-delta) {:action "yield-accrual" :workflow-id workflow-id}))
                     world''' (-> world''
-                                (update-in [:total-yield-generated tok] (fnil + 0) yield-delta)
                                 (assoc-in [:escrow-transfers workflow-id :last-accrual-time] now)
                                 (assoc-in [:escrow-transfers workflow-id :accumulated-yield] (+ unrealized-after realized-after)))]
                (attr/wrap-state world''' (attr/get-attribution attributed-state)))

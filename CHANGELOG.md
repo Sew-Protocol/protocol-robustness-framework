@@ -102,6 +102,14 @@
 
 - **Step-terminal path normalization for legacy yield-positions key:** `normalize-path-segment` in `expectations.clj` converted string `"yield-positions"` to keyword `:yield-positions` but the alias check (`= seg :yield-positions`) only matched pre-existing keywords, not the result of string conversion. Fixed by applying alias mapping inside the string case via `case (keyword seg)`. (`src/resolver_sim/scenario/expectations.clj:61-62`)
 
+- **Fixed-rate yield module bypassed held-adjustments:** `fixed-accrue` and `liquid_lending/accrue-from-index-schedule` used `update-in [:total-held]` directly, bypassing the held-adjustment ledger. This caused `held-adjustments-cover-total-held-delta` invariant failures in scenarios using the fixed-rate module (S88, S110). Moved all total-held updates to the Sew lifecycle's `accrue-yield-monadic` and `accrue-resolver-yield`, which use `add-held`/`sub-held` with proper adjustments. Both yield modules now only update `total-yield-generated` and positions. (`src/resolver_sim/yield/modules/fixed.clj:54-60`, `src/resolver_sim/yield/modules/liquid_lending.clj:113-117`, `src/resolver_sim/yield/accrual.clj:609-611`, `protocols_src/resolver_sim/protocols/sew/lifecycle.clj:91-131,820-829`)
+
+- **Resolver stake yield-exposure false-positive:** `check-sew-yield-exposure` checked `total-held` against resolver-owned positions, but resolver stakes are backed by `resolver-stakes` (outside `total-held`). Fixed `held-for-yield-exposure` to include `resolver-stakes` in the available funds. (`protocols_src/resolver_sim/protocols/sew/yield/invariants.clj:15-24`)
+
+- **`token-tax-reconciliation` false sign on stake delta:** The invariant subtracted `- delta-stake` from the unexplained-leak formula, but resolver stakes are external to `total-held` — stake increases don't reduce total-held. Removed the `(- delta-stake)` term. (`protocols_src/resolver_sim/protocols/sew/invariants.clj:1206-1208`)
+
+- **`yield-exposure` excluded resolver positions:** `check-provider-exposure` in yield invariants included resolver-owned positions, but those are backed by `resolver-stakes` (not `total-held`). Added `resolver-owned-position?` guard to exclude them. (`src/resolver_sim/yield/invariants.clj:225-235`)
+
 ### Cleanup (2026-07-10)
 
 - **Removed vim swap files:** Deleted 4 `.swp`/`.swo` crash-recovery files left in `protocols_src/` and `.ai/`. (`.sew.clj.swp`, `.accounting.clj.swp`, `.accounting.clj.swo`, `.project.md.swp`)

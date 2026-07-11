@@ -1203,8 +1203,11 @@
                     ;; A drop in held should be matched by increases in released/refunded/claimable
                     ;; or by bond/appeal distributions leaving the protocol custody.
                     ;; Mark-to-market accrual reversals pair with :total-yield-generated.
+                    ;; Resolver stakes are external to total-held; stake deltas are excluded
+                    ;; here because register-stake/withdraw-stake move funds between
+                    ;; resolver-stakes and the agent's external wallet, not total-held.
                     unexplained-leak (+ delta-held delta-released delta-refunded
-                                        delta-claimable delta-withdrawn (- delta-stake)
+                                        delta-claimable delta-withdrawn
                                         delta-distributed (- delta-yield-gen))]
               :when (neg? unexplained-leak)]
           {:token token

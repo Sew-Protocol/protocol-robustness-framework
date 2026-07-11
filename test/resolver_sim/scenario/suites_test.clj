@@ -47,7 +47,9 @@
             "resource:scenarios/edn/Y02_vault-shortfall-partial-withdraw.edn"
             "resource:scenarios/edn/Y03_vault-risk-override-schedule-shadowing.edn"
             "resource:scenarios/edn/Y04_vault-recovery-claim-deferred.edn"
-            "resource:scenarios/edn/Y05_auto-generated-shortfall.edn"]
+            "resource:scenarios/edn/Y05_auto-generated-shortfall.edn"
+            "resource:scenarios/edn/Y06_multi-party-pro-rata-shortfall.edn"
+            "resource:scenarios/edn/Y07_adversarial-shortfall-exploit.edn"]
            paths))
     (is (every? #(str/starts-with? % "resource:scenarios/edn/Y") paths))
     (is (not-any? #(str/includes? % "resource:scenarios/yield/") paths))

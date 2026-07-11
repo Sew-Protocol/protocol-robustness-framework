@@ -6,6 +6,7 @@
             [resolver-sim.community.task :as task]
             [resolver-sim.community.attestation :as att]
             [resolver-sim.community.mailbox :as mailbox]
+            [resolver-sim.community.graph :as graph]
             [resolver-sim.community.report :as report]
             [resolver-sim.community.result :as result]
             [resolver-sim.evidence.chain :as chain]
@@ -155,6 +156,7 @@
                   proj (result/project-stable-result evidence)
                   stable-hash (:stable/hash proj)
                   stable-projection (:stable/projection proj)]
+              (println (str "Task ref: " task-ref))
               (println (str "Stable result hash: " stable-hash))
               (when-not passed?
                 (println (str "WARNING: Benchmark did not pass all scenarios ("
@@ -254,11 +256,15 @@
           (println "Verifying task:" task-ref)
           (println "Status:" (name status))
           (println)
-          (doseq [m msgs]
-            (let [v (mailbox/verify-message m)]
-              (println (str "  " (:message/type m) " — " (:sender m)
-                            " hash: " (if (:hash-valid? v) "OK" "MISMATCH")
-                            " sig: " (if (:valid? v) "OK" "UNSIGNED/ERROR")))))
+          (if (seq msgs)
+            (doseq [m msgs]
+              (let [v (mailbox/verify-message m)]
+                (println (str "  " (:message/type m) " — " (:sender m)
+                              " hash: " (if (:hash-valid? v) "OK" "MISMATCH")
+                              " sig: " (if (:valid? v) "OK" "UNSIGNED/ERROR")))))
+            (do (println "No messages found for this task ref.")
+                (println)
+                (println "Run 'bb community:task:list' to see all registered tasks.")))
           {:exit-code 0})))))
 
 (defn generate-report
@@ -270,17 +276,54 @@
       (do (println "Usage: --task <task-ref>") {:exit-code 1})
       (binding [mailbox/*mailbox-dir* mailbox-dir]
         (let [msgs (mailbox/messages-for-task task-ref)
+              announcement (first (filter #(= :TASK_ANNOUNCEMENT (:message/type %)) msgs))
+              task-body (:body announcement)
               attestation-refs (keep :attestation-ref msgs)
               attestations (keep (fn [ref] (att/resolve-attestation dir ref)) attestation-refs)
               t {:task/hash (task/parse-task-ref task-ref) :task/ref task-ref
-                 :task/type :benchmark-execution :title "Community Task"
-                 :benchmark/id nil :suite/id nil :claim-ids [] :acceptance-criteria []}
+                 :task/type :benchmark-execution
+                 :title (or (:title task-body) "Community Task")
+                 :benchmark/id (:benchmark/id task-body)
+                 :suite/id (:suite/id task-body)
+                 :claim-ids [] :acceptance-criteria []}
               r (report/build-report {:task t :attestations attestations :messages msgs})]
           (report/print-report r)
+          (if (seq msgs)
+            (do (println "Raw files:")
+                (println (str "  Mailbox: " mailbox-dir))
+                (println (str "  Attestations: " dir "/community-attestations"))
+                (println)
+                (println "To export as GraphML for yEd:")
+                (println (str "  bb community:graph:export --task " task-ref " > graph.graphml"))
+                (println "  Then open graph.graphml in yEd (File > Open)."))
+            (println "No messages found. Run 'bb community:task:list' to see registered tasks."))
+          {:exit-code 0})))))
+
+(defn export-graph
+  "Export a task's evidence graph as GraphML for yEd."
+  [opts]
+  (let [task-ref (:task opts)
+        dir (or (:dir opts) default-artifact-dir)
+        mailbox-dir (or (:mailbox-dir opts) default-mailbox-dir)]
+    (if-not task-ref
+      (do (println "Usage: --task <task-ref>") {:exit-code 1})
+      (binding [mailbox/*mailbox-dir* mailbox-dir]
+        (let [msgs (mailbox/messages-for-task task-ref)
+              announcement (first (filter #(= :TASK_ANNOUNCEMENT (:message/type %)) msgs))
+              task-body (:body announcement)
+              attestation-refs (keep :attestation-ref msgs)
+              attestations (keep (fn [ref] (att/resolve-attestation dir ref)) attestation-refs)
+              t {:task/hash (task/parse-task-ref task-ref) :task/ref task-ref
+                 :task/type :benchmark-execution
+                 :title (or (:title task-body) "Community Task")
+                 :benchmark/id (:benchmark/id task-body)}
+              g (graph/build-task-graph-projection {:task t :messages msgs :attestations attestations})
+              graphml (graph/export-graphml g)]
+          (println graphml)
           {:exit-code 0})))))
 
 (defn- subcommand? [args]
-  (contains? #{"task:list" "task:show" "task:register" "run" "reproduce" "verify" "report"} (first args)))
+  (contains? #{"task:list" "task:show" "task:register" "run" "reproduce" "verify" "report" "graph:export"} (first args)))
 
 (defn- print-help []
   (println "PRF Community CLI — External researcher participation")
@@ -295,6 +338,7 @@
   (println "  reproduce --task <ref> -o <ref> -r <id> -k <key>  Reproduce a result")
   (println "  verify --task <ref>                    Verify evidence chain")
   (println "  report --task <ref>                    Generate evidence report")
+  (println "  graph:export --task <ref>              Export evidence graph as GraphML for yEd")
   (println)
   (println "Options:")
   (println "  -t, --task REF           Task reference")
@@ -319,6 +363,7 @@
         "reproduce" (System/exit (:exit-code (reproduce-task options)))
         "verify" (System/exit (:exit-code (verify-task options)))
         "report" (System/exit (:exit-code (generate-report options)))
+        "graph:export" (System/exit (:exit-code (export-graph options)))
         (do (println "Unknown command:" subcmd) (System/exit 1))))
     (let [{:keys [options errors]} (parse-opts args cli-options)]
       (cond

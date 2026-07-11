@@ -1,0 +1,104 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<graphml xmlns="http://graphml.graphdrawing.org/xmlns"
+         xmlns:y="http://www.yworks.com/xml/graphml">
+  <key id="label" for="node" attr.name="label" attr.type="string"/>
+  <key id="edge-label" for="edge" attr.name="label" attr.type="string"/>
+  <key id="d6" for="node" yfiles.type="nodegraphics"/>
+  <key id="d9" for="edge" yfiles.type="edgegraphics"/>
+  <graph id="G" edgedefault="directed">
+    <node id="n8d440174992f">
+      <data key="label">Research Task</data>
+      <data key="d6">
+        <y:ShapeNode>
+          <y:NodeLabel>Research Task</y:NodeLabel>
+        </y:ShapeNode>
+      </data>
+    </node>
+    <node id="nca10ec4fe30f">
+      <data key="label">Attestation: execution-attested</data>
+      <data key="d6">
+        <y:ShapeNode>
+          <y:NodeLabel>Attestation: execution-attested</y:NodeLabel>
+        </y:ShapeNode>
+      </data>
+    </node>
+    <node id="n69e04c906bc4">
+      <data key="label">Attestation: result-reproduced</data>
+      <data key="d6">
+        <y:ShapeNode>
+          <y:NodeLabel>Attestation: result-reproduced</y:NodeLabel>
+        </y:ShapeNode>
+      </data>
+    </node>
+    <node id="n21c2f2dd99fd">
+      <data key="label">Mailbox: RUNNER_RESULT</data>
+      <data key="d6">
+        <y:ShapeNode>
+          <y:NodeLabel>Mailbox: RUNNER_RESULT</y:NodeLabel>
+        </y:ShapeNode>
+      </data>
+    </node>
+    <node id="naa5c26c3eba3">
+      <data key="label">Mailbox: AGREEMENT</data>
+      <data key="d6">
+        <y:ShapeNode>
+          <y:NodeLabel>Mailbox: AGREEMENT</y:NodeLabel>
+        </y:ShapeNode>
+      </data>
+    </node>
+    <node id="nb4b1afd871b8">
+      <data key="label">Mailbox: TASK_ANNOUNCEMENT</data>
+      <data key="d6">
+        <y:ShapeNode>
+          <y:NodeLabel>Mailbox: TASK_ANNOUNCEMENT</y:NodeLabel>
+        </y:ShapeNode>
+      </data>
+    </node>
+    <edge id="enca10ec4fe30f-n8d440174992f" source="nca10ec4fe30f" target="n8d440174992f">
+      <data key="edge-label">attests</data>
+      <data key="d9">
+        <y:PolyLineEdge>
+          <y:EdgeLabel>attests</y:EdgeLabel>
+          <y:Arrows source="none" target="standard"/>
+        </y:PolyLineEdge>
+      </data>
+    </edge>
+    <edge id="en69e04c906bc4-n8d440174992f" source="n69e04c906bc4" target="n8d440174992f">
+      <data key="edge-label">attests</data>
+      <data key="d9">
+        <y:PolyLineEdge>
+          <y:EdgeLabel>attests</y:EdgeLabel>
+          <y:Arrows source="none" target="standard"/>
+        </y:PolyLineEdge>
+      </data>
+    </edge>
+    <edge id="en21c2f2dd99fd-n8d440174992f" source="n21c2f2dd99fd" target="n8d440174992f">
+      <data key="edge-label">messages</data>
+      <data key="d9">
+        <y:PolyLineEdge>
+          <y:EdgeLabel>messages</y:EdgeLabel>
+          <y:Arrows source="none" target="standard"/>
+        </y:PolyLineEdge>
+      </data>
+    </edge>
+    <edge id="enaa5c26c3eba3-n8d440174992f" source="naa5c26c3eba3" target="n8d440174992f">
+      <data key="edge-label">messages</data>
+      <data key="d9">
+        <y:PolyLineEdge>
+          <y:EdgeLabel>messages</y:EdgeLabel>
+          <y:Arrows source="none" target="standard"/>
+        </y:PolyLineEdge>
+      </data>
+    </edge>
+    <edge id="enb4b1afd871b8-n8d440174992f" source="nb4b1afd871b8" target="n8d440174992f">
+      <data key="edge-label">messages</data>
+      <data key="d9">
+        <y:PolyLineEdge>
+          <y:EdgeLabel>messages</y:EdgeLabel>
+          <y:Arrows source="none" target="standard"/>
+        </y:PolyLineEdge>
+      </data>
+    </edge>
+  </graph>
+</graphml>
+

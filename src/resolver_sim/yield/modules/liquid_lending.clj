@@ -113,8 +113,7 @@
           world'' (reduce (fn [w [oid updated yield-delta]]
                             (-> w
                                 (assoc-in [:yield/positions oid] updated)
-                                (update-in [:total-yield-generated token] (fnil + 0) (max 0 yield-delta))
-                                (update-in [:total-held token] (fnil + 0) yield-delta)))
+                                (update-in [:total-yield-generated token] (fnil + 0) yield-delta)))
                           snapshot-world
                           updates)]
       ;; 5: serial evidence capture
