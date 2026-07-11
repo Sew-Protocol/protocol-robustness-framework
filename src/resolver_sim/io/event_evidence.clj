@@ -357,8 +357,8 @@
   ([]
    (build-evidence-links-index-v1 (str (evcfg/artifact-dir) "/event-evidence")))
   ([dir]
-   (let [dir-file (io/file dir)]
-     (if-not (.isDirectory dir-file)
+   (let [dir-file (when dir (io/file dir))]
+     (if-not (and dir-file (.isDirectory dir-file))
        (do (log/warn! :evidence-links-dir-not-found {:path dir})
            {:schema-version "evidence-links-index.v1"
             :generated-at (str (java.time.Instant/now))

@@ -2,12 +2,16 @@
   "Run Clojure test namespaces in parallel using future, each with isolated
    artifact directory to prevent evidence reconciliation warnings.
 
-   Usage: clojure -M:test -m scripts.parallel-test-runner ns1 ns2 ns3
+   Usage:
+     clojure -M:test -m scripts.parallel-test-runner [--noop-capture] ns1 ns2 ns3
+
+   When --noop-capture is the first argument, evidence capture is suppressed
+   entirely (no disk I/O).  Use for pure unit tests.
 
    Environment variables:
      PARALLEL_TEST_JOBS  — max concurrent namespaces (default: (dec n-cpus), min 1)
      KEEP_PARALLEL_TEST_ARTIFACTS — set to any truthy value to preserve temp dirs
-                                   even on success (they are always kept on failure)
+                                    even on success (they are always kept on failure)
 
    Load-time side-effect invariant:
      Namespace loading (require) happens before per-namespace registry/artifact
@@ -16,6 +20,7 @@
      happen during test execution (run-tests), not at load time."
   (:require [clojure.java.io :as io]
             [clojure.test :as t]
+            [resolver-sim.evidence.capture :as cap]
             [resolver-sim.evidence.chain :as chain]
             [resolver-sim.evidence.attestation-registry :as ar]
             [resolver-sim.evidence.config :as evcfg]))
@@ -34,9 +39,17 @@
   (doseq [f (reverse (doall (file-seq (io/file root))))]
     (.delete f)))
 
+(defn- noop-capture
+  "No-op evidence capture — suppresses all disk I/O."
+  [& _]
+  nil)
+
 (defn -main
-  [& namespaces]
-  (let [syms (map symbol namespaces)
+  [& args]
+  (let [[noop-capture? namespaces] (if (= "--noop-capture" (first args))
+                                     [true (rest args)]
+                                     [false args])
+        syms (map symbol namespaces)
         _ (doseq [s syms] (require s))
         n (count syms)
         start (System/currentTimeMillis)
@@ -55,7 +68,10 @@
                                  (ar/with-fresh-registry*
                                   (fn []
                                     (binding [evcfg/*artifact-dir* ns-artifact-dir
-                                              chain/*allow-dirty* true]
+                                              chain/*allow-dirty* true
+                                              cap/*capture-event-evidence!* (if noop-capture?
+                                                                              noop-capture
+                                                                              cap/*capture-event-evidence!*)]
                                       (let [r (try (t/run-tests sym)
                                                    (catch Throwable t
                                                      (when (instance? InterruptedException t)

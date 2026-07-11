@@ -204,8 +204,8 @@
       #(replay/replay-yield-scenario protocol %)
       (fn [scenario]
         (if (= "sew-v1" protocol-id)
-          (sew/replay-with-sew-protocol scenario {:allow-dirty? true})
-          (replay/replay-with-protocol protocol scenario {:allow-dirty? true}))))))
+          (sew/replay-with-sew-protocol scenario {:allow-dirty? true :skip-finalize true})
+          (replay/replay-with-protocol protocol scenario {:allow-dirty? true :skip-finalize true}))))))
 
 (defn- scenario-file-details
   [scenario-path default-protocol-id]

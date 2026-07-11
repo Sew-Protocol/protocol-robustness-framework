@@ -107,14 +107,14 @@
     :else nil))
 
 (defn- run-simulator-scenario
-  [sc actual-dir replay-fn]
+  [sc actual-dir replay-fn replay-opts]
   (let [{:keys [id trace-slug upgrade-path classification primary-threat
                 expectations-passed invariants-passed claim-id invariant-ids]} sc
         scenario-path (:simulator/scenario-path sc)
         trace-rel (str "actual/traces/" trace-slug ".trace.json")
         trace-path (str actual-dir "/traces/" trace-slug ".trace.json")
         scenario ((requiring-resolve 'resolver-sim.io.scenarios/load-scenario-file) scenario-path)
-        result (replay-fn scenario)]
+        result (replay-fn scenario replay-opts)]
     (evidence/verify-evidence-invariants! result (or invariant-ids []))
     (let [metrics         (or (:metrics result) {})
           inv-violations  (:invariant-violations metrics 0)
@@ -156,9 +156,9 @@
          :trace_path trace-rel-path
          :upgrade_path upgrade-path}))))
 
-(defn- build-scenario-results [manifest actual-dir replay-fn]
+(defn- build-scenario-results [manifest actual-dir replay-fn replay-opts]
   {:suite_id (:suite/id manifest)
-   :results (mapv #(run-simulator-scenario % actual-dir replay-fn)
+   :results (mapv #(run-simulator-scenario % actual-dir replay-fn replay-opts)
                   (:scenarios manifest))})
 
 (defn- build-invariants [manifest]
@@ -264,13 +264,14 @@
      :replay-fn    — protocol replay function (default sew/replay-with-sew-protocol)
      :protocol     — keyword shortcut for known protocols (:sew)
      :refresh-expected? — copy actual/ to expected/ after generation"
-  [& {:keys [root refresh-expected? replay-fn protocol]}]
+  [& {:keys [root refresh-expected? replay-fn protocol replay-opts]
+      :or {replay-opts {:allow-dirty? true}}}]
   (let [root-dir (or root (.getPath (suite-root)))
         manifest (load-manifest root)
         actual-dir (str root-dir "/actual")
         replay-fn (or (when protocol (get protocols protocol)) replay-fn default-replay-fn)]
     (.mkdirs (io/file actual-dir "traces"))
-    (let [scenario-results (build-scenario-results manifest actual-dir replay-fn)
+    (let [scenario-results (build-scenario-results manifest actual-dir replay-fn replay-opts)
           results (:results scenario-results)
           outputs {"scenario-results" scenario-results
                    "invariants" (build-invariants manifest)

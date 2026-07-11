@@ -38,7 +38,7 @@
     "Partial-fill scenarios using waterfall mode should respect fill-order priority:
      higher-priority buckets are filled to exhaustion before lower-priority buckets
      receive any allocation."
-    :benchmark/manifest-path "benchmarks/packs/prf-core/shortfall-allocation-v0.edn"
+    :benchmark/manifest-path "benchmarks/packs/prf-core/yield-partial-fill-v0.edn"
     :mechanism-levels [:allocation/partial-fill]
     :closed-form-check-ids #{:partial-fill/waterfall-priority}
     :required-threat-tags #{"shortfall"}
@@ -51,7 +51,7 @@
     "Partial-fill decisions should respect rounding policy bounds under all modes:
      residual amounts must fall within the defined acceptable range for the active
      rounding policy."
-    :benchmark/manifest-path "benchmarks/packs/prf-core/shortfall-allocation-v0.edn"
+    :benchmark/manifest-path "benchmarks/packs/prf-core/yield-partial-fill-v0.edn"
     :mechanism-levels [:allocation/partial-fill]
     :closed-form-check-ids #{:partial-fill/rounding-residual-bounded}
     :required-threat-tags #{"shortfall"}
@@ -63,7 +63,7 @@
     :claim/description
     "Partial-fill decisions must declare a recognized fill mode: pro-rata,
      principal-first, or waterfall. Unrecognized modes are rejected."
-    :benchmark/manifest-path "benchmarks/packs/prf-core/shortfall-allocation-v0.edn"
+    :benchmark/manifest-path "benchmarks/packs/prf-core/yield-partial-fill-v0.edn"
     :mechanism-levels [:allocation/partial-fill]
     :closed-form-check-ids #{:partial-fill/mode-valid
                              :partial-fill/settlement-mode-valid}
@@ -91,7 +91,7 @@
      every claimant must receive the same fill ratio within rounding
      tolerance. Validated via evidence-root verifiability, invariant
      compliance, and complete allocation reporting."
-    :benchmark/manifest-path "benchmarks/packs/prf-core/shortfall-allocation-v0.edn"
+    :benchmark/manifest-path "benchmarks/packs/prf-core/yield-partial-fill-v0.edn"
     :mechanism-levels [:allocation/partial-fill]
     :closed-form-check-ids #{:partial-fill/pro-rata-cross-product}
     :required-threat-tags #{"shortfall"}

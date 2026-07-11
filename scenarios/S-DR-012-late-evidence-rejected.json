@@ -29,11 +29,16 @@
      "seq" : 1, "time" : 1060, "agent" : "buyer", "action" : "raise_dispute",
      "params" : { "workflow-id" : 0 }
    }, {
-   "seq" : 2, "time" : 1150, "agent" : "seller", "action" : "submit_evidence",
-   "params" : { "workflow-id" : 0, "evidence-hash" : "0xtoo-late" }
+     "seq" : 2, "time" : 1150, "agent" : "seller", "action" : "submit_evidence",
+     "params" : { "workflow-id" : 0, "evidence-hash" : "0xtoo-late" }
+   }, {
+     "seq" : 3, "time" : 1151, "agent" : "resolver", "action" : "execute_resolution",
+     "params" : { "workflow-id" : 0, "is-release" : true }
+   }, {
+     "seq" : 4, "time" : 1220, "agent" : "buyer", "action" : "execute_pending_settlement",
+     "params" : { "workflow-id" : 0 }
    } ],
  "scenario-notes" : "evidence-window-duration=60s. Dispute raised at t=1060, deadline = 1060+60=1120. Evidence at t=1150 is past the deadline (1150 > 1120), so it is rejected with :evidence-deadline-exceeded.",
    "scenario-author" : "@kilo-research",
    "provenance" : { "author-id" : "@kilo-research", "author" : "Kilo Research" }
  }
- 

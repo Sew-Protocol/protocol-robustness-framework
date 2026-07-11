@@ -149,7 +149,8 @@
   (let [out-dir (str (System/getProperty "java.io.tmpdir")
                      "/prf-game-theory-validation-real")
         {:keys [exit-code artifact output-files]}
-        (sut/run-strategic-claim-validation :out-dir out-dir)
+        (binding [resolver-sim.evidence.chain/*allow-dirty* true]
+          (sut/run-strategic-claim-validation :out-dir out-dir))
         level-verdicts (into {}
                              (map (juxt :mechanism-level identity))
                              (:level-verdicts artifact))
@@ -166,17 +167,18 @@
       (is (= :suite/sew-shortfall-allocation-v0 (:benchmark/scenario-suite artifact)))
       (is (= 2 (get-in artifact [:summary :matched-scenario-count])))
       (is (= 1 (get-in artifact [:summary :passed-level-count])))
-      (is (= 1 (get-in artifact [:summary :failed-level-count])))
-      (is (= 0 (get-in artifact [:summary :uncovered-level-count])))
+      (is (= 0 (get-in artifact [:summary :failed-level-count])))
+      (is (= 1 (get-in artifact [:summary :uncovered-level-count])))
       (is (false? (get-in artifact [:summary :valid?]))))
 
     (testing "real matching and level verdicts remain auditable"
       (is (= #{"S-DR-043-payout-shortfall-deferred"
                "S103_negative-yield-shortfall-cascade"}
              matched-scenario-ids))
-      (is (= :pass (get-in level-verdicts [:allocation/partial-fill :verdict])))
-      (is (= :fail (get-in level-verdicts [:allocation/shortfall :verdict])))
-      (is (= [] (:coverage-gaps artifact)))
+      (is (= :uncovered (get-in level-verdicts [:allocation/partial-fill :verdict])))
+      (is (= :pass (get-in level-verdicts [:allocation/shortfall :verdict])))
+      (is (= [{:mechanism-level :allocation/partial-fill :reason :no-partial-fill-decision-artifacts}]
+             (:coverage-gaps artifact)))
       (is (= 2 (count evidence-roots)))
       (is (every? #(re-matches #"[0-9a-f]{64}" %) evidence-roots)))
 

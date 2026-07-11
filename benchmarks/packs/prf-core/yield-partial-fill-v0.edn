@@ -1,0 +1,61 @@
+{:benchmark/id              :benchmark/prf-yield-partial-fill-v0
+  :benchmark/version         0
+  :benchmark/status          :experimental
+  :benchmark/domain          :domain/protocol-value-conservation
+  :benchmark/protocol        :protocol/prf
+  :benchmark/scenario-suite  :suite/yield-provider-scenarios
+  :benchmark/scenario-suite-description
+  "Two yield-v1 scenarios exercising partial-fill with pro-rata shortfall
+   distribution: Y06 (3-party pro-rata shortfall at 60% available) and
+   Y07 (adversarial shortfall exploit attempt at 50% available)."
+  :benchmark/runner-policy   :runner-policy/deterministic-local-v1
+  :benchmark/evidence-policy :evidence-policy/forensic-standard-v1
+  :benchmark/scoring-rule    :scoring/shortfall-allocation-v0
+  :benchmark/property-types  #{:fairness :safety}
+  :benchmark/description
+  "Yield-v1 partial-fill scenarios exercising pro-rata allocation fairness
+   under shortfall. Two scenarios: multi-party shortfall with 2 competing
+   claimants, and adversarial shortfall with 3 claimants including an
+   adversarial agent. Each scenario exercises shortfall detection, pro-rata
+   allocation, and deferred claim recording.
+   Uses :suite/yield-provider-scenarios (2 partial-fill scenarios)."
+  :benchmark/deferred-scenario-claims #{:conservation
+                                        :allocation-complete
+                                        :no-invariant-errors}
+  :benchmark/purpose
+  "Evaluate yield-v1 partial-fill behavior: pro-rata allocation fairness
+   under multi-party shortfall, and robustness against adversarial
+   withdrawal timing during shortfall."
+  :benchmark/concepts        [:allocation/partial-fill
+                              :allocation/shortfall
+                              :allocation/pro-rata-fairness
+                              :consensus/evidence
+                              :verifiable-assurance/forensic-confidence]
+  :benchmark/scenarios
+  [{:scenario/id "Y06_multi-party-pro-rata-shortfall"
+    :dimension   :allocation/partial-fill
+    :claim       :conservation}
+   {:scenario/id "Y07_adversarial-shortfall-exploit"
+    :dimension   :allocation/partial-fill
+    :claim       :conservation}]
+  :benchmark/claims
+  [{:claim/id :evidence-root-present
+    :claim/role :primary
+    :claim/rationale "Each partial-fill scenario must produce verifiable evidence."
+    :claim/failure-meaning "Evidence root hash is missing."}
+   {:claim/id :replay-result-present
+    :claim/role :primary
+    :claim/rationale "Replay must confirm that shortfall outcomes are reproducible."
+    :claim/failure-meaning "Scenario outcome is missing from replay."}
+   {:claim/id :scenario-hash-present
+    :claim/role :supporting
+    :claim/rationale "Evidence root hash integrity confirms the evidence bundle is unmodified."
+    :claim/failure-meaning "Evidence root is not a valid hash."}
+   {:claim/id :no-invariant-errors
+    :claim/role :diagnostic
+    :claim/rationale "Invariant failures indicate incorrect shortfall detection or allocation."
+    :claim/failure-meaning "Post-hoc invariants reported failures."}
+   {:claim/id :all-scenarios-pass
+    :claim/role :primary
+    :claim/rationale "All partial-fill scenarios must complete to assess fairness."
+    :claim/failure-meaning "Some partial-fill scenarios failed to complete."}]}

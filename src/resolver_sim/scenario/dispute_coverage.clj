@@ -6,6 +6,7 @@
   (:require [clojure.java.io :as io]
             [clojure.data.json :as json]
             [resolver-sim.evidence.config :as evcfg]
+            [resolver-sim.io.resource-path :as rp]
             [resolver-sim.io.scenarios :as sc]))
 
 (def coverage-categories
@@ -91,13 +92,13 @@
   "Check if a scenario file exists on disk."
   [scenario-id]
   (let [path (sc/scenario-path scenario-id)]
-    (.exists (io/file path))))
+    (rp/path-exists? path)))
 
 (defn- scenario-tags
   "Read tags from a scenario file."
   [scenario-id]
   (let [path (sc/scenario-path scenario-id)]
-    (when (.exists (io/file path))
+    (when (rp/path-exists? path)
       (try (let [sc (sc/load-scenario-file path)]
              (or (get sc :tags []) []))
            (catch Exception _ [])))))

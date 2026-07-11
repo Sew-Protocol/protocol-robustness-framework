@@ -17,13 +17,13 @@
                     :scenario-author "@test"
                     :purpose :regression
                     :agents [alice bob]
-                    :events [{:seq 0 :time 1000 :agent "alice" :action "create_escrow"
-                              :save-agent-as "creator"
-                              :params {:token "USDC" :to "0xB" :amount 1000}}
-                             {:seq 1 :time 1000 :agent "creator" :action "raise_dispute"
-                              :params {:workflow-id 0}}]
-                    :execution-mode :deterministic-batch}
-          result (replay/replay-with-protocol protocol scenario)]
+                     :events [{:seq 0 :time 1000 :agent "alice" :action "create_escrow"
+                               :save-agent-as "creator"
+                               :params {:token "USDC" :to "0xB" :amount 1000}}
+                              {:seq 1 :time 1001 :agent "creator" :action "raise_dispute"
+                               :params {:workflow-id 0}}]
+                     :execution-mode :deterministic-batch}
+           result (replay/replay-with-protocol protocol scenario)]
       (is (= :pass (:outcome result)) (str "Batch execution failed: " (:halt-reason result)))
       (is (= :ok (get-in (first (filter #(= 1 (:seq %)) (:trace result))) [:result])) "Event using alias failed")))
 
@@ -63,5 +63,5 @@
                     :execution-mode :deterministic-batch}
           result (replay/replay-with-protocol protocol scenario)
           final-alias-map (:id-alias-map result)]
-      (is (= "0xB" (get final-alias-map "my-alias"))
-          "Alias 'my-alias' should be updated to '0xB'"))))
+      (is (= "bob" (get final-alias-map "my-alias"))
+          "Alias 'my-alias' should be updated to 'bob'"))))

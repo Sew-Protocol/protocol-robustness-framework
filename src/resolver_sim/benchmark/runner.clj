@@ -9,6 +9,7 @@
             [resolver-sim.io.resource-path :as rp]
             [resolver-sim.io.scenarios :as io-sc]
             [resolver-sim.logging :as log]
+            [resolver-sim.contract-model.replay :as replay]
             [resolver-sim.protocols.sew :as sew]
             [resolver-sim.protocols.sew.invariants :as sew-inv]
             [resolver-sim.scenario.suites :as suites]
@@ -89,8 +90,11 @@
   [suite-kw scenario-file run-index run-count]
   (let [path (.getPath scenario-file)
         scenario (load-scenario path)
-        result   (sew/replay-with-sew-protocol scenario
-                                               {:allow-dirty? (or chain/*allow-dirty* false)})
+        protocol (:protocol scenario)
+        result   (if (= "yield-v1" protocol)
+                   (replay/replay-yield-scenario scenario)
+                   (sew/replay-with-sew-protocol scenario
+                                                  {:allow-dirty? (or chain/*allow-dirty* false)}))
         public-id (benchmark-public-scenario-id suite-kw path)
         scenario-evidence (hc/hash-with-intent
                            {:hash/intent :evidence-content}

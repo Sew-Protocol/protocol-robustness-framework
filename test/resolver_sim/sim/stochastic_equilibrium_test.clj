@@ -157,3 +157,78 @@
             expected-residual (+ (- fees rnet bond) fraud)]
         (is (= (double expected-residual) (double residual))
             (format "residual = %.0f matches expected = %.0f" residual expected-residual))))))
+
+;; ───────────────────────────────────────────────────────────────────────────
+;; evaluate-mech-budget-balance — ratcheting
+;; ───────────────────────────────────────────────────────────────────────────
+
+(deftest test-budget-balance-fails-on-missing-flow-data-in-shared-world
+  (testing "Shared-world mode with missing flow tracking data fails (not inconclusive)"
+    (let [result {:initial-resolver-count 10
+                  :initial-composition {:honest-count 5 :malice-count 5 :total-count 10
+                                        :honest-share 0.5 :malice-share 0.5}
+                  :epoch-results [{:batch-mode :shared-world :dominance-ratio 1.0
+                                   :honest-mean-profit 10 :malice-mean-profit 1}]
+                  :aggregated-stats {:honest-cumulative-profit 100.0
+                                     :malice-cumulative-profit -50.0
+                                     :total-resolver-exits 0
+                                     :honest-final-count 5
+                                     :malice-final-count 5
+                                     :honest-avg-win-rate 0.7
+                                     :malice-avg-win-rate 0.5}}
+          report (sut/evaluate-stochastic-equilibrium result)
+          mech (get-in report [:mechanism-proxy-results :budget-balance])]
+      (is (= :fail (:status mech))
+          "shared-world with missing flow keys should fail, not inconclusive")
+      (is (re-find #"missing" (:detail mech ""))
+          "fail detail mentions missing flow tracking data"))))
+
+;; ───────────────────────────────────────────────────────────────────────────
+;; Inconclusive incapacity tests
+;; ───────────────────────────────────────────────────────────────────────────
+
+(deftest test-participation-stable-inconclusive-missing-init-count
+  (testing "Missing initial-resolver-count yields inconclusive"
+    (let [result {:aggregated-stats {:total-resolver-exits 5}}
+          report (sut/evaluate-stochastic-equilibrium result)
+          claim (some #(when (= :participation-stable (:claim-id %)) %) (:claim-results report))]
+      (is (= :inconclusive (:status claim))
+          "no :initial-resolver-count → inconclusive")
+      (is (re-find #"initial-resolver-count" (:reason claim))
+          "reason mentions missing :initial-resolver-count"))))
+
+(deftest test-budget-balance-inconclusive-missing-flow-data
+  (testing "Missing flow tracking keys with non-shared-world yields inconclusive"
+    (let [result {:initial-resolver-count 10
+                  :initial-composition {:honest-count 5 :malice-count 5 :total-count 10
+                                        :honest-share 0.5 :malice-share 0.5}
+                  :aggregated-stats {:honest-cumulative-profit 100.0
+                                     :malice-cumulative-profit -50.0
+                                     :total-resolver-exits 0
+                                     :honest-final-count 5
+                                     :malice-final-count 5
+                                     :honest-avg-win-rate 0.7
+                                     :malice-avg-win-rate 0.5}}
+          report (sut/evaluate-stochastic-equilibrium result)
+          mech (get-in report [:mechanism-proxy-results :budget-balance])]
+      (is (= :inconclusive (:status mech))
+          "no flow keys and no shared-world → inconclusive")
+      (is (re-find #"flow-conservation data missing" (:reason mech))
+          "reason mentions missing flow-conservation data"))))
+
+;; ───────────────────────────────────────────────────────────────────────────
+;; Overall status propagation
+;; ───────────────────────────────────────────────────────────────────────────
+
+(deftest overall-status-inconclusive-on-any-incapacity
+  (testing "Any inconclusive claim makes overall status inconclusive"
+    (let [result {:initial-resolver-count 10}
+          report (sut/evaluate-stochastic-equilibrium result)]
+      (is (= :inconclusive (:overall-status report))
+          "overall status must be inconclusive when some claims cannot evaluate")
+      (is (pos? (:inconclusive-count report))
+          "inconclusive count must be positive")
+      (is (some? (:coverage report))
+          "coverage ratio is present")
+      (is (< (:coverage report) 1.0)
+          "coverage < 1.0 when some claims are inconclusive"))))

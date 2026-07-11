@@ -61,7 +61,7 @@
     (let [evidence (build-evidence)
           result (:evidence/result evidence)
           claims (get-in result [:pro-rata :claims])]
-      (is (= 7 (count claims)) "all 7 pro-rata claims present")
+      (is (= 9 (count claims)) "all 9 pro-rata claims present")
       (is (every? :claim-id claims) "each claim has :claim-id")
       (is (every? :claim-definition-hash claims) "each claim has :claim-definition-hash")
       (is (every? :claim-result-hash claims) "each claim has :claim-result-hash")
@@ -164,7 +164,7 @@
   (testing "each claim result entry includes :claim-definition-concept-hash alongside :claim-definition-hash"
     (let [evidence (build-evidence)
           claims (get-in evidence [:evidence/result :pro-rata :claims])]
-      (is (= 7 (count claims)))
+      (is (= 9 (count claims)))
       (is (every? :claim-definition-concept-hash claims) "each claim has :claim-definition-concept-hash")
       (is (every? string? (map :claim-definition-concept-hash claims)) "every concept-hash is a string")
       (is (every? #(= 64 (count (:claim-definition-concept-hash %))) claims) "each concept-hash is 64 hex chars")
@@ -178,7 +178,7 @@
                      (->> (map :claim-result-hash)))
           all-distinct? (apply distinct? hashes)]
       (is (every? string? hashes))
-      (is (= 7 (count (set hashes))) "each claim has a unique claim-result-hash"))))
+      (is (= 9 (count (set hashes))) "each claim has a unique claim-result-hash"))))
 
 (deftest evidence-dependencies-include-claim-eval-node
   (testing "evidence :dependencies includes the persisted claim-evaluation node hash"

@@ -13,5 +13,5 @@
         world    (:world result)]
     (is (= :pass (:outcome result)))
     (is (zero? (get-in result [:metrics :invariant-violations])))
-    (is (= 11000 (get-in world [:total-withdrawn :USDC])))
-    (is (= 1000 (get-in world [:total-yield-generated :USDC])))))
+    (is (= 400 (get-in world [:total-withdrawn :USDC])))
+    (is (= 400 (get-in world [:total-yield-generated :USDC])))))

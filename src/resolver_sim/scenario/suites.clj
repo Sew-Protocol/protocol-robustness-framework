@@ -261,15 +261,23 @@
     :description  "Reversal-reviewer slashing scenarios: appeal due process, multi-level vindication, governance force slashing, challenger bounty, and insufficient-stake accounting."
     :kind         :file-path-suite
     :ci-tier      :coverage}
-   :suite/sew-shortfall-allocation-v0
-   {:scenario-ids shortfall-scenario-ids
-    :protocol-id  "sew-v1"
-    :title        "Shortfall allocation v0 — partial fill and pro-rata scenarios"
-    :description  "Sew scenarios exercising yield shortfall with partial fill,
-      negative yield cascade with deferred recovery, and resolver stake
-      shortfall. Used by the shortfall-allocation-v0 benchmark pack."
-    :kind         :file-path-suite
-    :ci-tier      :coverage}})
+    :suite/sew-shortfall-allocation-v0
+    {:scenario-ids shortfall-scenario-ids
+     :protocol-id  "sew-v1"
+     :title        "Shortfall allocation v0 — partial fill and pro-rata scenarios"
+     :description  "Sew scenarios exercising yield shortfall with partial fill,
+       negative yield cascade with deferred recovery, and resolver stake
+       shortfall. Used by the shortfall-allocation-v0 benchmark pack."
+     :kind         :file-path-suite
+     :ci-tier      :coverage}
+    :suite/yield-provider-scenarios
+    {:scenario-ids yield-provider-scenario-ids
+     :protocol-id  "yield-v1"
+     :title        "Yield provider benchmark suite"
+     :description  "Standalone yield-v1 provider scenarios for partial-fill
+       benchmark evaluation. Used by the yield-partial-fill-v0 benchmark pack."
+     :kind         :file-path-suite
+     :ci-tier      :provider}})
 
 ;; ── Suite path resolution ─────────────────────────────────────────────────────
 ;; Scenario IDs are resolved to file paths via sc/scenario-path.

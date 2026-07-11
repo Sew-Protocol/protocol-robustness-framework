@@ -210,24 +210,26 @@
                                   {:path (evcfg/artifact-path :theory-eval)
                                    :error (.getMessage e)}))))
 
-                 (let [signing-key (or (:signing-key replay-opts)
-                                       chain/*signing-key*
-                                       (System/getenv "PRF_SIGNING_KEY"))
-                       signing-pw (or (:signing-password replay-opts)
-                                      chain/*signing-password*
-                                      (System/getenv "PRF_SIGNING_PASSWORD"))
-                       tsa-url (or (:tsa-url replay-opts)
-                                   ts/*tsa-url*
-                                   (System/getenv "PRF_TSA_URL"))
-                       allow-dirty? (:allow-dirty? replay-opts)]
-                   (chain/finalize-and-attest!
-                    :run-id run-id
-                    :private-key-path signing-key
-                    :password signing-pw
-                    :tsa-url tsa-url
-                    :allow-dirty? allow-dirty?))
-
-                 (chain/register-scenario-snapshot!)
+                  (when-not (:skip-finalize replay-opts)
+                    (let [signing-key (or (:signing-key replay-opts)
+                                          chain/*signing-key*
+                                          (System/getenv "PRF_SIGNING_KEY"))
+                          signing-pw (or (:signing-password replay-opts)
+                                       chain/*signing-password*
+                                       (System/getenv "PRF_SIGNING_PASSWORD"))
+                          tsa-url (or (:tsa-url replay-opts)
+                                    ts/*tsa-url*
+                                    (System/getenv "PRF_TSA_URL"))
+                          allow-dirty? (:allow-dirty? replay-opts)]
+                      (chain/finalize-and-attest!
+                       :run-id run-id
+                       :private-key-path signing-key
+                       :password signing-pw
+                       :tsa-url tsa-url
+                       :allow-dirty? allow-dirty?)))
+                  ;; Always register scenario snapshot (zero I/O, preserves
+                  ;; test depth for accumulation and reconciliation).
+                  (chain/register-scenario-snapshot!)
                  (assoc result :risk-events (risk/events)))))))))))
 
 (defn replay-yield-scenario

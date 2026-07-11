@@ -1024,10 +1024,10 @@
 
 (defmethod apply-action "withdraw-fees"
   [{:keys [agent-index] :as context} world event]
-  (if (:paused? world)
-    (t/fail :protocol-paused)
-    (run-governance-action context world event
-      (fn [_addr _agent _provenance]
+  (run-governance-action context world event
+    (fn [_addr _agent _provenance]
+      (if (:paused? world)
+        (t/fail :protocol-paused)
         (let [p     (:params event)
               token (:token p)
               token (when token (keyword token))]

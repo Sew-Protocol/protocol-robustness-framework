@@ -495,11 +495,8 @@
                                               agent-alias-key (:save-agent-as event)
                                               new-id (when (and alias-key supports-alias? (= :ok (:result entry)))
                                                        (proto/created-id protocol (:action event) (:extra entry)))
-                                              new-agent-addr (when (and agent-alias-key (= :ok (:result entry)))
-                                                               (let [agent-id (:agent event)
-                                                                     addr (or (get-in context [:agent-index agent-id :address])
-                                                                              (get-in context [:agent-index (name agent-id) :address]))]
-                                                                 addr))
+                                              new-agent-id (when (and agent-alias-key (= :ok (:result entry)))
+                                                              (:agent event))
                                               claimed' (if (= :ok (:result entry))
                                                          (reduce (fn [m d] (assoc m d (:seq event))) (:claimed-domains acc) domains)
                                                          (:claimed-domains acc))]
@@ -507,10 +504,10 @@
                                               (assoc :world new-world
                                                      :claimed-domains claimed'
                                                      :halted? (:halted? step)
-                                                     :id-alias-map (let [m (:id-alias-map acc)]
-                                                                     (cond-> m
-                                                                       (and alias-key new-id) (assoc alias-key new-id)
-                                                                       (and agent-alias-key new-agent-addr) (assoc agent-alias-key new-agent-addr))))
+                                                      :id-alias-map (let [m (:id-alias-map acc)]
+                                                                      (cond-> m
+                                                                        (and alias-key new-id) (assoc alias-key new-id)
+                                                                        (and agent-alias-key new-agent-id) (assoc agent-alias-key new-agent-id))))
                                               (update :trace conj entry)
                                               (assoc :metrics (metrics/accum-metrics protocol (:metrics acc) event entry agent-index working-world))
                                               (assoc :states (assoc (:states acc) (:seq event) (proto/world-snapshot protocol new-world)))

@@ -9,7 +9,8 @@
             [resolver-sim.community.graph :as graph]
             [resolver-sim.community.report :as report]
             [resolver-sim.community.result :as result]
-            [resolver-sim.evidence.chain :as chain]
+             [resolver-sim.evidence.chain :as chain]
+             [resolver-sim.evidence.node :as ev-node]
             [resolver-sim.benchmark.runner :as runner]
             [resolver-sim.hash.canonical :as hc]
             [resolver-sim.vcs :as vcs]))
@@ -268,7 +269,21 @@
               (let [code-info (compute-code-hash)
                     env-hash (compute-env-hash)
                     registry-hash (compute-registry-hash)
-                    ev-node-hash stable-hash
+                    ev-node-obj (ev-node/build-execution-node
+                                 {:execution-id :execution/replay
+                                  :status (if passed? :pass :fail)
+                                  :inputs {:manifest-path manifest-path
+                                           :benchmark/id benchmark-id
+                                           :task/ref task-ref}
+                                  :outputs {:metrics (:metrics evidence)
+                                            :bundle-root bundle-root
+                                            :claim-results (count (:claim-results evidence))}
+                                  :failure-details (when-not passed?
+                                                     [{:failure-type :benchmark-failure
+                                                       :message (str "benchmark " (get-in evidence [:metrics :passed]) "/" (get-in evidence [:metrics :total]) " passed")
+                                                       :expected? false
+                                                       :class :unexpected}])})
+                    ev-node-hash (:node-hash ev-node-obj)
                     ev-node-ref (str "evidence-node:sha256:" ev-node-hash)
                     attestation (att/build-execution-attestation
                                  {:task/ref task-ref :runner/id runner-id
@@ -345,7 +360,24 @@
               (println (str "Comparison: " (name comp-status)))
               (let [code-info (compute-code-hash)
                     env-hash (compute-env-hash)
-                    repro-ev-node-ref (str "evidence-node:sha256:" repro-hash)
+                    repro-ev-node-obj (ev-node/build-execution-node
+                                       {:execution-id :execution/replay
+                                        :status (if passed? :pass :fail)
+                                        :inputs {:manifest-path manifest-path
+                                                 :benchmark/id benchmark-id
+                                                 :task/ref task-ref
+                                                 :reproduction-of original-att-ref}
+                                        :outputs {:metrics (:metrics evidence)
+                                                  :bundle-root bundle-root
+                                                  :original-projection claimed-stable-hash
+                                                  :reproduction-projection repro-hash
+                                                  :comparison-status comp-status}
+                                        :failure-details (when-not passed?
+                                                           [{:failure-type :reproduction-failure
+                                                             :message (str "reproduction " (get-in evidence [:metrics :passed]) "/" (get-in evidence [:metrics :total]) " passed")
+                                                             :expected? false
+                                                             :class :unexpected}])})
+                    repro-ev-node-ref (str "evidence-node:sha256:" (:node-hash repro-ev-node-obj))
                     attestation (att/build-reproduction-attestation
                                  {:task/ref task-ref
                                   :original-attestation-ref original-att-ref
@@ -477,6 +509,23 @@
               (if (att/valid-sha256? result-proj)
                 (pass! (str "result-projection-" (name pred)))
                 (fail! (str "result-projection-" (name pred)) "Missing or invalid result projection"))))
+          ;; 4b. Code provenance
+          (when (seq attestations)
+            (println)
+            (println "Code Provenance:")
+            (doseq [a attestations]
+              (let [pred (:attestation/predicate a)
+                    code-hash (get-in a [:assertion :code-hash])
+                    cp (get-in a [:context :code-provenance])
+                    env-hash (get-in a [:assertion :env-hash])]
+                (println (str "  " (name pred) ":"))
+                (println (str "    Code hash: " code-hash))
+                (when cp
+                  (println (str "    Source: " (name (:code-source cp))))
+                  (println (str "    Worktree: " (name (:worktree-status cp))))
+                  (when-let [dh (:diff-hash cp)]
+                    (println (str "    Diff hash: " dh))))
+                (println (str "    Env hash: " env-hash)))))
           ;; 5. Comparison derivation and projection verification
           (let [exec-ats (filter #(= :runner/execution-attested (:attestation/predicate %)) attestations)
                 repro-ats (filter #(= :runner/result-reproduced (:attestation/predicate %)) attestations)]

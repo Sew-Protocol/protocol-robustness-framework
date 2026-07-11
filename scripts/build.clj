@@ -184,3 +184,30 @@
       (printf "\n  AOT bootstrapper compiled for JAR Main-Class.\n"))
     (println "  Done.\n")
     (flush)))
+
+(defn aot-sew
+  "AOT-compile SEW protocol source dirs only (protocols_src, then src)
+   for faster test startup.  Writes .class files to target/classes.
+   
+   Uses separate passes so a failure in src (deeper deps) doesn't
+   block the protocol layer compilation.
+   
+   Usage: clojure -T:build aot-sew"
+  [_]
+  (let [basis    (b/create-basis {:project "deps.edn"
+                                  :aliases [:test :with-sew]})
+        class-dir "target/classes"]
+    (.mkdirs (java.io.File. class-dir))
+    (println "\n=== AOT compile SEW protocol sources ===")
+    (doseq [src-dir ["protocols_src" "src"]]
+      (let [d (java.io.File. src-dir)]
+        (when (.exists d)
+          (try
+            (println (str "  Compiling " src-dir "..."))
+            (b/compile-clj {:basis basis
+                            :src-dirs [src-dir]
+                            :class-dir class-dir})
+            (println (str "    OK: " src-dir))
+            (catch Exception e
+              (println (str "    WARN: " src-dir " — " (.getMessage e))))))))
+    (println "\n  Done.\n")))

@@ -360,13 +360,83 @@ cli-args (cond-> ["-M:run:with-sew" "--invariants" "--scenario" scenario]
   test {:doc "Run canonical validation gate (all targets via scripts/test.sh)"
         :task (shell "scripts/with-test-artifact-lock.sh" "./scripts/test.sh" "all")}
 
-  test:unit {:doc "Run canonical unit target (all — framework + Sew)"
-             :task (shell "scripts/with-test-artifact-lock.sh" "./scripts/test.sh" "unit")}
+   test:framework:parallel
+   {:doc "Run framework unit tests in parallel with noop evidence capture"
+    :task (shell "scripts/with-test-artifact-lock.sh" "clojure" "-M:test" "-m" "scripts.parallel-test-runner" "--noop-capture"
+                 "resolver-sim.core-tests"
+                 "resolver-sim.protocol-alignment-test"
+                 "resolver-sim.time.context-test"
+                 "resolver-sim.time.model-test"
+                 "resolver-sim.sim.defection-test"
+                 "resolver-sim.sim.strategy-adaptation-test"
+                 "resolver-sim.sim.waterfall-test")}
 
-  test:framework {:doc "Run framework unit tests only (no Sew protocol)"
-                   :task (shell "scripts/with-test-artifact-lock.sh" "./scripts/test.sh" "framework")}
+   test:unit:parallel
+   {:doc "Run all unit tests (framework + Sew) in parallel with noop capture"
+    :task (shell "scripts/with-test-artifact-lock.sh" "clojure" "-M:test:with-sew" "-m" "scripts.parallel-test-runner" "--noop-capture"
+                 "resolver-sim.core-tests"
+                 "resolver-sim.protocol-alignment-test"
+                 "resolver-sim.protocols.sew.replay-test"
+                 "resolver-sim.protocols.sew.forking-strategist-expectations-test"
+                 "resolver-sim.protocols.sew.slashing-test"
+                 "resolver-sim.protocols.sew.phase-k-test"
+                 "resolver-sim.protocols.sew.phase-m-test"
+                 "resolver-sim.scenario.expectations-test"
+                 "resolver-sim.scenario.equilibrium-test"
+                 "resolver-sim.sim.multi-epoch-test"
+                 "resolver-sim.sim.defection-test"
+                 "resolver-sim.sim.strategy-adaptation-test"
+                 "resolver-sim.sim.waterfall-test"
+                 "resolver-sim.io.scenario-fixture-parity-test"
+                 "resolver-sim.contract-model.replay-batch-test"
+                 "resolver-sim.contract-model.replay-batch-sew-test"
+                 "resolver-sim.contract-model.replay-batch-appeal-test"
+                 "resolver-sim.contract-model.replay-batch-slash-domain-test"
+                 "resolver-sim.protocols.sew.dispute-resolution-coverage-test"
+                 "resolver-sim.financial.pro-rata-characterization-test"
+                 "resolver-sim.scenario.suites-test"
+                 "resolver-sim.validation.scenario-registry-test"
+                 "resolver-sim.run.overview-test"
+                 "resolver-sim.evidence.node-test"
+                 "resolver-sim.evidence.attestation-dag-test")}
 
-  test:benchmark:e2e
+   test:evidence
+   {:doc "Run evidence-chain unit tests (node, chain, registry, attestation, integrity, qol) with noop capture"
+    :task (shell "scripts/with-test-artifact-lock.sh" "clojure" "-M:test:with-sew" "-m" "scripts.parallel-test-runner" "--noop-capture"
+                 "resolver-sim.evidence.node-test"
+                 "resolver-sim.evidence.chain-test"
+                 "resolver-sim.evidence.registry-test"
+                 "resolver-sim.evidence.qol-test"
+                 "resolver-sim.evidence.integrity-test"
+                 "resolver-sim.evidence.attestation-dag-test"
+                 "resolver-sim.evidence.attestation-test"
+                 "resolver-sim.evidence.attestation-node-test"
+                 "resolver-sim.evidence.attestation-registry-test"
+                 "resolver-sim.evidence.attestation-policy-test"
+                 "resolver-sim.evidence.timestamping-test"
+                 "resolver-sim.evidence.revocation-test"
+                 "resolver-sim.evidence.commitment-root-test")}
+
+   test:sew
+   {:doc "Run Sew protocol unit tests with noop capture (single JVM)"
+    :task (shell "scripts/with-test-artifact-lock.sh" "clojure" "-M:test:with-sew" "-m" "scripts.run-sew-tests" "unit")}
+
+   test:unit
+   {:doc "Run all unit tests (framework + Sew) with noop capture (single JVM)"
+    :task (shell "scripts/with-test-artifact-lock.sh" "clojure" "-M:test:with-sew" "-m" "scripts.run-sew-tests" "unit")}
+
+   test:framework
+   {:doc "Run framework unit tests with noop capture (single JVM)"
+    :task (shell "scripts/with-test-artifact-lock.sh" "clojure" "-M:test" "-m" "scripts.parallel-test-runner" "--noop-capture"
+                 "resolver-sim.core-tests"
+                 "resolver-sim.protocol-alignment-test"
+                 "resolver-sim.time.context-test"
+                 "resolver-sim.time.model-test"
+                 "resolver-sim.sim.defection-test"
+                 "resolver-sim.sim.strategy-adaptation-test"
+                 "resolver-sim.sim.waterfall-test")}
+
+   test:benchmark:e2e
   {:doc "Run benchmark report end-to-end tests using fixture evidence bundles.
          Tests the full pipeline: evidence bundle → resolve-report → report map validation.
          Does not require bb benchmark:run — uses pre-generated .evidence.edn fixtures."
@@ -374,50 +444,7 @@ cli-args (cond-> ["-M:run:with-sew" "--invariants" "--scenario" scenario]
                   "(require (quote resolver-sim.benchmark.report-test))
                    (clojure.test/run-tests (quote resolver-sim.benchmark.report-test))")}
 
-  test:framework:parallel
-  {:doc "Run framework unit tests in parallel (uses future dispatch for ~2x speedup)"
-   :task (shell "scripts/with-test-artifact-lock.sh" "clojure" "-M:test" "-m" "scripts.parallel-test-runner"
-                "resolver-sim.core-tests"
-                "resolver-sim.protocol-alignment-test"
-                "resolver-sim.time.context-test"
-                "resolver-sim.time.model-test"
-                "resolver-sim.sim.defection-test"
-                "resolver-sim.sim.strategy-adaptation-test"
-                "resolver-sim.sim.waterfall-test")}
-
-  test:unit:parallel
-  {:doc "Run all unit tests (framework + Sew) in parallel"
-   :task (shell "scripts/with-test-artifact-lock.sh" "clojure" "-M:test:with-sew" "-m" "scripts.parallel-test-runner"
-                "resolver-sim.core-tests"
-                "resolver-sim.protocol-alignment-test"
-                "resolver-sim.protocols.sew.replay-test"
-                "resolver-sim.protocols.sew.forking-strategist-expectations-test"
-                "resolver-sim.protocols.sew.slashing-test"
-                "resolver-sim.protocols.sew.phase-k-test"
-                "resolver-sim.protocols.sew.phase-m-test"
-                "resolver-sim.scenario.expectations-test"
-                "resolver-sim.scenario.equilibrium-test"
-                "resolver-sim.sim.multi-epoch-test"
-                "resolver-sim.sim.defection-test"
-                "resolver-sim.sim.strategy-adaptation-test"
-                "resolver-sim.sim.waterfall-test"
-                "resolver-sim.io.scenario-fixture-parity-test"
-                "resolver-sim.contract-model.replay-batch-test"
-                "resolver-sim.contract-model.replay-batch-sew-test"
-                "resolver-sim.contract-model.replay-batch-appeal-test"
-                "resolver-sim.contract-model.replay-batch-slash-domain-test"
-                "resolver-sim.protocols.sew.dispute-resolution-coverage-test"
-                "resolver-sim.financial.pro-rata-characterization-test"
-                "resolver-sim.scenario.suites-test"
-                "resolver-sim.validation.scenario-registry-test"
-                "resolver-sim.run.overview-test"
-                "resolver-sim.evidence.node-test"
-                "resolver-sim.evidence.attestation-dag-test")}
-
-  test:sew {:doc "Run Sew protocol unit tests only"
-            :task (shell "scripts/with-test-artifact-lock.sh" "./scripts/test.sh" "sew")}
-
-  test:yield {:doc "Run yield protocol unit tests only"
+   test:yield {:doc "Run yield protocol unit tests only"
               :task (shell "scripts/with-test-artifact-lock.sh" "./scripts/test.sh" "yield")}
 
   test:yield-provider-scenarios {:doc "Run standalone yield-v1 JSON scenarios"
@@ -490,22 +517,6 @@ cli-args (cond-> ["-M:run:with-sew" "--invariants" "--scenario" scenario]
                       "-M:with-sew" "-e"
                       "(require '[clojure.pprint :as pp] '[resolver-sim.io.scenario-runner :as sr]) (pp/print-table [:suite/key :suite/type :suite/protocols :suite/scenario-count :suite/title] (sr/known-suite-summaries))")))}
 
-  test:evidence {:doc "Run evidence-chain unit tests (node, chain, registry, attestation, integrity, qol)"
-                 :task (shell "scripts/with-test-artifact-lock.sh" "clojure" "-M:test:with-sew" "-m" "scripts.parallel-test-runner"
-                             "resolver-sim.evidence.node-test"
-                             "resolver-sim.evidence.chain-test"
-                             "resolver-sim.evidence.registry-test"
-                             "resolver-sim.evidence.qol-test"
-                             "resolver-sim.evidence.integrity-test"
-                             "resolver-sim.evidence.attestation-dag-test"
-                             "resolver-sim.evidence.attestation-test"
-                             "resolver-sim.evidence.attestation-node-test"
-                             "resolver-sim.evidence.attestation-registry-test"
-                             "resolver-sim.evidence.attestation-policy-test"
-                             "resolver-sim.evidence.timestamping-test"
-                             "resolver-sim.evidence.revocation-test"
-                             "resolver-sim.evidence.commitment-root-test")}
-
   test:generators {:doc "Run canonical generator/property regression target"
                    :task (shell "./scripts/test.sh generators")}
 
@@ -555,10 +566,38 @@ cli-args (cond-> ["-M:run:with-sew" "--invariants" "--scenario" scenario]
    test:notebooks {:doc "Load every notebook namespace to verify it compiles"
                     :task (shell "scripts/with-test-artifact-lock.sh" "clojure" "-M:with-sew" "-m" "scripts.test-notebooks")}
 
+   test:quick-sew
+   {:doc "Fast SEW confidence check in a single JVM with noop capture.
+          Consolidates framework + dispute-resolution + evidence into one
+          parallel-runner call.  Replaces 3 separate JVMs (~42s saved)."
+    :task (shell "scripts/with-test-artifact-lock.sh" "clojure" "-M:test:with-sew" "-m"
+                 "scripts.parallel-test-runner" "--noop-capture"
+                 "resolver-sim.core-tests"
+                 "resolver-sim.protocol-alignment-test"
+                 "resolver-sim.time.context-test"
+                 "resolver-sim.time.model-test"
+                 "resolver-sim.sim.defection-test"
+                 "resolver-sim.sim.strategy-adaptation-test"
+                 "resolver-sim.sim.waterfall-test"
+                 "resolver-sim.protocols.sew.dispute-resolution-coverage-test"
+                 "resolver-sim.evidence.node-test"
+                 "resolver-sim.evidence.chain-test"
+                 "resolver-sim.evidence.registry-test"
+                 "resolver-sim.evidence.qol-test"
+                 "resolver-sim.evidence.integrity-test"
+                 "resolver-sim.evidence.attestation-dag-test"
+                 "resolver-sim.evidence.attestation-test"
+                 "resolver-sim.evidence.attestation-node-test"
+                 "resolver-sim.evidence.attestation-registry-test"
+                 "resolver-sim.evidence.attestation-policy-test"
+                 "resolver-sim.evidence.timestamping-test"
+                 "resolver-sim.evidence.revocation-test"
+                 "resolver-sim.evidence.commitment-root-test")}
+
    test:quick
    {:doc "Fast confidence check (~3 min). Covers: framework + dispute-resolution + evidence + contracts + validate."
     :task (shell "bash" "-c"
-            "bb test:framework:parallel && bb test:dispute-resolution && bb test:evidence && bb test:contracts && bb validate")}
+            "bb test:quick-sew && bb test:contracts && bb validate")}
 
    test:medium
    {:doc "Medium coverage check (~12 min). Adds suites to the quick set."

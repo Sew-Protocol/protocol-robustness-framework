@@ -26,11 +26,16 @@
      "seq" : 1, "time" : 1060, "agent" : "buyer", "action" : "raise_dispute",
      "params" : { "workflow-id" : 0 }
    }, {
-   "seq" : 2, "time" : 1120, "agent" : "seller", "action" : "submit_evidence",
-   "params" : { "workflow-id" : 0, "evidence-hash" : "0xdeadline-edge" }
+     "seq" : 2, "time" : 1120, "agent" : "seller", "action" : "submit_evidence",
+     "params" : { "workflow-id" : 0, "evidence-hash" : "0xdeadline-edge" }
+   }, {
+     "seq" : 3, "time" : 1121, "agent" : "resolver", "action" : "execute_resolution",
+     "params" : { "workflow-id" : 0, "is-release" : true }
+   }, {
+     "seq" : 4, "time" : 1190, "agent" : "buyer", "action" : "execute_pending_settlement",
+     "params" : { "workflow-id" : 0 }
    } ],
  "scenario-notes" : "evidence-window-duration=60s. Dispute raised at t=1060, deadline = 1060+60=1120. Evidence at t=1120 equals the deadline exactly. The guard checks (> now deadline), so evidence at t=1120 is NOT past the deadline (1120 is not > 1120), and is accepted. Tests strict-greater-than boundary.",
    "scenario-author" : "@kilo-research",
    "provenance" : { "author-id" : "@kilo-research", "author" : "Kilo Research" }
  }
- 

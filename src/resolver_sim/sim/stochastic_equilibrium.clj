@@ -192,22 +192,22 @@
 
    Evidence includes per-strategy breakdown and both rates."
   [result]
-  (let [initial  (:initial-resolver-count result)
-        stats    (:aggregated-stats result)
-        exits    (:total-resolver-exits stats 0)
-        h-exits  (:honest-exit-count stats 0)
-        l-exits  (:lazy-exit-count stats 0)
-        mx-exits (:malicious-exit-count stats 0)
-        c-exits  (:collusive-exit-count stats 0)
-        init-comp (:initial-composition result)
-        h-init  (:honest-count init-comp 0)
-        l-init  (:lazy-count init-comp 0)
-        mx-init (:malicious-count init-comp 0)
-        c-init  (:collusive-count init-comp 0)
-        agg-rate (double (/ exits (max 1 initial)))]
+  (let [initial  (:initial-resolver-count result)]
     (if (nil? initial)
       (inconclusive :participation-stable "initial-resolver-count missing from result")
-      (let [productive-init (+ h-init l-init)
+      (let [stats    (:aggregated-stats result)
+            exits    (:total-resolver-exits stats 0)
+            h-exits  (:honest-exit-count stats 0)
+            l-exits  (:lazy-exit-count stats 0)
+            mx-exits (:malicious-exit-count stats 0)
+            c-exits  (:collusive-exit-count stats 0)
+            init-comp (:initial-composition result)
+            h-init  (:honest-count init-comp 0)
+            l-init  (:lazy-count init-comp 0)
+            mx-init (:malicious-count init-comp 0)
+            c-init  (:collusive-count init-comp 0)
+            agg-rate (double (/ exits (max 1 initial)))
+            productive-init (+ h-init l-init)
             productive-exits (+ h-exits l-exits)
             productive-rate (if (pos? productive-init)
                               (/ (double productive-exits) productive-init)
@@ -405,15 +405,26 @@
      profit_honest = fee + appeal_recovery
      profit_malice = fee - bond_loss + fraud_upside"
   [result]
-  (let [stats    (:aggregated-stats result)
-        h-prof   (:honest-cumulative-profit stats)
-        m-prof   (:malice-cumulative-profit stats)
-        fees-col (:flow-total-fees-collected stats)
+  (let [stats     (:aggregated-stats result)
+        h-prof    (:honest-cumulative-profit stats)
+        m-prof    (:malice-cumulative-profit stats)
+        fees-col  (:flow-total-fees-collected stats)
         bond-loss (:flow-total-bond-loss stats)
-        fraud-up  (:flow-total-fraud-upside stats)]
+        fraud-up  (:flow-total-fraud-upside stats)
+        batch-mode (some-> result :epoch-results first :batch-mode)]
     (if (some nil? [h-prof m-prof fees-col bond-loss fraud-up])
-      (mech-inconclusive :budget-balance
-                         "flow-conservation data missing; simulation may lack :use-budget-flow-tracking? or use older params")
+      (if (and (= :shared-world batch-mode)
+               (some nil? [fees-col bond-loss fraud-up]))
+        (mech-fail :budget-balance
+                   {:batch-mode    batch-mode
+                    :missing-keys  (vec (for [[k v] {:flow-total-fees-collected fees-col
+                                                      :flow-total-bond-loss     bond-loss
+                                                      :flow-total-fraud-upside  fraud-up}
+                                             :when (nil? v)]
+                                          k))}
+                   "flow tracking data missing in shared-world mode: simulation bug or missing flow plumbing")
+        (mech-inconclusive :budget-balance
+                           "flow-conservation data missing; simulation may lack :use-budget-flow-tracking? or use older params"))
       (let [resolver-net (+ h-prof m-prof)
             ;; Flow conservation: fees_in = resolver_net + bond_loss - fraud_upside
             residual (+ (- fees-col resolver-net bond-loss) fraud-up)
@@ -580,6 +591,7 @@
       :pass-count              int
       :fail-count              int
       :inconclusive-count      int
+      :coverage                double-or-nil
       :summary                 string}"
   [multi-epoch-result]
   (let [claim-results    (mapv #(% multi-epoch-result) evaluators)
@@ -599,7 +611,8 @@
       :pass-count          pass-count
       :fail-count          fail-count
       :inconclusive-count  inc-count
-      :summary             summary}
+      :summary             summary
+      :coverage            (/ (+ pass-count fail-count) (double (count claim-results)))}
      mech-proxies)))
 
 (defn print-equilibrium-report
