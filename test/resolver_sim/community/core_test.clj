@@ -7,13 +7,50 @@
             [resolver-sim.community.graph :as graph]
             [resolver-sim.community.report :as report]))
 
-(defn temp-dir-fixture
-  [f]
+(defn temp-dir-fixture [f]
   (let [d (str (java.nio.file.Files/createTempDirectory "community-test" (make-array java.nio.file.attribute.FileAttribute 0)))]
     (binding [mailbox/*mailbox-dir* (str d "/mailbox")]
       (f))))
 
 (use-fixtures :each temp-dir-fixture)
+
+(defn- valid-exec-spec [& {:keys [task-ref runner-id exec-hash result-hash code-hash env-hash bundle registry issued-at]
+                           :or {task-ref "research-task:sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+                                runner-id "runner-1"
+                                exec-hash "evidence-node:sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+                                result-hash "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+                                code-hash "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+                                env-hash "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+                                bundle "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+                                registry "1111111111111111111111111111111111111111111111111111111111111111"
+                                issued-at "2026-07-01T00:00:00Z"}}]
+  {:task/ref task-ref :runner/id runner-id
+   :code-hash code-hash :env-hash env-hash :bundle-root bundle
+   :execution-node-hash exec-hash :result-projection-hash result-hash
+   :registry-snapshot-hash registry :issued-at issued-at})
+
+(defn- valid-repro-spec [& {:keys [task-ref orig-att-ref orig-result runner-id repro-exec repro-result comp-policy comp-status
+                                   code-hash env-hash issued-at]
+                            :or {task-ref "research-task:sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+                                 orig-att-ref "attestation:sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+                                 orig-result "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+                                 runner-id "runner-2"
+                                 repro-exec "evidence-node:sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+                                 repro-result "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+                                 comp-policy :stable-projection-v0
+                                 comp-status :matched
+                                 code-hash "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+                                 env-hash "1111111111111111111111111111111111111111111111111111111111111111"
+                                 issued-at "2026-07-01T00:00:00Z"}}]
+  {:task/ref task-ref :original-attestation-ref orig-att-ref
+   :original-result-projection-hash orig-result
+   :runner/id runner-id :code-hash code-hash :env-hash env-hash
+   :reproduction-execution-node-hash repro-exec
+   :reproduction-result-projection-hash repro-result
+   :comparison-policy comp-policy :comparison-status comp-status
+   :issued-at issued-at})
+
+;; ── Canonical identity ──────────────────────────────────
 
 (deftest equivalent-task-hashes-match
   (let [spec {:title "Test" :benchmark/id :test}
@@ -22,29 +59,19 @@
     (is (= (:task/hash t1) (:task/hash t2)))))
 
 (deftest equivalent-attestation-hashes-match
-  (let [a1 (att/build-execution-attestation
-            {:task/ref "research-task:sha256:abc123" :runner/id "runner-1"
-             :execution-node-hash "node-hash-1" :issued-at "2026-07-01T00:00:00Z"})
-        a2 (att/build-execution-attestation
-            {:task/ref "research-task:sha256:abc123" :runner/id "runner-1"
-             :execution-node-hash "node-hash-1" :issued-at "2026-07-01T00:00:00Z"})]
+  (let [a1 (att/build-execution-attestation (valid-exec-spec))
+        a2 (att/build-execution-attestation (valid-exec-spec))]
     (is (= (:attestation/hash a1) (:attestation/hash a2)))))
 
 (deftest changing-subject-changes-attestation-hash
-  (let [a1 (att/build-execution-attestation
-            {:task/ref "research-task:sha256:abc123" :runner/id "runner-1" :execution-node-hash "node-A"})
-        a2 (att/build-execution-attestation
-            {:task/ref "research-task:sha256:def456" :runner/id "runner-1" :execution-node-hash "node-A"})]
+  (let [a1 (att/build-execution-attestation (valid-exec-spec))
+        a2 (att/build-execution-attestation (valid-exec-spec
+                                             :task-ref "research-task:sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"))]
     (is (not= (:attestation/hash a1) (:attestation/hash a2)))))
 
 (deftest changing-predicate-changes-attestation-hash
-  (let [a1 (att/build-execution-attestation
-            {:task/ref "research-task:sha256:abc123" :runner/id "runner-1" :execution-node-hash "node-A"})
-        a2 (att/build-reproduction-attestation
-            {:task/ref "research-task:sha256:abc123" :original-attestation-ref "attestation:sha256:orig"
-             :original-result-projection-hash "proj-A" :runner/id "runner-2"
-             :reproduction-execution-node-hash "node-B" :reproduction-result-projection-hash "proj-B"
-             :comparison-policy :strict-hash :comparison-status :matched})]
+  (let [a1 (att/build-execution-attestation (valid-exec-spec))
+        a2 (att/build-reproduction-attestation (valid-repro-spec))]
     (is (not= (:attestation/hash a1) (:attestation/hash a2)))))
 
 (deftest tampered-message-is-detected
@@ -52,6 +79,8 @@
            {:message/type :TASK_ANNOUNCEMENT :subject-task "research-task:sha256:abc123" :sender "runner-1"})
         tampered (assoc m :sender "different-runner")]
     (is (not (:hash-valid? (mailbox/verify-message tampered))))))
+
+;; ── External resolution ─────────────────────────────────
 
 (deftest clean-process-resolves-task
   (let [t (task/build-task {:title "Test Task" :benchmark/id :test})]
@@ -66,6 +95,8 @@
   (is (not (task/task-ref? "bare-id")))
   (is (not (task/task-ref? "sha256:abc")))
   (is (task/task-ref? "research-task:sha256:abc123def456abc123def456abc123def456abc123def456abc123def456abc1")))
+
+;; ── Mailbox ─────────────────────────────────────────────
 
 (deftest message-hashes-are-deterministic
   (let [m1 (mailbox/build-message
@@ -92,12 +123,13 @@
       (is (= 3 (count for-task)))
       (is (= :challenged (mailbox/task-status task-ref))))))
 
+;; ── Graph and report ────────────────────────────────────
+
 (deftest graph-traversal-reaches-all-records
   (let [t (task/build-task {:title "Graph Test" :benchmark/id :test})
         m (mailbox/build-message
            {:message/type :TASK_ANNOUNCEMENT :subject-task (:task/ref t) :sender "runner-1"})
-        a (att/build-execution-attestation
-           {:task/ref (:task/ref t) :runner/id "runner-1" :execution-node-hash "node-test"})
+        a (att/build-execution-attestation (valid-exec-spec :task-ref (:task/ref t)))
         g (graph/build-task-graph-projection {:task t :messages [m] :attestations [a]})]
     (is (= 3 (:node-count (:summary g))))
     (is (= 2 (:edge-count (:summary g))))
@@ -105,32 +137,32 @@
 
 (deftest report-is-side-effect-free
   (let [t (task/build-task {:title "Report Test" :benchmark/id :test})
-        a (att/build-execution-attestation
-           {:task/ref (:task/ref t) :runner/id "runner-1" :execution-node-hash "node-test"})
+        a (att/build-execution-attestation (valid-exec-spec :task-ref (:task/ref t)))
         r (report/build-report {:task t :attestations [a]})]
     (is (= (:schema-version r) "community-report.v0"))
     (is (= (:task-status r) :unknown))
     (is (string? (get-in r [:original-run :attestation-hash])))))
 
+;; ── Attestation validation ──────────────────────────────
+
 (deftest valid-signed-execution-attestation-passes
-  (let [a (att/build-execution-attestation
-           {:task/ref "research-task:sha256:abc123" :runner/id "runner-1" :execution-node-hash "node-test"})]
+  (let [a (att/build-execution-attestation (valid-exec-spec))]
     (is (att/valid-attestation? a))))
 
 (deftest wrong-subject-hash-fails
-  (let [a (att/build-execution-attestation
-           {:task/ref "research-task:sha256:abc123" :runner/id "runner-1" :execution-node-hash "node-test"})
+  (let [a (att/build-execution-attestation (valid-exec-spec))
         tampered (assoc-in a [:subject :hash] "wrong-hash")]
     (is (not (att/valid-attestation? tampered)))))
 
+;; ── Challenge semantics ─────────────────────────────────
+
 (deftest challenge-does-not-mutate-original
-  (let [orig (att/build-execution-attestation
-              {:task/ref "research-task:sha256:abc123" :runner/id "runner-1" :execution-node-hash "node-test"})
+  (let [orig (att/build-execution-attestation (valid-exec-spec))
         challenge (att/build-challenge-attestation
-                   {:task/ref "research-task:sha256:abc123"
+                   {:task/ref "research-task:sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
                     :challenged-attestation-ref (:attestation/ref orig)
                     :runner/id "runner-2" :reason "Evidence cannot be resolved"
-                    :challenge-type :evidence-unresolvable})]
+                    :challenge-type :evidence-unresolvable :issued-at "2026-07-01T00:00:00Z"})]
     (is (att/valid-attestation? orig))
     (is (att/valid-attestation? challenge))
     (is (not= (:attestation/hash orig) (:attestation/hash challenge)))))

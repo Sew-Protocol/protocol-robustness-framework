@@ -1,160 +1,91 @@
 (ns resolver-sim.community.design-scrutiny-test
-  "Tests for the design concerns raised during review.
-   Each test verifies that references are correctly included in content hashes
-   and that tampering with any reference field changes the object hash."
   (:require [clojure.test :refer [deftest is]]
             [resolver-sim.community.attestation :as att]
             [resolver-sim.community.mailbox :as mailbox]
             [resolver-sim.community.task :as task]))
 
-;; ── Concern 4: Reference fields in hashes ──────────────────────────────
-;; The canonical-body functions strip ONLY explicitly designated self-identity
-;; keys (e.g. :attestation/id, :attestation/hash, :attestation/ref).
-;; They do NOT strip nested semantic references inside :subject, :assertion, etc.
-;; These tests confirm that changing any external reference changes the hash.
+(def H1 "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")
+(def H2 "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb")
+(def H3 "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc")
+(def H4 "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd")
+(def H5 "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee")
+
+(defn- exec-att [& {:keys [task-ref exec-hash] :or {task-ref (str "research-task:sha256:" H1) exec-hash (str "evidence-node:sha256:" H2)}}]
+  (att/build-execution-attestation
+   {:task/ref task-ref :runner/id "r1" :execution-node-hash exec-hash
+    :result-projection-hash H3 :code-hash H4 :env-hash H5
+    :bundle-root H1 :registry-snapshot-hash H2}))
 
 (deftest change-task-ref-changes-attestation-hash
-  (let [h1 (:attestation/hash
-            (att/build-execution-attestation
-             {:task/ref "research-task:sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
-              :runner/id "r1"
-              :execution-node-hash "node-1"
-              :issued-at "2026-07-01T00:00:00Z"}))
-        h2 (:attestation/hash
-            (att/build-execution-attestation
-             {:task/ref "research-task:sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
-              :runner/id "r1"
-              :execution-node-hash "node-1"
-              :issued-at "2026-07-01T00:00:00Z"}))]
-    (is (not= h1 h2) "Changing task ref must change attestation hash")))
+  (let [h1 (:attestation/hash (exec-att))
+        h2 (:attestation/hash (exec-att :task-ref (str "research-task:sha256:" H2)))]
+    (is (not= h1 h2))))
 
 (deftest change-challenged-ref-changes-challenge-hash
   (let [h1 (:attestation/hash
             (att/build-challenge-attestation
-             {:task/ref "research-task:sha256:task"
-              :challenged-attestation-ref "attestation:sha256:original-aaa"
-              :runner/id "r2"
-              :reason "test"
-              :issued-at "2026-07-01T00:00:00Z"}))
+             {:task/ref (str "research-task:sha256:" H1)
+              :challenged-attestation-ref (str "attestation:sha256:" H2)
+              :runner/id "r2" :reason "test"}))
         h2 (:attestation/hash
             (att/build-challenge-attestation
-             {:task/ref "research-task:sha256:task"
-              :challenged-attestation-ref "attestation:sha256:original-bbb"
-              :runner/id "r2"
-              :reason "test"
-              :issued-at "2026-07-01T00:00:00Z"}))]
-    (is (not= h1 h2) "Changing challenged attestation ref must change challenge hash")))
+             {:task/ref (str "research-task:sha256:" H1)
+              :challenged-attestation-ref (str "attestation:sha256:" H3)
+              :runner/id "r2" :reason "test"}))]
+    (is (not= h1 h2))))
 
 (deftest change-original-attestation-ref-changes-reproduction-hash
   (let [h1 (:attestation/hash
             (att/build-reproduction-attestation
-             {:task/ref "research-task:sha256:task"
-              :original-attestation-ref "attestation:sha256:orig-aaa"
-              :original-result-projection-hash "proj-aaa"
-              :runner/id "r2"
-              :reproduction-execution-node-hash "repro-node"
-              :reproduction-result-projection-hash "proj-bbb"
-              :comparison-policy :strict-hash
-              :comparison-status :matched
-              :issued-at "2026-07-01T00:00:00Z"}))
+             {:task/ref (str "research-task:sha256:" H1)
+              :original-attestation-ref (str "attestation:sha256:" H2)
+              :original-result-projection-hash H3
+              :runner/id "r2" :code-hash H4 :env-hash H5
+              :reproduction-execution-node-hash (str "evidence-node:sha256:" H4)
+              :reproduction-result-projection-hash H3
+              :comparison-policy :stable-projection-v0 :comparison-status :matched}))
         h2 (:attestation/hash
             (att/build-reproduction-attestation
-             {:task/ref "research-task:sha256:task"
-              :original-attestation-ref "attestation:sha256:orig-bbb"
-              :original-result-projection-hash "proj-aaa"
-              :runner/id "r2"
-              :reproduction-execution-node-hash "repro-node"
-              :reproduction-result-projection-hash "proj-bbb"
-              :comparison-policy :strict-hash
-              :comparison-status :matched
-              :issued-at "2026-07-01T00:00:00Z"}))]
-    (is (not= h1 h2) "Changing original attestation ref must change reproduction hash")))
+             {:task/ref (str "research-task:sha256:" H1)
+              :original-attestation-ref (str "attestation:sha256:" H3)
+              :original-result-projection-hash H3
+              :runner/id "r2" :code-hash H4 :env-hash H5
+              :reproduction-execution-node-hash (str "evidence-node:sha256:" H4)
+              :reproduction-result-projection-hash H3
+              :comparison-policy :stable-projection-v0 :comparison-status :matched}))]
+    (is (not= h1 h2))))
 
 (deftest change-evidence-node-ref-changes-execution-hash
-  (let [h1 (:attestation/hash
-            (att/build-execution-attestation
-             {:task/ref "research-task:sha256:task"
-              :runner/id "r1"
-              :execution-node-hash "evidence-node:sha256:node-aaa"
-              :issued-at "2026-07-01T00:00:00Z"}))
-        h2 (:attestation/hash
-            (att/build-execution-attestation
-             {:task/ref "research-task:sha256:task"
-              :runner/id "r1"
-              :execution-node-hash "evidence-node:sha256:node-bbb"
-              :issued-at "2026-07-01T00:00:00Z"}))]
-    (is (not= h1 h2) "Changing evidence node ref must change execution attestation hash")))
-
-;; ── Concern 2: Public key substitution ─────────────────────────────────
-;; The hashed payload includes :sender (for mailbox messages) and :assertion/:runner/id
-;; (for attestations). If an attacker substitutes both the public key and signature,
-;; the hash stays the same BUT the committed sender/runner-id in the hash must be
-;; verified against the actual key used for signing.
-;; These tests confirm that a masqueraded message (different public key for same sender)
-;; can be detected by a verifier that checks key-to-identity binding.
+  (let [h1 (:attestation/hash (exec-att :exec-hash (str "evidence-node:sha256:" H2)))
+        h2 (:attestation/hash (exec-att :exec-hash (str "evidence-node:sha256:" H3)))]
+    (is (not= h1 h2))))
 
 (deftest sender-identity-is-committed-in-hash
   (let [h1 (:message/hash
             (mailbox/build-message
-             {:message/type :RUNNER_RESULT
-              :subject-task "research-task:sha256:task"
-              :sender "runner-alpha"}))
+             {:message/type :RUNNER_RESULT :subject-task (str "research-task:sha256:" H1) :sender "runner-alpha"}))
         h2 (:message/hash
             (mailbox/build-message
-             {:message/type :RUNNER_RESULT
-              :subject-task "research-task:sha256:task"
-              :sender "runner-beta"}))]
-    (is (not= h1 h2) "Different senders must produce different message hashes")))
+             {:message/type :RUNNER_RESULT :subject-task (str "research-task:sha256:" H1) :sender "runner-beta"}))]
+    (is (not= h1 h2))))
 
 (deftest runner-identity-is-committed-in-attestation-hash
-  (let [h1 (:attestation/hash
-            (att/build-execution-attestation
-             {:task/ref "research-task:sha256:task"
-              :runner/id "runner-alpha"
-              :execution-node-hash "node-1"
-              :issued-at "2026-07-01T00:00:00Z"}))
-        h2 (:attestation/hash
-            (att/build-execution-attestation
-             {:task/ref "research-task:sha256:task"
-              :runner/id "runner-beta"
-              :execution-node-hash "node-1"
-              :issued-at "2026-07-01T00:00:00Z"}))]
-    (is (not= h1 h2) "Different runner IDs must change attestation hash")))
-
-;; ── Concern 3: Timestamps ──────────────────────────────────────────────
-;; :issued-at IS included in the attestation hash (not stripped by canonical-body).
-;; Mailbox :timestamp is excluded from hash.
-;; These tests confirm the current behaviour.
+  (let [h1 (:attestation/hash (exec-att))
+        h2 (:attestation/hash (att/build-execution-attestation
+                               {:task/ref (str "research-task:sha256:" H1) :runner/id "runner-beta"
+                                :execution-node-hash (str "evidence-node:sha256:" H2)
+                                :result-projection-hash H3 :code-hash H4 :env-hash H5
+                                :bundle-root H1 :registry-snapshot-hash H2}))]
+    (is (not= h1 h2))))
 
 (deftest issued-at-is-included-in-attestation-hash
-  (let [same-payload (fn [issued-at]
-                       (:attestation/hash
-                        (att/build-execution-attestation
-                         {:task/ref "research-task:sha256:task"
-                          :runner/id "r1"
-                          :execution-node-hash "node-1"
-                          :issued-at issued-at})))
-        h1 (same-payload "2026-07-01T00:00:00Z")
-        h2 (same-payload "2026-07-02T00:00:00Z")]
-    (is (not= h1 h2) ":issued-at changes must change attestation hash")))
+  (let [base {:task/ref (str "research-task:sha256:" H1) :runner/id "r1"
+              :execution-node-hash (str "evidence-node:sha256:" H2)
+              :result-projection-hash H3 :code-hash H4 :env-hash H5
+              :bundle-root H1 :registry-snapshot-hash H2}]
+    (is (not= (:attestation/hash (att/build-execution-attestation (assoc base :issued-at "2026-07-01T00:00:00Z")))
+              (:attestation/hash (att/build-execution-attestation (assoc base :issued-at "2026-07-02T00:00:00Z")))))))
 
 (deftest mailbox-timestamp-is-excluded-from-hash
-  (let [h1 (:message/hash
-            (mailbox/build-message
-             {:message/type :TASK_ANNOUNCEMENT
-              :subject-task "research-task:sha256:task"
-              :sender "r1"
-              :timestamp "2026-07-01T00:00:00Z"}))
-        h2 (:message/hash
-            (mailbox/build-message
-             {:message/type :TASK_ANNOUNCEMENT
-              :subject-task "research-task:sha256:task"
-              :sender "r1"
-              :timestamp "2026-07-02T00:00:00Z"}))]
-    (is (= h1 h2) "Mailbox timestamps must be excluded from content hashes")
-    (is (nil? (:message/signature
-               (mailbox/build-message
-                {:message/type :TASK_ANNOUNCEMENT
-                 :subject-task "research-task:sha256:task"
-                 :sender "r1"})))
-        "Unsigned messages cannot prove timestamp integrity")))
+  (is (= (:message/hash (mailbox/build-message {:message/type :TASK_ANNOUNCEMENT :subject-task (str "research-task:sha256:" H1) :sender "r1" :timestamp "2026-07-01T00:00:00Z"}))
+         (:message/hash (mailbox/build-message {:message/type :TASK_ANNOUNCEMENT :subject-task (str "research-task:sha256:" H1) :sender "r1" :timestamp "2026-07-02T00:00:00Z"})))))

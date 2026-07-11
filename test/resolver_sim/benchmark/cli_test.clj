@@ -19,3 +19,8 @@
                               entries))]
     (is replay)
     (is (= "prf-core/prf-deterministic-replay-v1" (:id replay)))))
+
+(deftest non-interactive-runs-suppress-the-post-run-prompt
+  (is (#'cli/interactive-run? true {}))
+  (is (not (#'cli/interactive-run? true {:non-interactive true})))
+  (is (not (#'cli/interactive-run? false {}))))

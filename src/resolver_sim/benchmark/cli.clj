@@ -87,7 +87,12 @@
    [nil "--verify-attestation PATH" "Verify an independent attestation"]
    [nil "--tsa-url URL" "RFC 3161 Time-Stamp Authority URL for timestamping evidence artifacts"]
    [nil "--history" "Display local evidence run history"]
+   [nil "--non-interactive" "Write the result and exit without the post-run prompt"]
    ["-h" "--help" "Show help"]])
+
+(defn- interactive-run?
+  [passed? options]
+  (and passed? (not (:non-interactive options))))
 
 (defn- interactive-ux [evidence output-path options]
   (println "\n" (apply str (repeat 40 "─")))
@@ -204,7 +209,7 @@
         ((requiring-resolve 'resolver-sim.benchmark.runner/write-evidence)
          evidence output-path)
         (record-history-best-effort! evidence)
-        (when passed?
+        (when (interactive-run? passed? options)
           (interactive-ux evidence output-path options)))
       (System/exit exit-code))))
 

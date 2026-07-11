@@ -171,7 +171,7 @@
                            :w 220 :h 40}])
                        (vec layer-nodes))))
         entries (mapcat (fn [layer] (per-layer layer (get by-layer layer [])))
-                       (sort (keys by-layer)))]
+                        (sort (keys by-layer)))]
     (into {} entries)))
 
 (defn export-graphml

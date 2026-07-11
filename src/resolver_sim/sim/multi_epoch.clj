@@ -31,6 +31,7 @@
             [resolver-sim.sim.defection            :as defection]
             [resolver-sim.sim.stochastic-equilibrium :as stoch-eq]
             [resolver-sim.stochastic.rng           :as rng]
+            [resolver-sim.stochastic.economics     :as econ]
             [clojure.set]))
 
 ;; ---------------------------------------------------------------------------
@@ -173,6 +174,23 @@
                        (pos? honest-mean)                   Double/POSITIVE_INFINITY
                        :else                                1.0)
 
+          ;; ── Financial flow tracking for budget-balance ───────────────────
+         all-trials          (concat trials-honest trials-malicious)
+         fee-per-trial       (econ/calculate-fee (:escrow-size decayed-params 10000)
+                                                 (:resolver-fee-bps decayed-params 150))
+         epoch-fees-collected (long (* (if use-shared? n-trials (* 2 n-trials)) fee-per-trial))
+         effective-bond-loss-fn
+         (fn [t]
+           (let [slashed? (:slashed? t false)
+                 frozen?  (:frozen? t false)
+                 escaped? (:escaped? t false)
+                 pending? (:slashing-pending? t false)]
+             (if (and slashed? frozen? (not escaped?))
+               (get t :bond-loss 0)
+               (if pending? 0 (get t :bond-loss 0)))))
+         epoch-bond-loss (reduce + 0 (map effective-bond-loss-fn all-trials))
+         epoch-fraud-upside  (reduce + 0 (map #(get % :fraud-upside 0) all-trials))
+
           ;; ── Optional kernel validation ────────────────────────────────────
          kv-min-pass-rate (:kernel-validation-min-pass-rate params 0.0)
          kernel-validation
@@ -212,7 +230,10 @@
                   :detection-rate         (:detection-rate aggregate-malice)
                   :l1-reversal-rate       (:p-l1-reversal decayed-params)
                   :l2-reversal-rate       (:p-l2-reversal decayed-params)
-                  :routing-mode           (router/routing-mode trial-router)}
+                  :routing-mode           (router/routing-mode trial-router)
+                  :epoch-fees-collected  epoch-fees-collected
+                  :epoch-bond-loss       epoch-bond-loss
+                  :epoch-fraud-upside    epoch-fraud-upside}
            kernel-validation
            (assoc :kernel-validation kernel-validation))
 
@@ -345,7 +366,13 @@
                        :epochs          (cons epoch-summary (:epochs acc []))
                        :histories       updated-histories
                        :epoch-snapshots (conj (:epoch-snapshots acc []) epoch-snapshot)
-                       :next-id         (or next-resolver-id (:next-id acc n-resolvers)))))
+                       :next-id         (or next-resolver-id (:next-id acc n-resolvers))
+                       :total-fees-collected (+ (:total-fees-collected acc 0)
+                                                (:epoch-fees-collected epoch-summary 0))
+                       :total-bond-loss      (+ (:total-bond-loss acc 0)
+                                                (:epoch-bond-loss epoch-summary 0))
+                       :total-fraud-upside   (+ (:total-fraud-upside acc 0)
+                                                (:epoch-fraud-upside epoch-summary 0)))))
             {:rng rng :epochs [] :histories initial-histories :epoch-snapshots []
              :next-id n-resolvers}
             (range 1 (inc n-epochs)))
@@ -362,16 +389,26 @@
                  m-profits (map #(rep/cumulative-profit (val %)) malice-rs)
                  h-wr      (map #(rep/win-rate (val %)) honest-rs)
                  m-wr      (map #(rep/win-rate (val %)) malice-rs)
-                 exits     (count (clojure.set/difference
-                                   (set (keys initial-histories))
-                                   (set (keys final-histories))))
-                ;; Sum slashed-exits and natural-exits across all epoch-results
+                 exited-ids (clojure.set/difference
+                             (set (keys initial-histories))
+                             (set (keys final-histories)))
+                 exits     (count exited-ids)
+                 exited-init-strats (keep #(-> initial-histories (get %) :strategy) exited-ids)
+                 honest-exits    (count (filter #(= :honest %) exited-init-strats))
+                 lazy-exits      (count (filter #(= :lazy %) exited-init-strats))
+                 malicious-exits (count (filter #(= :malicious %) exited-init-strats))
+                 collusive-exits (count (filter #(= :collusive %) exited-init-strats))
+                 ;; Sum slashed-exits and natural-exits across all epoch-results
                  total-slashed-exits (reduce #(+ %1 (:slashed-exits %2 0)) 0 epoch-results)
                  total-natural-exits (reduce #(+ %1 (:natural-exits %2 0)) 0 epoch-results)]
              {:final-resolver-count       (count final-histories)
               :total-resolver-exits       exits
               :total-slashed-exits        total-slashed-exits
               :total-natural-exits        total-natural-exits
+              :honest-exit-count          honest-exits
+              :lazy-exit-count            lazy-exits
+              :malicious-exit-count       malicious-exits
+              :collusive-exit-count       collusive-exits
               :honest-final-count         (count honest-rs)
               :malice-final-count         (count malice-rs)
               :honest-cumulative-profit   (if (seq h-profits) (double (apply + h-profits)) 0.0)
@@ -381,9 +418,12 @@
               :honest-exit-rate           (double (/ exits (max 1 n-resolvers)))
               :malice-survival-rate       (double (/ (count malice-rs)
                                                      (max 1 (count (filter #(not= :honest (:strategy (val %)))
-                                                                           initial-histories)))))})
+                                                                           initial-histories)))))
+              :flow-total-fees-collected  (get result-accumulator :total-fees-collected 0)
+              :flow-total-bond-loss       (get result-accumulator :total-bond-loss 0)
+              :flow-total-fraud-upside    (get result-accumulator :total-fraud-upside 0)})
 
-          ;; Legacy equity-only trajectories (backward compat)
+;; Legacy equity-only trajectories (backward compat)
            profit-snapshots (mapv (fn [s] (reduce-kv (fn [m id v] (assoc m id (:profit v))) {} s))
                                   epoch-snapshots)
            equity-trajectories          (trajectory/build-equity-trajectories profit-snapshots resolver-ids)
@@ -399,13 +439,21 @@
             :initial-resolver-count n-resolvers
             :initial-strategy-mix   strategy-mix
             :initial-composition
-            {:honest-count    (count (filter #(= :honest (:strategy (val %))) initial-histories))
-             :malice-count    (count (filter #(not= :honest (:strategy (val %))) initial-histories))
-             :total-count     (count initial-histories)
-             :honest-share    (let [n (double (max 1 (count initial-histories)))]
-                                (/ (count (filter #(= :honest (:strategy (val %))) initial-histories)) n))
-             :malice-share    (let [n (double (max 1 (count initial-histories)))]
-                                (/ (count (filter #(not= :honest (:strategy (val %))) initial-histories)) n))}
+            (let [h-count (count (filter #(= :honest     (:strategy (val %))) initial-histories))
+                  l-count (count (filter #(= :lazy      (:strategy (val %))) initial-histories))
+                  mx-count (count (filter #(= :malicious (:strategy (val %))) initial-histories))
+                  c-count (count (filter #(= :collusive (:strategy (val %))) initial-histories))
+                  m-count (+ l-count mx-count c-count)
+                  t-count (count initial-histories)
+                  n       (double (max 1 t-count))]
+              {:honest-count    h-count
+               :lazy-count      l-count
+               :malicious-count mx-count
+               :collusive-count c-count
+               :malice-count    m-count
+               :total-count     t-count
+               :honest-share    (/ h-count n)
+               :malice-share    (/ m-count n)})
             :epoch-results          (or epoch-results [])
             :resolver-histories     final-histories
             :aggregated-stats       final-stats

@@ -74,8 +74,8 @@
   (println (str "  Ref:   " (get-in r [:task :ref])))
   (println (str "  Type:  " (name (get-in r [:task :type]))))
   (println (str "  Title: " (get-in r [:task :title])))
-  (println (str "  Benchmark: " (get-in r [:task :benchmark/id])))
-  (println (str "  Suite: " (get-in r [:task :suite/id])))
+  (println (str "  Benchmark: " (or (get-in r [:task :benchmark/id]) "(not specified)")))
+  (println (str "  Suite: " (or (get-in r [:task :suite/id]) "(not specified)")))
   (println)
   (let [orig (:original-run r)]
     (when orig

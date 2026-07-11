@@ -9,7 +9,8 @@
 (def ^:const domain-tag "COMMUNITY_MAILBOX_V0")
 
 (def ^:const message-types
-  #{:TASK_ANNOUNCEMENT :RUNNER_RESULT :REPRODUCTION_RESULT
+  #{:TASK_ANNOUNCEMENT :RUNNER_RESULT
+    :REPRODUCTION_RESULT   ;; reserved for two-step reproduction workflow
     :CHALLENGE :AGREEMENT :DISAGREEMENT})
 
 (def ^:const supported-statuses
@@ -116,6 +117,7 @@
   (filter #(= task-ref (:subject-task %)) (list-messages)))
 
 (defn task-status
+  "Derive task status from mailbox message types only (fast, no verification)."
   [task-ref]
   (let [msgs (messages-for-task task-ref)
         types (set (map :message/type msgs))]
@@ -123,6 +125,45 @@
       (contains? types :CHALLENGE) :challenged
       (contains? types :DISAGREEMENT) :disagreed
       (contains? types :AGREEMENT) :agreed
+      (contains? types :REPRODUCTION_RESULT) :reproduced
+      (contains? types :RUNNER_RESULT) :executed
+      (contains? types :TASK_ANNOUNCEMENT) :announced
+      :else :unknown)))
+
+(defn verified-task-status
+  "Derive task status from verified attestations (slower, checks integrity).
+   Requires artifact-dir to resolve attestations from disk.
+   Returns :agreed or :disagreed only when the underlying attestations
+   pass valid-attestation? (hash integrity + predicate-specific field validation)."
+  [task-ref artifact-dir]
+  (let [msgs (messages-for-task task-ref)
+        types (set (map :message/type msgs))
+        resolve-att (fn [ref]
+                      (when ref
+                        (try (edn/read-string
+                              (slurp (str artifact-dir "/community-attestations/"
+                                          "att-" (subs (if (.startsWith ref "attestation:sha256:")
+                                                         (subs ref (count "attestation:sha256:"))
+                                                         ref)
+                                                       0 12) ".edn")))
+                             (catch Exception _ nil))))]
+    (cond
+      (contains? types :CHALLENGE) :challenged
+      (contains? types :DISAGREEMENT)
+      (let [msg (first (filter #(= :DISAGREEMENT (:message/type %)) msgs))
+            att (resolve-att (:attestation-ref msg))]
+        (if (and att (requiring-resolve 'resolver-sim.community.attestation/valid-attestation?))
+          :disagreed
+          :inconclusive))
+      (contains? types :AGREEMENT)
+      (let [msg (first (filter #(= :AGREEMENT (:message/type %)) msgs))
+            run-msg (first (filter #(= :RUNNER_RESULT (:message/type %)) msgs))
+            run-att (resolve-att (:attestation-ref run-msg))
+            repro-att (resolve-att (:attestation-ref msg))
+            att-valid? (fn [a] (and a ((requiring-resolve 'resolver-sim.community.attestation/valid-attestation?) a)))]
+        (if (and (att-valid? run-att) (att-valid? repro-att))
+          :agreed
+          :inconclusive))
       (contains? types :REPRODUCTION_RESULT) :reproduced
       (contains? types :RUNNER_RESULT) :executed
       (contains? types :TASK_ANNOUNCEMENT) :announced

@@ -30,6 +30,8 @@ they do not count as evaluated coverage without a runnable claim evaluator.
 
 Start with the [benchmark showcase](benchmarks/README.md#public-showcase) for
 the capability matrix, lifecycle definitions, and evidence-inspection path.
+The recorded yield-shortfall run currently has 15/15 passing scenarios; its
+independent CLI verification is pending an unrelated execution-registry repair.
 
 ## Repository map
 

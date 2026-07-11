@@ -87,6 +87,8 @@
 
     {:profit-honest      (:profit-honest h)
      :profit-malice      (:profit-malice m)
+     :bond-loss          (:bond-loss m 0)
+     :fraud-upside       (:fraud-upside m 0)
      :slashed?           (:slashed? m)
      :slashing-reason    (:slashing-reason m)
      :dispute-correct?   (:dispute-correct? h true)

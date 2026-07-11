@@ -52,10 +52,10 @@
                     :total-shortfall-basis    total-shortfall-basis
                     :total-shortfall-filled   total-shortfall-filled
                     :total-shortfall-deferred total-shortfall-deferred
-                     :total-shortfall-haircut  total-shortfall-haircut
-                     :redistribution-total-passes redistribution-total-passes
-                     :redistribution-iteration-limit-hit? redistribution-iteration-limit-hit?
-                     :redistribution-negative-allocations redistribution-negative-allocations}
+                    :total-shortfall-haircut  total-shortfall-haircut
+                    :redistribution-total-passes redistribution-total-passes
+                    :redistribution-iteration-limit-hit? redistribution-iteration-limit-hit?
+                    :redistribution-negative-allocations redistribution-negative-allocations}
    :trace-summary  {:halt-reason   halt-reason
                     :events-count  2
                     :actors        ["buyer" "seller"]

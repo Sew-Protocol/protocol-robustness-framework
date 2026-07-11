@@ -10,8 +10,8 @@ demonstrated only when an active benchmark executes its registered evaluator.
 
 | Capability | Concept | Claims | Evaluator | Active benchmark | Status |
 |---|---|---|---|---|---|
-| Sew-backed deterministic replay | evidence integrity | identical results, canonical hash consistency, no nondeterminism | benchmark consistency evaluators | `:benchmark/prf-deterministic-replay-v1` | Demonstrated for the included Sew workload only |
-| Sew yield shortfall handling | shortfall, partial fill, pro-rata fairness | preservation, fairness, cap, and leakage | named Sew invariants | `:benchmark/sew-yield-shortfall-v1` | Demonstrated for its 15-scenario workload |
+| Sew yield shortfall handling | shortfall, partial fill, pro-rata fairness | preservation, fairness, cap, and leakage | named Sew invariants | `:benchmark/sew-yield-shortfall-v1` | Primary showcase: demonstrated for its 15-scenario workload |
+| Sew-backed deterministic replay | evidence integrity | identical results, canonical hash consistency, no nondeterminism | benchmark consistency evaluators | `:benchmark/prf-deterministic-replay-v1` | Secondary showcase for the included Sew workload only |
 | Escrow dispute and slashing invariants | authority, liveness, conservation | named safety and liveness claims | named Sew invariants | Sew active benchmarks | Demonstrated within named suites |
 | Broad protocol robustness | accountability, adversarial liveness, fund safety | deferred semantic claims | none | none | Experimental research profile |
 | PRF shortfall assurance profile | allocation completeness and conservation | deferred scenario claims | none | none | Experimental, not semantic assurance |
@@ -20,14 +20,32 @@ demonstrated only when an active benchmark executes its registered evaluator.
 ### First Run
 
 ```bash
-bb benchmark:run :benchmark/prf-deterministic-replay-v1 -o results/sew-replay-showcase.edn
-bb benchmark:verify results/sew-replay-showcase.edn
-bb benchmark:share-summary results/sew-replay-showcase.edn
+bb benchmark:run --non-interactive :benchmark/sew-yield-shortfall-v1 -o results/sew-yield-shortfall-showcase.edn
+bb benchmark:verify results/sew-yield-shortfall-showcase.edn
+bb benchmark:share-summary results/sew-yield-shortfall-showcase.edn
 ```
 
 The evidence bundle contains scenario results, claim outcomes, configuration,
 derived concept coverage, and an evidence hash. This result demonstrates only
-the declared Sew-backed workload and runner configuration.
+the declared 15-scenario Sew yield-shortfall workload and runner configuration.
+
+### Recorded Showcase Result
+
+The current completed local bundle is `results/evidence/latest.edn`:
+
+| Field | Value |
+|---|---|
+| Benchmark | `:benchmark/sew-yield-shortfall-v1` |
+| Scenario results | 15 / 15 passed |
+| Evaluated claim results | 45 passed |
+| Not exercised | 15 scenario-level checks whose invariant path did not occur in that workload execution |
+| Evidence hash | `e0e7b00b171104a632d78febdc80a80f5d5050bc817d274e2d1bb3c0e94f1b6f` |
+
+`bb benchmark:verify` and `bb benchmark:share-summary` are currently blocked
+before bundle processing by an execution-registry validation error:
+`:execution/community-benchmark` names the unregistered runner
+`:runner/local-clojure`. This is a repository startup-registry issue, not a
+claim that the recorded bundle has passed independent verification.
 
 ### Hierarchy
 

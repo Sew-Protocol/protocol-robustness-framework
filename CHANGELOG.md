@@ -32,6 +32,8 @@
 
 - **Public benchmark framing:** The root README and benchmark guide now distinguish demonstrated workload-specific claims from experimental profiles, concepts, and research tooling. (`README.md`, `benchmarks/README.md`)
 
+- **Yield-shortfall showcase path:** Added a non-interactive benchmark-run option and documented the recorded 15/15 Sew yield-shortfall bundle, including its evidence hash and the currently blocking execution-registry verification issue. (`src/resolver_sim/benchmark/cli.clj`, `benchmarks/README.md`)
+
 ### Added (2026-07-10)
 
 - **Evidence commitment root node:** Replaced `:evidence/chain-root` with `:evidence/commitment-root` — a proper post-hoc DAG anchor that references the execution node via `parent-hashes`, the evidence chain cursor via `bootstrap-roots`, and the bundle root hash via `outputs`. Uses typed references (`sha256:<hash>`, `evidence-chain:sha256:<hash>`). Preserves the distinction between commitment construction status (`:result :status`) and underlying execution status (`:outputs :execution/status`). (`src/resolver_sim/io/scenario_runner.clj:980-997`, `src/resolver_sim/definitions/passive_registries.clj:544-551`, `src/resolver_sim/evidence/node.clj:554-556`)

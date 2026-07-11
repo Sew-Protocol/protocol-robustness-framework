@@ -126,19 +126,19 @@
   (let [positions (vals (:yield/positions world {}))
         by-key (group-by (fn [p] [(:module/id p) (:token p)]) positions)
         violations (into []
-                        (keep (fn [[[mid tok] pos-group]]
-                                (let [total-basis (reduce + 0 (map (comp (fn [v] (long (or v 0))) :basis-amount :shortfall) pos-group))
-                                      total-value (reduce + 0 (map (fn [p]
+                         (keep (fn [[[mid tok] pos-group]]
+                                 (let [total-basis (reduce + 0 (map (comp (fn [v] (long (or v 0))) :basis-amount :shortfall) pos-group))
+                                       total-value (reduce + 0 (map (fn [p]
                                                                       (+ (long (:principal p 0))
                                                                          (long (:realized-yield p 0))
                                                                          (max 0 (long (:unrealized-yield p 0)))))
                                                                     pos-group))]
-                                  (when (> total-basis total-value)
-                                    {:module-id mid :token tok
-                                     :total-basis total-basis
-                                     :total-value total-value
-                                     :imbalance (- total-basis total-value)}))))
-                        by-key)]
+                                   (when (> total-basis total-value)
+                                     {:module-id mid :token tok
+                                      :total-basis total-basis
+                                      :total-value total-value
+                                      :imbalance (- total-basis total-value)}))))
+                         by-key)]
     {:holds? (empty? violations)
      :violations (vec violations)}))
 

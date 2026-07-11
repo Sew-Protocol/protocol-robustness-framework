@@ -111,7 +111,7 @@
                                          :principal 1000 :realized-yield 0 :unrealized-yield 0
                                          :shortfall {:basis-amount 600 :fulfilled-amount 400
                                                      :deferred-amount 200 :haircut-amount 0}}
-                                    "u2" {:module/id :m :token :t :status :unwinding
+                                   "u2" {:module/id :m :token :t :status :unwinding
                                          :principal 2000 :realized-yield 0 :unrealized-yield 0
                                          :shortfall {:basis-amount 800 :fulfilled-amount 600
                                                      :deferred-amount 200 :haircut-amount 0}}}}]
@@ -123,7 +123,7 @@
                                          :principal 100 :realized-yield 0 :unrealized-yield 0
                                          :shortfall {:basis-amount 600 :fulfilled-amount 400
                                                      :deferred-amount 200 :haircut-amount 0}}
-                                    "u2" {:module/id :m :token :t :status :unwinding
+                                   "u2" {:module/id :m :token :t :status :unwinding
                                          :principal 200 :realized-yield 0 :unrealized-yield 0
                                          :shortfall {:basis-amount 800 :fulfilled-amount 600
                                                      :deferred-amount 200 :haircut-amount 0}}}}]
@@ -140,7 +140,7 @@
                                          :principal 1000 :realized-yield 0 :unrealized-yield 0
                                          :shortfall {:basis-amount 600 :fulfilled-amount 400
                                                      :deferred-amount 200 :haircut-amount 0}}
-                                    "u2" {:module/id :m2 :token :t2 :status :unwinding
+                                   "u2" {:module/id :m2 :token :t2 :status :unwinding
                                          :principal 2000 :realized-yield 0 :unrealized-yield 0
                                          :shortfall {:basis-amount 500 :fulfilled-amount 400
                                                      :deferred-amount 100 :haircut-amount 0}}}}]
