@@ -27,23 +27,30 @@
         report-msgs (map message-summary (vec (or messages [])))]
     {:schema-version schema-version
      :report/generated-at (str (java.time.Instant/now))
-     :task {:id (:task/hash task) :ref (:task/ref task)
-            :type (:task/type task) :title (:title task)
-            :benchmark/id (:benchmark/id task) :suite/id (:suite/id task)
-            :claim-ids (:claim-ids task) :acceptance-criteria (:acceptance-criteria task)}
-     :original-run (when (seq execution-ats)
-                     (let [a (first execution-ats)]
-                       {:runner (get-in a [:assertion :runner/id])
-                        :execution-hash (get-in a [:assertion :execution-node-hash])
-                        :attestation-hash (:attestation/hash a)
-                        :attestation-verified (some? (:attestation/signature a))}))
-     :reproduction-run (when (seq reproduction-ats)
-                         (let [a (first reproduction-ats)]
-                           {:runner (get-in a [:assertion :runner/id])
-                            :comparison-status (get-in a [:assertion :comparison-status])
-                            :original-attestation (get-in a [:assertion :original-attestation-ref])
-                            :attestation-hash (:attestation/hash a)
-                            :attestation-verified (some? (:attestation/signature a))}))
+      :task {:id (:task/hash task) :ref (:task/ref task)
+             :type (:task/type task) :title (:title task)
+             :benchmark/id (:benchmark/id task) :suite/id (:suite/id task)
+             :claim-ids (:claim-ids task) :acceptance-criteria (:acceptance-criteria task)
+             :registry-snapshot/hash (:registry-snapshot/hash task)}
+      :original-run (when (seq execution-ats)
+                      (let [a (first execution-ats)]
+                        {:runner (get-in a [:assertion :runner/id])
+                         :execution-hash (get-in a [:assertion :execution-node-hash])
+                         :bundle-root (get-in a [:assertion :bundle-root])
+                         :result-projection (get-in a [:assertion :result-projection-hash])
+                         :attestation-hash (:attestation/hash a)
+                         :attestation-ref (:attestation/ref a)
+                         :attestation-verified (some? (:attestation/signature a))}))
+      :reproduction-run (when (seq reproduction-ats)
+                          (let [a (first reproduction-ats)]
+                            {:runner (get-in a [:assertion :runner/id])
+                             :comparison-status (get-in a [:assertion :comparison-status])
+                             :original-attestation (get-in a [:assertion :original-attestation-ref])
+                             :original-result-projection (get-in a [:assertion :original-result-projection-hash])
+                             :reproduction-result-projection (get-in a [:assertion :reproduction-result-projection-hash])
+                             :attestation-hash (:attestation/hash a)
+                             :attestation-ref (:attestation/ref a)
+                             :attestation-verified (some? (:attestation/signature a))}))
      :challenges (mapv (fn [a]
                          {:attestation/hash (:attestation/hash a)
                           :predicate (:attestation/predicate a)
@@ -76,22 +83,37 @@
   (println (str "  Title: " (get-in r [:task :title])))
   (println (str "  Benchmark: " (or (get-in r [:task :benchmark/id]) "(not specified)")))
   (println (str "  Suite: " (or (get-in r [:task :suite/id]) "(not specified)")))
+  (println (str "  Registry snapshot: " (or (get-in r [:task :registry-snapshot/hash]) "(not recorded)")))
+  (let [claims (get-in r [:task :claim-ids])]
+    (when (seq claims)
+      (println (str "  Claims evaluated: " (pr-str claims)))))
+  (let [criteria (get-in r [:task :acceptance-criteria])]
+    (when (seq criteria)
+      (println "  Acceptance criteria:")
+      (doseq [c criteria]
+        (println (str "    - " c)))))
   (println)
   (let [orig (:original-run r)]
     (when orig
       (println "Original Execution:")
-      (println (str "  Runner:   " (:runner orig)))
-      (println (str "  Evidence: " (:execution-hash orig)))
-      (println (str "  Attestation: " (:attestation-hash orig)))
-      (println (str "  Signature: " (if (:attestation-verified orig) "verified" "unsigned")))))
+      (println (str "  Runner:         " (:runner orig)))
+      (println (str "  Evidence root:  " (:execution-hash orig)))
+      (println (str "  Bundle root:    " (:bundle-root orig)))
+      (println (str "  Result proj.:   " (:result-projection orig)))
+      (println (str "  Attestation:    " (:attestation-hash orig)))
+      (println (str "  Attestation ref: " (:attestation-ref orig)))
+      (println (str "  Signature:      " (if (:attestation-verified orig) "verified" "unsigned")))))
   (println)
   (let [rep (:reproduction-run r)]
     (when rep
       (println "Reproduction:")
-      (println (str "  Runner:      " (:runner rep)))
-      (println (str "  Comparison:  " (name (:comparison-status rep))))
-      (println (str "  Attestation: " (:attestation-hash rep)))
-      (println (str "  Signature:   " (if (:attestation-verified rep) "verified" "unsigned")))))
+      (println (str "  Runner:              " (:runner rep)))
+      (println (str "  Comparison:          " (name (:comparison-status rep))))
+      (println (str "  Original proj.:      " (:original-result-projection rep)))
+      (println (str "  Reproduction proj.:  " (:reproduction-result-projection rep)))
+      (println (str "  Attestation:         " (:attestation-hash rep)))
+      (println (str "  Attestation ref:     " (:attestation-ref rep)))
+      (println (str "  Signature:           " (if (:attestation-verified rep) "verified" "unsigned")))))
   (println)
   (let [challenges (:challenges r)]
     (when (seq challenges)

@@ -14,6 +14,8 @@
             [resolver-sim.hash.canonical :as hc]
             [resolver-sim.vcs :as vcs]))
 
+(declare compute-code-hash compute-env-hash compute-registry-hash)
+
 (def ^:const default-mailbox-dir
   (str (System/getProperty "user.home") "/.protocol-robustness/community-mailbox"))
 
@@ -31,6 +33,7 @@
    ["-b" "--benchmark-id ID" "Benchmark ID (e.g. :benchmark/prf-deterministic-replay-v1)"]
    ["-n" "--title TITLE" "Task title"]
    ["-s" "--suite-id ID" "Suite ID (e.g. :suite/prf-replay-v1)"]
+   [nil "--claim-ids CLAIMS" "Comma-separated claim IDs (e.g. :claim/no-nondeterminism,:claim/replay-identical-results)"]
    [nil "--allow-dirty" "Allow dirty git working copy during execution"]])
 
 (defn list-tasks
@@ -75,49 +78,99 @@
   (let [title (:title opts)
         benchmark-id (:benchmark-id opts)
         suite-id (:suite-id opts)
+        claim-ids-str (:claim-ids opts)
+        registry-hash (compute-registry-hash)
         mailbox-dir (or (:mailbox-dir opts) default-mailbox-dir)]
     (if-not title
-      (do (println "Usage: --title <title> [--benchmark-id <id> --suite-id <id>]")
+      (do (println "Usage: --title <title> [--benchmark-id <id> --suite-id <id> --claim-ids <ids>]")
           {:exit-code 1})
       (binding [mailbox/*mailbox-dir* mailbox-dir]
         (let [parse-kw (fn [s] (when s (keyword (str/replace s #"^:" ""))))
+              claim-ids (vec (keep parse-kw (when claim-ids-str (str/split claim-ids-str #","))))
               t (task/build-task
                  {:title title
                   :task/type :benchmark-execution
                   :benchmark/id (parse-kw benchmark-id)
                   :suite/id (parse-kw suite-id)
-                  :claim-ids []
-                  :acceptance-criteria []})
+                  :claim-ids claim-ids
+                  :acceptance-criteria []
+                  :registry-snapshot/hash registry-hash})
               msg (mailbox/build-message
                    {:message/type :TASK_ANNOUNCEMENT
                     :subject-task (:task/ref t)
                     :sender "community-registrar"
-                    :body {:title title
-                           :benchmark/id (parse-kw benchmark-id)
-                           :suite/id (parse-kw suite-id)}})]
+                     :body {:title title
+                            :benchmark/id (parse-kw benchmark-id)
+                            :suite/id (parse-kw suite-id)
+                            :claim-ids claim-ids
+                            :registry-snapshot/hash registry-hash}})]
           (mailbox/publish! msg)
           (println (str "Task registered: " (:task/ref t)))
           (println (str "Title: " title))
           (when benchmark-id
             (println (str "Benchmark: " benchmark-id)))
+          (when (seq claim-ids)
+            (println (str "Claims: " (pr-str claim-ids))))
           (println)
           (println "To execute this task:")
           (println (str "  bb community:run --task " (:task/ref t) " --runner <id> --key <key>"))
           {:exit-code 0 :task t :message msg})))))
 
 (defn- compute-code-hash
-  "Return the current git commit hash as the code identity."
+  "Return code identity: git commit hash with dirty-state marker.
+   Returns {:code-hash hex :code-source kw :worktree-status kw :diff-hash hex-or-nil}
+   When the worktree is dirty, includes a diff hash to distinguish materially
+   different code states that share the same commit."
   []
-  (try (:source/hash (vcs/source-provenance))
-       (catch Exception _ "0000000000000000000000000000000000000000000000000000000000000000")))
+  (try (let [src (vcs/source-provenance)
+             commit-hash (or (:source/hash src) "0000000000000000000000000000000000000000000000000000000000000000")
+             dirty? (:dirty? src)]
+         (if dirty?
+           (let [diff-hash (or (try (vcs/dirty-diff-hash)
+                                   (catch Exception _ nil))
+                               "0000000000000000000000000000000000000000000000000000000000000000")
+                 combined (hc/domain-hash "COMMUNITY_CODE_V0"
+                           {:git-commit commit-hash
+                            :worktree-status :dirty
+                            :diff-hash diff-hash})]
+             {:code-hash combined
+              :code-source :git-commit-plus-diff
+              :worktree-status :dirty
+              :diff-hash diff-hash})
+           {:code-hash commit-hash
+            :code-source :git-commit
+            :worktree-status :clean
+            :diff-hash nil}))
+       (catch Exception _
+         {:code-hash "0000000000000000000000000000000000000000000000000000000000000000"
+          :code-source :unknown
+          :worktree-status :unknown
+          :diff-hash nil})))
 
 (defn- compute-env-hash
-  "Fingerprint the execution environment (JVM, language version)."
+  "Fingerprint the execution environment.
+   Covers execution-affecting environment: language runtime, OS, architecture,
+   and runner implementation. Does NOT include hardware-specific identifiers.
+   
+   Fields:
+   - clojure-version     — Clojure language version
+   - java-version        — Java runtime version (e.g. \"17.0.1\")
+   - java-vendor         — Java runtime vendor (e.g. \"Eclipse Adoptium\")
+   - java-vm-name        — JVM implementation name
+   - os-name             — Operating system name
+   - os-arch             — System architecture (e.g. \"amd64\")
+   - os-version          — Operating system version
+   - runner-type         — Always :community-cli for this runner"
   []
   (hc/domain-hash "COMMUNITY_ENV_V0"
     {:clojure-version (or (try (clojure-version) (catch Exception _ "unknown")) "unknown")
      :java-version (or (System/getProperty "java.version") "unknown")
-     :java-vm-name (or (System/getProperty "java.vm.name") "unknown")}))
+     :java-vendor (or (System/getProperty "java.vendor") "unknown")
+     :java-vm-name (or (System/getProperty "java.vm.name") "unknown")
+     :os-name (or (System/getProperty "os.name") "unknown")
+     :os-arch (or (System/getProperty "os.arch") "unknown")
+     :os-version (or (System/getProperty "os.version") "unknown")
+     :runner-type :community-cli}))
 
 (defn- compute-registry-hash
   "Hash the current execution registry for snapshot binding."
@@ -160,9 +213,10 @@
           {:exit-code 1})
       (binding [mailbox/*mailbox-dir* mailbox-dir
                 chain/*allow-dirty* (:allow-dirty opts)]
-        (let [manifest-path (or (resolve-benchmark-manifest
-                                 (some-> (mailbox/find-message task-ref)
-                                         :body :benchmark/id))
+        (let [announce-msgs (filter #(= :TASK_ANNOUNCEMENT (:message/type %))
+                                    (mailbox/messages-for-task task-ref))
+              benchmark-id (get-in (first announce-msgs) [:body :benchmark/id])
+              manifest-path (or (resolve-benchmark-manifest benchmark-id)
                                 "benchmarks/packs/prf-core/deterministic-replay-v1.edn")
               _ (println (str "Manifest: " manifest-path))
               _ (println (str "Executing task: " task-ref))
@@ -176,25 +230,30 @@
                 {:exit-code 1})
             (let [passed? (= (get-in evidence [:metrics :passed])
                              (get-in evidence [:metrics :total]))
+                  bundle-root (:evidence/hash evidence)
                   proj (result/project-stable-result evidence)
                   stable-hash (:stable/hash proj)
                   stable-projection (:stable/projection proj)]
               (println (str "Task ref: " task-ref))
+              (println (str "Bundle root: " bundle-root))
               (println (str "Stable result hash: " stable-hash))
               (when-not passed?
                 (println (str "WARNING: Benchmark did not pass all scenarios ("
                               (get-in evidence [:metrics :passed]) "/"
                               (get-in evidence [:metrics :total]) ")")))
-              (let [code-hash (compute-code-hash)
+              (let [code-info (compute-code-hash)
                     env-hash (compute-env-hash)
                     registry-hash (compute-registry-hash)
                     ev-node-hash stable-hash
                     ev-node-ref (str "evidence-node:sha256:" ev-node-hash)
                     attestation (att/build-execution-attestation
                                  {:task/ref task-ref :runner/id runner-id
-                                  :code-hash code-hash
+                                  :code-hash (:code-hash code-info)
+                                  :code-provenance {:code-source (:code-source code-info)
+                                                    :worktree-status (:worktree-status code-info)
+                                                    :diff-hash (:diff-hash code-info)}
                                   :env-hash env-hash
-                                  :bundle-root stable-hash
+                                  :bundle-root bundle-root
                                   :execution-node-hash ev-node-ref
                                   :result-projection-hash stable-hash
                                   :registry-snapshot-hash registry-hash})
@@ -205,12 +264,18 @@
                           :sender runner-id
                           :attestation-ref (:attestation/ref signed)
                           :evidence-ref ev-node-ref
-                          :body {:result stable-hash :stable-projection stable-projection}})
+                          :body {:bundle-root bundle-root
+                                 :result-projection stable-hash
+                                 :stable-projection stable-projection}})
                     signed-msg (mailbox/sign-message! msg key-path)
                     pub-result (mailbox/publish! signed-msg)]
-                (println (str "Code hash: " code-hash))
+                (println (str "Code hash: " (:code-hash code-info)))
+                (println (str "  source: " (name (:code-source code-info))))
+                (println (str "  worktree: " (name (:worktree-status code-info))))
                 (println (str "Env hash: " env-hash))
                 (println (str "Registry snapshot: " registry-hash))
+                (println (str "Bundle root: " bundle-root))
+                (println (str "Stable result: " stable-hash))
                 (println (str "Evidence node: " ev-node-ref))
                 (println (str "Attestation: " (:attestation/ref signed)))
                 (println (str "Mailbox message: " (if (= :published pub-result) "published" "duplicate")))
@@ -231,9 +296,10 @@
                 chain/*allow-dirty* (:allow-dirty opts)]
         (let [original-att (att/resolve-attestation dir original-att-ref)
               _ (println (str "Reproducing task: " task-ref))
-              manifest-path (or (resolve-benchmark-manifest
-                                 (some-> (mailbox/find-message task-ref)
-                                         :body :benchmark/id))
+              announce-msgs (filter #(= :TASK_ANNOUNCEMENT (:message/type %))
+                                    (mailbox/messages-for-task task-ref))
+              benchmark-id (get-in (first announce-msgs) [:body :benchmark/id])
+              manifest-path (or (resolve-benchmark-manifest benchmark-id)
                                 "benchmarks/packs/prf-core/deterministic-replay-v1.edn")
               evidence (try
                          (runner/run-benchmark manifest-path)
@@ -253,7 +319,7 @@
               (println (str "Original stable hash: " claimed-stable-hash))
               (println (str "Reproduction stable hash: " repro-hash))
               (println (str "Comparison: " (name comp-status)))
-              (let [code-hash (compute-code-hash)
+              (let [code-info (compute-code-hash)
                     env-hash (compute-env-hash)
                     repro-ev-node-ref (str "evidence-node:sha256:" repro-hash)
                     attestation (att/build-reproduction-attestation
@@ -261,7 +327,10 @@
                                   :original-attestation-ref original-att-ref
                                   :original-result-projection-hash claimed-stable-hash
                                   :runner/id runner-id
-                                  :code-hash code-hash
+                                  :code-hash (:code-hash code-info)
+                                  :code-provenance {:code-source (:code-source code-info)
+                                                    :worktree-status (:worktree-status code-info)
+                                                    :diff-hash (:diff-hash code-info)}
                                   :env-hash env-hash
                                   :reproduction-execution-node-hash repro-ev-node-ref
                                   :reproduction-result-projection-hash repro-hash
@@ -305,10 +374,11 @@
               attestation-refs (keep :attestation-ref msgs)
               attestations (keep (fn [ref] (att/resolve-attestation dir ref)) attestation-refs)
               t (when task-body
-                  (task/build-task
-                   {:title (:title task-body)
-                    :benchmark/id (:benchmark/id task-body)
-                    :suite/id (:suite/id task-body)
+                   (task/build-task
+                    {:title (:title task-body)
+                     :benchmark/id (:benchmark/id task-body)
+                     :suite/id (:suite/id task-body)
+                     :claim-ids (:claim-ids task-body)
                      :task/type :benchmark-execution}))
               verified-status (mailbox/verified-task-status task-ref dir)
               status (mailbox/task-status task-ref)
@@ -326,8 +396,12 @@
             (do (pass! "task-integrity")
                 (println (str "  Title: " (:title task-body)))
                 (println (str "  Benchmark: " (or (:benchmark/id task-body) "(not specified)")))
-                (println (str "  Suite: " (or (:suite/id task-body) "(not specified)"))))
-            (fail! "task-integrity" "No task announcement found"))
+                (println (str "  Suite: " (or (:suite/id task-body) "(not specified)")))
+                (println (str "  Claims: " (or (pr-str (:claim-ids task-body)) "(none)"))))
+            (do (fail! "task-integrity" "No TASK_ANNOUNCEMENT message found for this ref")
+                (when (seq msgs)
+                  (println "  (messages exist but no announcement — the announcement")
+                  (println "   may have been deleted. Task metadata is unavailable.)"))))
           (println)
           ;; 2. Mailbox messages
           (doseq [m msgs]
@@ -360,9 +434,13 @@
             (doseq [ra repro-ats]
               (let [claimed-status (:comparison-status (:assertion ra))
                     original-ref (:original-attestation-ref (:assertion ra))
-                    orig (first (filter #(= (:attestation/ref %) original-ref) exec-ats))]
+                    orig (or (first (filter #(= (:attestation/ref %) original-ref) exec-ats))
+                             (att/resolve-attestation dir original-ref))]
                 (if orig
-                  (pass! "reproduction-original-resolved")
+                  (do (pass! "reproduction-original-resolved")
+                      (when (and (not (some #(= (:attestation/ref orig) %) (map :attestation/ref exec-ats)))
+                                 (att/valid-attestation? orig))
+                        (println (str "  Original attestation resolved from disk (no RUNNER_RESULT message)"))))
                   (fail! "reproduction-original-resolved" "Original attestation not found"))
                 (if (contains? #{:matched :semantically-matched :mismatched :inconclusive} claimed-status)
                   (pass! "reproduction-status-known")
@@ -408,7 +486,9 @@
                  :title (or (:title task-body) "Community Task")
                  :benchmark/id (:benchmark/id task-body)
                  :suite/id (:suite/id task-body)
-                 :claim-ids [] :acceptance-criteria []}
+                 :claim-ids (or (:claim-ids task-body) [])
+                 :registry-snapshot/hash (:registry-snapshot/hash task-body)
+                 :acceptance-criteria (:acceptance-criteria task-body)}
               r (report/build-report {:task t :attestations attestations :messages msgs})]
           (report/print-report r)
           (if (seq msgs)

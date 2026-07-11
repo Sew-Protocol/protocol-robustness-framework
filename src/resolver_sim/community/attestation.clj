@@ -79,7 +79,8 @@
                           :bundle-root (:bundle-root m)
                           :execution-node-hash exec-node-hash
                           :result-projection-hash result-proj}
-              :context {:registry-snapshot/hash (:registry-snapshot-hash m)}
+              :context {:registry-snapshot/hash (:registry-snapshot-hash m)
+                        :code-provenance (:code-provenance m)}
               :issued-at (or (:issued-at m) (str (java.time.Instant/now)))}
         hash (compute-hash body)]
     (assoc body :attestation/id hash :attestation/hash hash :attestation/ref (attestation-ref hash))))
@@ -113,7 +114,7 @@
                           :comparison-policy (:comparison-policy m)
                           :comparison-status comparison-status
                           :mismatch-artifact-refs (vec (or (:mismatch-artifact-refs m) []))}
-              :context {:registry-snapshot/hash nil}
+              :context {:registry-snapshot/hash nil :code-provenance (:code-provenance m)}
               :issued-at (or (:issued-at m) (str (java.time.Instant/now)))}
         hash (compute-hash body)]
     (assoc body :attestation/id hash :attestation/hash hash :attestation/ref (attestation-ref hash))))
@@ -133,7 +134,7 @@
                           :challenge-type (or (:challenge-type m) :evidence-unresolvable)
                           :reason (:reason m)
                           :challenge-evidence-refs (vec (or (:challenge-evidence-refs m) []))}
-              :context {:registry-snapshot/hash nil}
+              :context {:registry-snapshot/hash nil :code-provenance (:code-provenance m)}
               :issued-at (or (:issued-at m) (str (java.time.Instant/now)))}
         hash (compute-hash body)]
     (assoc body :attestation/id hash :attestation/hash hash :attestation/ref (attestation-ref hash))))

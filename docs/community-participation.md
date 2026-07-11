@@ -218,7 +218,7 @@ Additive record that never mutates the challenged result:
 |------|---------|
 | `TASK_ANNOUNCEMENT` | Register a new research task |
 | `RUNNER_RESULT` | Publish execution result |
-| `REPRODUCTION_RESULT` | Publish reproduction result |
+| `REPRODUCTION_RESULT` | Reserved for two-step reproduction workflow |
 | `CHALLENGE` | Challenge a result |
 | `AGREEMENT` | Agree with a result |
 | `DISAGREEMENT` | Disagree with a result |
