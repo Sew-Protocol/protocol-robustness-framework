@@ -4,7 +4,6 @@
     "resolver-fee-bps": 150,
     "appeal-window-duration": 60,
     "max-dispute-duration": 2592000,
-    "resolver-bond-bps": 0,
     "resolution-module": "0xkleros-proxy",
     "escalation-resolvers": {
       "0": "0xl0",

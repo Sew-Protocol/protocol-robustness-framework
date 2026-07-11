@@ -15,6 +15,7 @@
    "escalate_dispute"           :case/escalation-triggered
    "execute_pending_settlement" :case/pending-executed
    "release"                    :transfer/released
+   "partial_release"            :transfer/partially-released
    "sender_cancel"              :transfer/cancelled-sender
    "recipient_cancel"           :transfer/cancelled-recipient})
 

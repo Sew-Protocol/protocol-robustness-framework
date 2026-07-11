@@ -146,37 +146,38 @@
                          (runner/run-benchmark manifest-path)
                          (catch Exception e
                            (println "Execution failed:" (.getMessage e))
-                           nil))
-              passed? (when evidence
-                        (= (get-in evidence [:metrics :passed])
-                           (get-in evidence [:metrics :total])))
-              {:keys [stable/hash stable/projection]}
-              (if evidence
-                (result/project-stable-result evidence)
-                {:stable/hash nil :stable/projection nil})
-              _ (println (str "Stable result hash: " stable/hash))
-              _ (when-not passed?
-                  (println (str "WARNING: Benchmark did not pass all scenarios ("
-                                (get-in evidence [:metrics :passed]) "/"
-                                (get-in evidence [:metrics :total]) ")")))
-              attestation (att/build-execution-attestation
-                           {:task/ref task-ref :runner/id runner-id
-                            :bundle-root stable/hash
-                            :execution-node-hash (str "evidence-node:sha256:" (or stable/hash "none"))
-                            :result-projection-hash stable/hash})
-              signed (att/sign-attestation! attestation key-path)
-              _ (att/persist-attestation! signed dir)
-              msg (mailbox/build-message
-                   {:message/type :RUNNER_RESULT :subject-task task-ref
-                    :sender runner-id
-                    :attestation-ref (:attestation/ref signed)
-                    :evidence-ref (str "evidence-node:sha256:" stable/hash)
-                    :body {:result stable/hash :stable-projection stable/projection}})
-              signed-msg (mailbox/sign-message! msg key-path)
-              pub-result (mailbox/publish! signed-msg)]
-          (println (str "Attestation: " (:attestation/ref signed)))
-          (println (str "Mailbox message: " (if (= :published pub-result) "published" "duplicate")))
-          {:exit-code (if passed? 0 1) :attestation signed :message signed-msg})))))
+                           nil))]
+          (if-not evidence
+            (do (println "ERROR: Benchmark execution produced no evidence. Aborting.")
+                {:exit-code 1})
+            (let [passed? (= (get-in evidence [:metrics :passed])
+                             (get-in evidence [:metrics :total]))
+                  proj (result/project-stable-result evidence)
+                  stable-hash (:stable/hash proj)
+                  stable-projection (:stable/projection proj)]
+              (println (str "Stable result hash: " stable-hash))
+              (when-not passed?
+                (println (str "WARNING: Benchmark did not pass all scenarios ("
+                              (get-in evidence [:metrics :passed]) "/"
+                              (get-in evidence [:metrics :total]) ")")))
+              (let [attestation (att/build-execution-attestation
+                                 {:task/ref task-ref :runner/id runner-id
+                                  :bundle-root stable-hash
+                                  :execution-node-hash (str "evidence-node:sha256:" stable-hash)
+                                  :result-projection-hash stable-hash})
+                    signed (att/sign-attestation! attestation key-path)
+                    _ (att/persist-attestation! signed dir)
+                    msg (mailbox/build-message
+                         {:message/type :RUNNER_RESULT :subject-task task-ref
+                          :sender runner-id
+                          :attestation-ref (:attestation/ref signed)
+                          :evidence-ref (str "evidence-node:sha256:" stable-hash)
+                          :body {:result stable-hash :stable-projection stable-projection}})
+                    signed-msg (mailbox/sign-message! msg key-path)
+                    pub-result (mailbox/publish! signed-msg)]
+                (println (str "Attestation: " (:attestation/ref signed)))
+                (println (str "Mailbox message: " (if (= :published pub-result) "published" "duplicate")))
+                {:exit-code (if passed? 0 1) :attestation signed :message signed-msg}))))))))
 
 (defn reproduce-task
   [opts]
@@ -201,44 +202,45 @@
                          (runner/run-benchmark manifest-path)
                          (catch Exception e
                            (println "Reproduction failed:" (.getMessage e))
-                           nil))
-              passed? (when evidence
-                        (= (get-in evidence [:metrics :passed])
-                           (get-in evidence [:metrics :total])))
-              claimed-stable-hash (get-in original-att [:assertion :result-projection-hash])
-              {:keys [stable/hash]} (if evidence
-                                      (result/project-stable-result evidence)
-                                      {:stable/hash nil})
-              matched? (and evidence (= hash claimed-stable-hash))
-              comp-status (if matched? :matched :mismatched)
-              _ (println (str "Original stable hash: " claimed-stable-hash))
-              _ (println (str "Reproduction stable hash: " hash))
-              _ (println (str "Comparison: " (name comp-status)))
-              attestation (att/build-reproduction-attestation
-                           {:task/ref task-ref
-                            :original-attestation-ref original-att-ref
-                            :original-result-projection-hash claimed-stable-hash
-                            :runner/id runner-id
-                            :reproduction-execution-node-hash (str "evidence-node:sha256:" hash)
-                            :reproduction-result-projection-hash hash
-                            :comparison-policy :stable-projection-v0
-                            :comparison-status comp-status})
-              signed (att/sign-attestation! attestation key-path)
-              _ (att/persist-attestation! signed dir)
-              msg-type (if matched? :AGREEMENT :DISAGREEMENT)
-              msg (mailbox/build-message
-                   {:message/type msg-type :subject-task task-ref :sender runner-id
-                    :attestation-ref (:attestation/ref signed)
-                    :evidence-ref (str "evidence-node:sha256:" hash)
-                    :body {:comparison-status comp-status
-                           :comparison-policy :stable-projection-v0
-                           :original-projection claimed-stable-hash
-                           :reproduction-projection hash}})
-              signed-msg (mailbox/sign-message! msg key-path)
-              pub-result (mailbox/publish! signed-msg)]
-          (println (str "Attestation: " (:attestation/ref signed)))
-          (println (str "Mailbox message: " (if (= :published pub-result) "published" "duplicate")))
-          {:exit-code (if passed? 0 1) :attestation signed :message signed-msg})))))
+                           nil))]
+          (if-not evidence
+            (do (println "ERROR: Reproduction benchmark produced no evidence. Aborting.")
+                {:exit-code 1})
+            (let [passed? (= (get-in evidence [:metrics :passed])
+                             (get-in evidence [:metrics :total]))
+                  claimed-stable-hash (get-in original-att [:assertion :result-projection-hash])
+                  repro-proj (result/project-stable-result evidence)
+                  repro-hash (:stable/hash repro-proj)
+                  matched? (and claimed-stable-hash (= repro-hash claimed-stable-hash))
+                  comp-status (if matched? :matched :mismatched)]
+              (println (str "Original stable hash: " claimed-stable-hash))
+              (println (str "Reproduction stable hash: " repro-hash))
+              (println (str "Comparison: " (name comp-status)))
+              (let [attestation (att/build-reproduction-attestation
+                                 {:task/ref task-ref
+                                  :original-attestation-ref original-att-ref
+                                  :original-result-projection-hash claimed-stable-hash
+                                  :runner/id runner-id
+                                  :reproduction-execution-node-hash (str "evidence-node:sha256:" repro-hash)
+                                  :reproduction-result-projection-hash repro-hash
+                                  :comparison-policy :stable-projection-v0
+                                  :comparison-status comp-status})
+                    signed (att/sign-attestation! attestation key-path)
+                    _ (att/persist-attestation! signed dir)
+                    msg-type (if matched? :AGREEMENT :DISAGREEMENT)
+                    msg (mailbox/build-message
+                         {:message/type msg-type :subject-task task-ref :sender runner-id
+                          :attestation-ref (:attestation/ref signed)
+                          :evidence-ref (str "evidence-node:sha256:" repro-hash)
+                          :body {:comparison-status comp-status
+                                 :comparison-policy :stable-projection-v0
+                                 :original-projection claimed-stable-hash
+                                 :reproduction-projection repro-hash}})
+                    signed-msg (mailbox/sign-message! msg key-path)
+                    pub-result (mailbox/publish! signed-msg)]
+                (println (str "Attestation: " (:attestation/ref signed)))
+                (println (str "Mailbox message: " (if (= :published pub-result) "published" "duplicate")))
+                {:exit-code (if passed? 0 1) :attestation signed :message signed-msg}))))))))
 
 (defn verify-task
   [opts]

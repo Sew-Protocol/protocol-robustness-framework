@@ -32,21 +32,15 @@
   120000)
 
 (defn load-notebook [ns-sym]
-  (let [f (future
-            (try
-              (require ns-sym)
-              :loaded
-              (catch Exception e
-                (println "  ✗" ns-sym)
-                (println "    " (ex-message e))
-                :failed)))]
-    (let [result (deref f notebook-timeout-ms :timeout)]
-      (if (= :timeout result)
-        (do (future-cancel f)
-            (println "  ⏱" ns-sym "(timed out after" notebook-timeout-ms "ms)")
-            false)
-        (do (when (= :loaded result) (println "  ✓" ns-sym))
-            (= :loaded result))))))
+  (try
+    (require ns-sym)
+    (println "  ✓" ns-sym)
+    true
+    (catch Exception e
+      (println "  ✗" ns-sym)
+      (println "    " (ex-message e))
+      false)))
+
 
 ;; ── entry point ────────────────────────────────────────────────────────────────
 

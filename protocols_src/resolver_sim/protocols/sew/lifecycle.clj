@@ -128,7 +128,8 @@
   [world workflow-id direction & {:keys [authorization-provenance]}]
   (let [et        (t/get-transfer world workflow-id)
         token     (:token et)
-        amt       (:amount-after-fee et)
+        released-so-far (get-in world [:amount-released workflow-id] 0)
+        amt       (- (:amount-after-fee et) released-so-far)
         fot-bps   (get-in world [:token-fot-bps token] 0)
         net-amt   (- amt (t/compute-fee amt fot-bps))
         snap      (t/get-snapshot world workflow-id)
@@ -521,6 +522,81 @@
         (t/ok (finalize world workflow-id :released))))))
 
 ;; ---------------------------------------------------------------------------
+;; partial-release
+;;
+;; Mirrors: EscrowVault.partialRelease
+;;
+;; Guards:
+;;   1. workflow-id must exist
+;;   2. state must be :pending
+;;   3. amount must be positive
+;;   4. amount must not exceed remaining (amount-after-fee - already-released)
+;;   5. release-strategy-fn must be non-nil
+;;   6. strategy must return {:allowed? true}
+;;
+;; Accounting (matching EscrowVault.partialRelease):
+;;   - increments :amount-released[workflow-id]
+;;   - sub-held(token, amount)
+;;   - record-claimable(workflow-id, :to, amount)
+;;   - record-released(token, amount)
+;;   - if amount-released == amount-after-fee → transitions to :released
+;; ---------------------------------------------------------------------------
+
+(defn partial-release
+  "Release a portion of a :pending escrow to :to.
+
+   release-strategy-fn — (fn [world workflow-id caller]
+                           → {:allowed? bool :reason-code n})"
+  [world workflow-id caller amount release-strategy-fn]
+  (let [wf-id (t/normalize-workflow-id workflow-id)]
+    (cond
+      (not (t/valid-workflow-id? world wf-id))
+      (guard-fail :invalid-workflow-id :workflow-id wf-id)
+
+      (not= :pending (t/escrow-state world wf-id))
+      (guard-fail :transfer-not-pending
+                  :escrow-state (t/escrow-state world wf-id)
+                  :workflow-id wf-id)
+
+      (<= amount 0)
+      (guard-fail :amount-zero :workflow-id wf-id :amount amount)
+
+      (nil? release-strategy-fn)
+      (guard-fail :release-strategy-not-set :workflow-id wf-id)
+
+      :else
+      (let [et (t/get-transfer world wf-id)
+            afa (:amount-after-fee et)
+            released-so-far (get-in world [:amount-released wf-id] 0)
+            remaining (- afa released-so-far)]
+        (if (> amount remaining)
+          (guard-fail :amount-exceeds-balance
+                      :requested amount :available remaining
+                      :workflow-id wf-id)
+          (let [{:keys [allowed? reason-code]} (release-strategy-fn world wf-id caller)]
+            (if-not allowed?
+              (guard-fail (if (= 1 reason-code) :not-sender :release-not-allowed)
+                          :reason-code reason-code :workflow-id wf-id)
+              (let [new-released (+ released-so-far amount)]
+                (if (>= new-released afa)
+                  ;; Fully released — transition to :released
+                  (t/ok (-> world
+                            (assoc-in [:amount-released wf-id] new-released)
+                            (acct/sub-held (:token et) amount)
+                            (acct/record-claimable-v2 wf-id :settlement/principal (:to et) amount)
+                            (acct/record-released (:token et) amount)
+                            (sm/apply-transition! wf-id :released)
+                            (update-in [:escrow-transfers wf-id] assoc
+                                       :sender-status :none
+                                       :recipient-status :none)))
+                  ;; Partial — stay :pending
+                  (t/ok (-> world
+                            (assoc-in [:amount-released wf-id] new-released)
+                            (acct/sub-held (:token et) amount)
+                            (acct/record-claimable-v2 wf-id :settlement/principal (:to et) amount)
+                            (acct/record-released (:token et) amount))))))))))))
+
+;; ---------------------------------------------------------------------------
 ;; sender-cancel
 ;;
 ;; Mirrors: BaseEscrow.senderCancel
@@ -752,6 +828,11 @@
   "Monadic version of release."
   [workflow-id caller release-strategy-fn]
   (am/update-with-result release workflow-id caller release-strategy-fn))
+
+(defn partial-release-m
+  "Monadic version of partial-release."
+  [workflow-id caller amount release-strategy-fn]
+  (am/update-with-result partial-release workflow-id caller amount release-strategy-fn))
 
 (defn sender-cancel-m
   "Monadic version of sender-cancel."

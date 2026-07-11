@@ -1,8 +1,8 @@
 {:golden-schema-version "2.0",
- :suite-id :suites/dr3-critical,
+ :suite-id :suites/equivalence-escalation-boundaries,
  :trace-id "s48-max-escalation-exact-boundary",
  :final-state-hash
- "eee7e11605c22da2e8940a4f1cace4e5bc9ba41f72acac7dfb1ffdcca13f1d2d",
+ "41b128d70ff6d7adba73e48165807681164400da9d5a3de125b344fecb70c5b6",
  :metrics
  {:yield/escrow-unrealized 0,
   :yield/position-status nil,

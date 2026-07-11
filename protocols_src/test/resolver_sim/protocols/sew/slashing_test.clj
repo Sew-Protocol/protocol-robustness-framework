@@ -44,7 +44,9 @@
 
         (testing "Governance upholds appeal"
           (let [world-app (-> (res/appeal-slash world-prop workflow-id res) :world)
-                r-res (res/resolve-appeal world-app workflow-id gov true)
+                r-res (res/resolve-appeal world-app workflow-id gov true workflow-id
+                                          :authorization-provenance {:authorization/type :governance
+                                                                     :authorization/basis :test})
                 world-upheld (:world r-res)]
             (is (= :reversed (get-in world-upheld [:pending-fraud-slashes workflow-id :status])))))))))
 
@@ -80,7 +82,9 @@
                              :appeal-deadline 1100
                              :appeal-bond-held 0
                              :contest-deadline 0}))
-        r (res/resolve-appeal world 0 gov true slash-id)]
+        r (res/resolve-appeal world 0 gov true slash-id
+                              :authorization-provenance {:authorization/type :governance
+                                                         :authorization/basis :test})]
     (is (true? (:ok r)))
     (is (= :reversed (get-in (:world r) [:pending-fraud-slashes slash-id :status])))))
 
@@ -305,7 +309,10 @@
         (world-ready-for-fraud-slash-propose world0 buyer "USDC" seller resolver-addr 1000 snap)
         world1 (-> (res/propose-fraud-slash world workflow-id gov resolver-addr 100) :world)
         world2 (-> (res/appeal-slash world1 workflow-id resolver-addr) :world)
-        world3 (-> (res/resolve-appeal world2 workflow-id gov true) :world)]
+        world3 (-> (res/resolve-appeal world2 workflow-id gov true workflow-id
+                                       :authorization-provenance {:authorization/type :governance
+                                                                  :authorization/basis :test})
+                   :world)]
     (is (= 75 (get-in world2 [:pending-fraud-slashes workflow-id :appeal-bond-held])))
     (is (= :reversed (get-in world3 [:pending-fraud-slashes workflow-id :status])))
     (is (= 0 (get-in world3 [:pending-fraud-slashes workflow-id :appeal-bond-held])))
@@ -328,7 +335,10 @@
         ;; Appeal is opened and bond is held before governance resolves it
         world2 (-> (res/appeal-slash world1 workflow-id resolver-addr) :world)
         ;; Governance rejects the appeal → slash deferred as :pending
-        world3 (-> (res/resolve-appeal world2 workflow-id gov false) :world)
+        world3 (-> (res/resolve-appeal world2 workflow-id gov false workflow-id
+                                       :authorization-provenance {:authorization/type :governance
+                                                                  :authorization/basis :test})
+                   :world)
         ;; Advance time past appeal deadline and execute
         deadline (get-in world3 [:pending-fraud-slashes workflow-id :appeal-deadline] 0)
         world3-timed (time-ctx/advance-time world3 {:to (inc deadline)})
@@ -397,8 +407,13 @@
           (world-ready-for-fraud-slash-propose world0 buyer "USDC" seller resolver-addr 1000 snap)
           world1 (-> (res/propose-fraud-slash world workflow-id gov resolver-addr 100) :world)
           world2 (-> (res/appeal-slash world1 workflow-id resolver-addr) :world)
-          world3 (-> (res/resolve-appeal world2 workflow-id gov false) :world)
-          r-second (res/resolve-appeal world3 workflow-id gov false)]
+          world3 (-> (res/resolve-appeal world2 workflow-id gov false workflow-id
+                                         :authorization-provenance {:authorization/type :governance
+                                                                    :authorization/basis :test})
+                     :world)
+          r-second (res/resolve-appeal world3 workflow-id gov false workflow-id
+                                       :authorization-provenance {:authorization/type :governance
+                                                                  :authorization/basis :test})]
       (is (= :pending (get-in world3 [:pending-fraud-slashes workflow-id :status]))
           "rejected appeal sets status to :pending (deferred)")
       (is (= 1000 (reg/get-stake world3 resolver-addr))
@@ -537,7 +552,9 @@
           ;; Resolver appeals the reversal slash
           world2  (:world (res/appeal-slash world1 workflow-id l0-res slash-id))
           ;; Governance upholds the appeal → slash :reversed
-          world3  (:world (res/resolve-appeal world2 workflow-id gov true slash-id))]
+          world3  (:world (res/resolve-appeal world2 workflow-id gov true slash-id
+                                             :authorization-provenance {:authorization/type :governance
+                                                                        :authorization/basis :test}))]
       (is (= :appealed (get-in world2 [:pending-fraud-slashes slash-id :status]))
           "After appeal, slash should be :appealed")
       (is (= :reversed (get-in world3 [:pending-fraud-slashes slash-id :status]))
@@ -592,7 +609,9 @@
                                   :appeal-bond-held 0
                                   :contest-deadline 0
                                   :workflow-id      wf-id}))
-          r     (res/resolve-appeal world wf-id gov true slash-id)
+          r     (res/resolve-appeal world wf-id gov true slash-id
+                                    :authorization-provenance {:authorization/type :governance
+                                                               :authorization/basis :test})
           world' (:world r)]
       (is (true? (:ok r)))
       (is (= :reversed (get-in world' [:pending-fraud-slashes slash-id :status])))
@@ -716,7 +735,9 @@
                              :appeal-deadline 0
                              :appeal-bond-held 0
                              :contest-deadline 0}))
-        r (res/resolve-appeal world 0 gov true "s1")]
+        r (res/resolve-appeal world 0 gov true "s1"
+                              :authorization-provenance {:authorization/type :governance
+                                                         :authorization/basis :test})]
     (is (false? (:ok r)))
     (is (= :cannot-reverse-executed-slash (:error r)))))
 
@@ -764,7 +785,9 @@
           after-l1 (:world (res/execute-resolution after-esc workflow-id "0xL1" false "0xl1" nil))
           slash-id (str workflow-id "-reversal-0")
           world-appealed (:world (res/appeal-slash after-l1 workflow-id res slash-id))
-          world-rejected (:world (res/resolve-appeal world-appealed workflow-id gov false slash-id))
+          world-rejected (:world (res/resolve-appeal world-appealed workflow-id gov false slash-id
+                                                     :authorization-provenance {:authorization/type :governance
+                                                                                :authorization/basis :test}))
           deadline (get-in world-rejected [:pending-fraud-slashes slash-id :appeal-deadline] 0)
           world-timed (time-ctx/advance-time world-rejected {:to (inc deadline)})
           world-params (assoc-in world-timed [:params :slash-epoch-cap-bps] 5000)
@@ -935,8 +958,12 @@
           (world-ready-for-fraud-slash-propose world0 "0xBuyer" "USDC" "0xSeller" resolver-addr 1000 snap)
           world1 (-> (res/propose-fraud-slash world workflow-id gov resolver-addr 100) :world)
           world2 (-> (res/appeal-slash world1 workflow-id resolver-addr) :world)
-          r1 (res/resolve-appeal world2 workflow-id gov false)
-          r2 (res/resolve-appeal (:world r1) workflow-id gov false)]
+          r1 (res/resolve-appeal world2 workflow-id gov false workflow-id
+                                 :authorization-provenance {:authorization/type :governance
+                                                            :authorization/basis :test})
+          r2 (res/resolve-appeal (:world r1) workflow-id gov false workflow-id
+                                 :authorization-provenance {:authorization/type :governance
+                                                            :authorization/basis :test})]
       (is (true? (:ok r1)) "first resolve (reject) succeeds")
       (is (= :pending (get-in (:world r1) [:pending-fraud-slashes workflow-id :status]))
           "rejected appeal sets status to :pending (deferred execution)")
@@ -1015,7 +1042,9 @@
           (world-ready-for-fraud-slash-propose world0 "0xBuyer" "0xT" "0xSeller" resolver-addr 1000 snap)
           world1 (-> (res/propose-fraud-slash world workflow-id gov resolver-addr 200) :world)
           world2 (-> (res/appeal-slash world1 workflow-id resolver-addr) :world)
-          world3 (:world (res/resolve-appeal world2 workflow-id gov false))
+          world3 (:world (res/resolve-appeal world2 workflow-id gov false workflow-id
+                                            :authorization-provenance {:authorization/type :governance
+                                                                       :authorization/basis :test}))
           deadline (get-in world3 [:pending-fraud-slashes workflow-id :appeal-deadline] 0)
           world-timed (time-ctx/advance-time world3 {:to (inc deadline)})
           r (res/execute-fraud-slash world-timed workflow-id)]
@@ -1036,7 +1065,9 @@
           (world-ready-for-fraud-slash-propose world0 "0xBuyer" "0xT" "0xSeller" resolver-addr 1000 snap)
           world1 (-> (res/propose-fraud-slash world workflow-id gov resolver-addr 200) :world)
           world2 (-> (res/appeal-slash world1 workflow-id resolver-addr) :world)
-          world3 (:world (res/resolve-appeal world2 workflow-id gov true))
+          world3 (:world (res/resolve-appeal world2 workflow-id gov true workflow-id
+                                            :authorization-provenance {:authorization/type :governance
+                                                                       :authorization/basis :test}))
           r (res/execute-fraud-slash world3 workflow-id)]
       (is (= :reversed (get-in world3 [:pending-fraud-slashes workflow-id :status])))
       (is (false? (:ok r)))
@@ -1164,7 +1195,9 @@
           wf-id     (:workflow-id world)
           slash-id  (:slash-id world)
           gov       "0xGov"
-          r         (res/resolve-appeal w2 wf-id gov false slash-id)
+          r         (res/resolve-appeal w2 wf-id gov false slash-id
+                                       :authorization-provenance {:authorization/type :governance
+                                                                  :authorization/basis :test})
           w3        (:world r)]
       ;; Appeal custody used non-USDC token
       (is (true? (:ok r)) "resolve-appeal succeeds")
@@ -1184,7 +1217,9 @@
           wf-id     (:workflow-id world)
           slash-id  (:slash-id world)
           gov       "0xGov"
-          r         (res/resolve-appeal w2 wf-id gov false slash-id)
+          r         (res/resolve-appeal w2 wf-id gov false slash-id
+                                       :authorization-provenance {:authorization/type :governance
+                                                                  :authorization/basis :test})
           w3        (:world r)
           deadline  (get-in w3 [:pending-fraud-slashes slash-id :appeal-deadline] 0)
           w3-timed  (time-ctx/advance-time w3 {:to (inc deadline)})

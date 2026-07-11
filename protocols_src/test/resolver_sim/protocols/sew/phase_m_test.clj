@@ -46,7 +46,10 @@
 
         (testing "Successful Slashing Appeal"
           (let [world-appealed (-> (res/appeal-slash world-final workflow-id r0 slash-id) :world)
-                world-upheld   (-> (res/resolve-appeal world-appealed workflow-id gov true slash-id) :world)]
+                world-upheld   (-> (res/resolve-appeal world-appealed workflow-id gov true slash-id
+                                                       :authorization-provenance {:authorization/type :governance
+                                                                                  :authorization/basis :test})
+                                   :world)]
             (is (= :reversed (get-in world-upheld [:pending-fraud-slashes slash-id :status]))
                 "Slash status should be REVERSED")
 
