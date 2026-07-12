@@ -1,4 +1,0 @@
-# file: /home/user/Code/sew-simulation/python/property_tests.py
-# hypothesis_version: 6.151.12
-
-[100, 200, 500, 1000, 10000, 10000000, '0xattacker', '0xbuyer', '0xbuyer2', '0xbuyer3', '0xh', '0xhash', '0xkeeper', '0xresolver', '0xseller', 'USDC', 'action', 'address', 'agent', 'amount', 'attacker', 'auto_cancel_disputed', 'buyer', 'buyer2', 'buyer3', 'create_escrow', 'custom_resolver', 'execute_resolution', 'halted', 'honest', 'id', 'invariant_violated', 'is_release', 'keeper', 'params', 'raise_dispute', 'recipient_cancel', 'release', 'resolution_hash', 'resolver', 'resolver_fee_bps', 'result', 'results', 'seller', 'sender_cancel', 'seq', 'session', 'steps_run', 'time', 'to', 'token', 'trace_entry', 'type', 'unknown', 'violations', 'workflow_id']

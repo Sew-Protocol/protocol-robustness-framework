@@ -2,7 +2,7 @@
  :suite-id :suites/spe-regression,
  :trace-id "spe-reg-v7-reputation-slash-fail",
  :final-state-hash
- "cf0d275e1d079f47dcad74dde92ed02d7f57d5d04d4f6fbbfff9616ac82cd967",
+ "dfe2c3cab6f8f47e91b7633a13d5944a0bac388724cd6f9d88080f38d4526b9a",
  :metrics
  {:yield/escrow-unrealized 0,
   :yield/position-status nil,

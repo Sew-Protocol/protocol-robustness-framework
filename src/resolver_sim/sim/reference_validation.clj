@@ -21,10 +21,17 @@
 (def ^{:doc "Default suite root (relative to project root)."}
   default-suite-root "suites/reference-validation-v1")
 
+(defn- yield-replay-wrapper
+  "Wraps replay-yield-scenario to accept (scenario opts) signature.
+   replay-yield-scenario has 2-arity [protocol scenario], not [scenario opts],
+   so the opts map would be misinterpreted as the scenario."
+  [scenario _opts]
+  (yield-replay/replay-yield-scenario scenario))
+
 (def ^{:doc "Map of protocol keyword → replay function. Extend this when adding new protocols."}
   protocols
   {:sew sew/replay-with-sew-protocol
-   :yield yield-replay/replay-yield-scenario})
+   :yield yield-replay-wrapper})
 
 (def ^{:doc "Default replay function (Sew protocol)."}
   default-replay-fn sew/replay-with-sew-protocol)
@@ -101,7 +108,7 @@
      (trace-export/export-trace-fixture result scenario)
      trace-path)
 
-    (= replay-fn yield-replay/replay-yield-scenario)
+    (= replay-fn yield-replay-wrapper)
     (write-json! trace-path (export-yield-trace-fixture result))
 
     :else nil))

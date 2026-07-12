@@ -19,7 +19,8 @@
             [resolver-sim.sim.fixtures :as f]
             [resolver-sim.evidence.chain :as chain]
             [resolver-sim.evidence.attestation-registry :as ar]
-            [resolver-sim.evidence.config :as evcfg])
+            [resolver-sim.evidence.config :as evcfg]
+            [resolver-sim.protocols.registry :as preg])
   (:gen-class))
 
 (defn- parse-suite-key
@@ -69,6 +70,10 @@
   [& args]
   (let [suite-keys (mapv parse-suite-key args)
         n (count suite-keys)
+        _ (println "Pre-loading protocol namespaces...")
+        _ (doseq [ns-sym (preg/known-protocol-namespaces)]
+          (require ns-sym))
+        _ (println "Loaded" (count (preg/known-protocol-namespaces)) "protocol namespaces.")
         _ (println (str "Running " n " canonical fixture suites (single JVM, parallel)..."))
         _ (flush)
         start (System/currentTimeMillis)

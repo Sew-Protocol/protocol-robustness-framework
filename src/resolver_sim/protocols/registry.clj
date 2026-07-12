@@ -26,5 +26,14 @@
 (defn known-protocol-ids []
   (keys protocol-symbol-registry))
 
+(defn known-protocol-namespaces
+  "Return the list of protocol implementation namespace symbols (without the -protocol var suffix).
+   Used to pre-load protocol namespaces before parallel execution."
+  []
+  (->> (vals protocol-symbol-registry)
+       (map (comp symbol namespace))
+       (distinct)
+       (sort)))
+
 (defn get-protocol [protocol-id]
   (resolve-var-value (get protocol-symbol-registry protocol-id)))

@@ -9,7 +9,8 @@
       "0": "0xl0",
       "1": "0xl1",
       "2": "0xl2"
-    }
+    },
+    "resolver-bond-bps": 0
   },
   "expected-outcome": {
     "workflow-0": "release-after-l1-reversal"
@@ -119,7 +120,7 @@
     "resolution-hash-isolation",
     "claimable-balance-isolation"
   ],
-  "id": "scenarios\/s29-forking-strategist-seller-escalates",
+  "id": "scenarios/s29-forking-strategist-seller-escalates",
   "notes": null,
   "expectations": {
     "terminal": [
