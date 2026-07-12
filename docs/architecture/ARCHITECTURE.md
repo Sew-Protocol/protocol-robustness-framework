@@ -19,6 +19,10 @@ The framework operates at two levels:
 
 ## Two-engine design
 
+See `docs/architecture/REPLAY_ENGINE_ARCHITECTURE.md` for the full architecture of
+the deterministic replay and statistical simulation engines, their adapter interface
+design, namespace boundaries, and dispatch flow.
+
 ## Temporal semantics contract (event-time vs valid-time vs record-time)
 
 To avoid overloading one timestamp with multiple meanings, the framework uses

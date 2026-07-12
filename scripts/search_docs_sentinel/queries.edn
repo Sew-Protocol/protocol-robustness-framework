@@ -130,8 +130,11 @@
   :terms ["evidence" "claim" "manifest" "provenance" "artifact"]
   :expected-paths ["docs/evidence/README.md"
                    "docs/evidence/RESEARCHER_EVIDENCE_PACK.md"
+                   "docs/evidence/EVIDENCE_DAG_OVERVIEW.md"
                    "docs/evidence/summary.md"
                    "docs/evidence/investigation_guide_S19.md"
+                   "docs/architecture/EVIDENCE_DAG_ARCHITECTURE.md"
+                   "docs/architecture/EVIDENCE_CHAIN_ARCHITECTURE.md"
                    "r/manifest.json"
                    "r/provenance.json"
                    "schemas/claimable-classification-v2.json"]

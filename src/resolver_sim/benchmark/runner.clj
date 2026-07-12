@@ -94,7 +94,7 @@
         result   (if (= "yield-v1" protocol)
                    (replay/replay-yield-scenario scenario)
                    (sew/replay-with-sew-protocol scenario
-                                                  {:allow-dirty? (or chain/*allow-dirty* false)}))
+                                                 {:allow-dirty? (or chain/*allow-dirty* false)}))
         public-id (benchmark-public-scenario-id suite-kw path)
         scenario-evidence (hc/hash-with-intent
                            {:hash/intent :evidence-content}

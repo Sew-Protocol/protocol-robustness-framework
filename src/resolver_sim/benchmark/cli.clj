@@ -109,11 +109,11 @@
   [bundle]
   (let [stored-hash (:evidence/hash bundle)
         current-hash (hc/hash-with-intent {:hash/intent :bundle-root}
-                                           (hashable-evidence bundle))
+                                          (hashable-evidence bundle))
         legacy-hash (hc/hash-with-intent {:hash/intent :bundle-root}
-                                          (dissoc (hashable-evidence bundle)
-                                                  :run/manifest
-                                                  :benchmark-certification))]
+                                         (dissoc (hashable-evidence bundle)
+                                                 :run/manifest
+                                                 :benchmark-certification))]
     (cond
       (hc/intent-hash= current-hash stored-hash)
       {:hash-ok? true :scheme :current :computed-hash current-hash}
@@ -540,7 +540,7 @@
       (let [bundle-path (first arguments)
             bundle (rp/edn-read bundle-path)
             computed-hash (hc/hash-with-intent {:hash/intent :bundle-root}
-                                                (hashable-evidence bundle))]
+                                               (hashable-evidence bundle))]
         (println computed-hash)
         (System/exit 0))
 

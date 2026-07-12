@@ -845,6 +845,9 @@ cli-args (cond-> ["-M:run:with-sew" "--invariants" "--scenario" scenario]
    community:graph:export {:doc "Export evidence graph as GraphML for yEd. Usage: bb community:graph:export -t <task-ref>"
                             :task (apply clojure "-M:with-sew" "-m" "resolver-sim.community.cli" "graph:export" *command-line-args*)}
 
+   community:mailbox:clear {:doc "Clear all mailbox messages. Usage: bb community:mailbox:clear"
+                             :task (apply clojure "-M:with-sew" "-m" "resolver-sim.community.cli" "mailbox:clear" *command-line-args*)}
+
    test:community {:doc "Run community participation tests"
                    :task (shell "scripts/with-test-artifact-lock.sh" "clojure" "-M:test:with-sew" "-m" "scripts.parallel-test-runner"
                                 "resolver-sim.community.core-test"

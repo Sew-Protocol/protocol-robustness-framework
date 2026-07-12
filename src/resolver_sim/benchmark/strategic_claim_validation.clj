@@ -221,15 +221,15 @@
 (defn- scenario-check-results
   [claim-spec mechanism-level result]
   (into [{:check/id :scenario-passed
-    :status (if (= :pass (:outcome result)) :pass :fail)
-    :details {:outcome (:outcome result)
-              :halt-reason (:halt-reason result)}}
-   {:check/id :evidence-root-valid
-    :status (if (sha-256-hex? (:scenario/evidence-root result)) :pass :fail)
-    :details {:scenario/evidence-root (:scenario/evidence-root result)}}
-   {:check/id :no-invariant-errors
-    :status (if (empty? (invariant-failures result)) :pass :fail)
-    :details {:failed-invariants (invariant-failures result)}}]
+          :status (if (= :pass (:outcome result)) :pass :fail)
+          :details {:outcome (:outcome result)
+                    :halt-reason (:halt-reason result)}}
+         {:check/id :evidence-root-valid
+          :status (if (sha-256-hex? (:scenario/evidence-root result)) :pass :fail)
+          :details {:scenario/evidence-root (:scenario/evidence-root result)}}
+         {:check/id :no-invariant-errors
+          :status (if (empty? (invariant-failures result)) :pass :fail)
+          :details {:failed-invariants (invariant-failures result)}}]
         (when (= :allocation/partial-fill mechanism-level)
           (closed-form-check-results result (:closed-form-check-ids claim-spec)))))
 

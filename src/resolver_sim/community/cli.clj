@@ -9,8 +9,8 @@
             [resolver-sim.community.graph :as graph]
             [resolver-sim.community.report :as report]
             [resolver-sim.community.result :as result]
-             [resolver-sim.evidence.chain :as chain]
-             [resolver-sim.evidence.node :as ev-node]
+            [resolver-sim.evidence.chain :as chain]
+            [resolver-sim.evidence.node :as ev-node]
             [resolver-sim.benchmark.runner :as runner]
             [resolver-sim.hash.canonical :as hc]
             [resolver-sim.vcs :as vcs]))
@@ -33,25 +33,37 @@
    ["-m" "--mailbox-dir DIR" "Mailbox directory" :default default-mailbox-dir]
    ["-b" "--benchmark-id ID" "Benchmark ID (e.g. :benchmark/prf-deterministic-replay-v1)"]
    ["-n" "--title TITLE" "Task title"]
+   [nil "--description DESC" "Task description (optional)"]
    ["-s" "--suite-id ID" "Suite ID (e.g. :suite/prf-replay-v1)"]
    [nil "--claim-ids CLAIMS" "Comma-separated claim IDs (e.g. :claim/no-nondeterminism,:claim/replay-identical-results)"]
-   [nil "--allow-dirty" "Allow dirty git working copy during execution"]])
+   [nil "--allow-dirty" "Allow dirty git working copy during execution"]
+   [nil "--benchmark-filter ID" "Filter tasks by benchmark ID (e.g. :benchmark/prf-deterministic-replay-v1)"]
+   [nil "--suite-filter ID" "Filter tasks by suite ID (e.g. :suite/prf-replay-v1)"]])
 
 (defn list-tasks
   [opts]
-  (let [dir (or (:mailbox-dir opts) default-mailbox-dir)]
+  (let [dir (or (:mailbox-dir opts) default-mailbox-dir)
+        parse-kw (fn [s] (when s (keyword (str/replace s #"^:" ""))))
+        bm-filter (parse-kw (:benchmark-filter opts))
+        suite-filter (parse-kw (:suite-filter opts))]
     (binding [mailbox/*mailbox-dir* dir]
-      (let [msgs (mailbox/list-messages :type-filter :TASK_ANNOUNCEMENT)]
-        (if (seq msgs)
+      (let [msgs (mailbox/list-messages :type-filter :TASK_ANNOUNCEMENT)
+            filtered (filter (fn [m]
+                               (let [body (:body m)]
+                                 (and (or (nil? bm-filter) (= bm-filter (:benchmark/id body)))
+                                      (or (nil? suite-filter) (= suite-filter (:suite/id body))))))
+                             msgs)]
+        (if (seq filtered)
           (do
-            (println (format "%-70s %-25s %s" "Task Ref" "Title" "Status"))
-            (println (apply str (repeat 120 "-")))
-            (doseq [m msgs]
+            (println (format "%-70s %-25s %-25s %s" "Task Ref" "Title" "Status" "Benchmark"))
+            (println (apply str (repeat 140 "-")))
+            (doseq [m filtered]
               (let [body (:body m)
                     task-ref (or (:subject-task m) "")
                     title (or (:title body) "")
+                    bm (or (:benchmark/id body) "-")
                     status (mailbox/task-status (:subject-task m))]
-                (println (format "%-70s %-25s %s" task-ref title (name status)))))
+                (println (format "%-70s %-25s %-25s %s" task-ref title (name status) bm))))
             {:exit-code 0})
           (do (println "No community tasks found.")
               {:exit-code 0}))))))
@@ -166,7 +178,6 @@
                   (:packs registry)))))
       (catch Exception _ nil))))
 
-
 (defn register-task
   "Build a community task record and publish it to the mailbox."
   [opts]
@@ -183,8 +194,8 @@
         (let [parse-kw (fn [s] (when s (keyword (str/replace s #"^:" ""))))
               benchmark-kw (parse-kw benchmark-id)
               claim-ids (let [from-bench (when benchmark-kw
-                                          (when-let [mp (resolve-benchmark-manifest benchmark-kw)]
-                                            (read-benchmark-claims mp)))]
+                                           (when-let [mp (resolve-benchmark-manifest benchmark-kw)]
+                                             (read-benchmark-claims mp)))]
                           (if (and (not claim-ids-str) from-bench)
                             from-bench
                             (vec (keep parse-kw (when claim-ids-str (str/split claim-ids-str #","))))))
@@ -196,8 +207,10 @@
                     (assert (contains? manifest-claims c)
                             (str "Claim " c " is not evaluated by benchmark " benchmark-id
                                  ". Known claims: " (pr-str (sort manifest-claims))))))
+              description (:description opts)
               t (task/build-task
                  {:title title
+                  :description description
                   :task/type :benchmark-execution
                   :benchmark/id benchmark-kw
                   :suite/id (parse-kw suite-id)
@@ -208,11 +221,12 @@
                    {:message/type :TASK_ANNOUNCEMENT
                     :subject-task (:task/ref t)
                     :sender "community-registrar"
-                     :body {:title title
-                            :benchmark/id benchmark-kw
-                            :suite/id (parse-kw suite-id)
-                            :claim-ids claim-ids
-                            :registry-snapshot/hash registry-hash}})]
+                    :body {:title title
+                           :description description
+                           :benchmark/id benchmark-kw
+                           :suite/id (parse-kw suite-id)
+                           :claim-ids claim-ids
+                           :registry-snapshot/hash registry-hash}})]
           (mailbox/publish! msg)
           (println (str "Task registered: " (:task/ref t)))
           (println (str "Title: " title))
@@ -224,7 +238,6 @@
           (println "To execute this task:")
           (println (str "  bb community:run --task " (:task/ref t) " --runner <id> --key <key>"))
           {:exit-code 0 :task t :message msg})))))
-
 
 (defn run-task
   [opts]
@@ -495,93 +508,104 @@
                     (fail! (str "attestation-sig-" (name pred))
                            (if key-path "Public key not found" "No key-path in context"))))))
           ;; 4. Execution evidence verification
-          (doseq [a attestations]
-            (let [pred (:attestation/predicate a)
-                  exec-ref (get-in a [:assertion :execution-node-hash])
-                  bundle-root (get-in a [:assertion :bundle-root])
-                  result-proj (get-in a [:assertion :result-projection-hash])]
-              (if (att/parse-evidence-ref exec-ref)
-                (pass! (str "execution-ref-" (name pred)))
-                (fail! (str "execution-ref-" (name pred)) "Missing or malformed evidence ref"))
-              (if (att/valid-sha256? bundle-root)
-                (pass! (str "bundle-root-" (name pred)))
-                (fail! (str "bundle-root-" (name pred)) "Missing or invalid bundle root"))
-              (if (att/valid-sha256? result-proj)
-                (pass! (str "result-projection-" (name pred)))
-                (fail! (str "result-projection-" (name pred)) "Missing or invalid result projection"))))
-          ;; 4b. Code provenance
-          (when (seq attestations)
-            (println)
-            (println "Code Provenance:")
             (doseq [a attestations]
               (let [pred (:attestation/predicate a)
-                    code-hash (get-in a [:assertion :code-hash])
-                    cp (get-in a [:context :code-provenance])
-                    env-hash (get-in a [:assertion :env-hash])]
-                (println (str "  " (name pred) ":"))
-                (println (str "    Code hash: " code-hash))
-                (when cp
-                  (println (str "    Source: " (name (:code-source cp))))
-                  (println (str "    Worktree: " (name (:worktree-status cp))))
-                  (when-let [dh (:diff-hash cp)]
-                    (println (str "    Diff hash: " dh))))
-                (println (str "    Env hash: " env-hash)))))
+                    exec-ref (get-in a [:assertion :execution-node-hash])
+                    bundle-root (get-in a [:assertion :bundle-root])
+                    result-proj (get-in a [:assertion :result-projection-hash])]
+                (if (att/parse-evidence-ref exec-ref)
+                  (pass! (str "execution-ref-" (name pred)))
+                  (fail! (str "execution-ref-" (name pred)) "Missing or malformed evidence ref"))
+                (if (att/valid-sha256? bundle-root)
+                  (pass! (str "bundle-root-" (name pred)))
+                  (fail! (str "bundle-root-" (name pred)) "Missing or invalid bundle root"))
+                (if (att/valid-sha256? result-proj)
+                  (pass! (str "result-projection-" (name pred)))
+                  (fail! (str "result-projection-" (name pred)) "Missing or invalid result projection"))))
+          ;; 4b. Evidence node resolution
+            (doseq [a attestations]
+              (let [exec-ref (get-in a [:assertion :execution-node-hash])
+                    ref-ok? (att/parse-evidence-ref exec-ref)]
+                (when ref-ok?
+                  (let [node-dir (io/file dir "evidence-nodes")
+                        node-file (io/file node-dir (str "node-" (subs ref-ok? 0 12) ".edn"))]
+                    (if (.exists node-file)
+                      (pass! (str "evidence-node-resolved-" (name (:attestation/predicate a))))
+                      (do (pass! (str "evidence-node-ref-valid-" (name (:attestation/predicate a))))
+                          (println (str "  (evidence node not persisted locally — hash reference only)"))))))))
+          ;; 4c. Code provenance
+            (when (seq attestations)
+              (println)
+              (println "Code Provenance:")
+              (doseq [a attestations]
+                (let [pred (:attestation/predicate a)
+                      code-hash (get-in a [:assertion :code-hash])
+                      cp (get-in a [:context :code-provenance])
+                      env-hash (get-in a [:assertion :env-hash])]
+                  (println (str "  " (name pred) ":"))
+                  (println (str "    Code hash: " code-hash))
+                  (when cp
+                    (println (str "    Source: " (name (:code-source cp))))
+                    (println (str "    Worktree: " (name (:worktree-status cp))))
+                    (when-let [dh (:diff-hash cp)]
+                      (println (str "    Diff hash: " dh))))
+                  (println (str "    Env hash: " env-hash)))))
           ;; 5. Comparison derivation and projection verification
-          (let [exec-ats (filter #(= :runner/execution-attested (:attestation/predicate %)) attestations)
-                repro-ats (filter #(= :runner/result-reproduced (:attestation/predicate %)) attestations)]
-            (doseq [ra repro-ats]
-              (let [claimed-status (:comparison-status (:assertion ra))
-                    original-ref (:original-attestation-ref (:assertion ra))
-                    orig (or (first (filter #(= (:attestation/ref %) original-ref) exec-ats))
-                             (att/resolve-attestation dir original-ref))]
-                (if orig
-                  (do (pass! "reproduction-original-resolved")
-                      (when (and (not (some #(= (:attestation/ref orig) %) (map :attestation/ref exec-ats)))
-                                 (att/valid-attestation? orig))
-                        (println (str "  Original attestation resolved from disk (no RUNNER_RESULT message)"))))
-                  (fail! "reproduction-original-resolved" "Original attestation not found"))
-                (if (contains? #{:matched :semantically-matched :mismatched :inconclusive} claimed-status)
-                  (pass! "reproduction-status-known")
-                  (fail! "reproduction-status-known" (str "Unknown status: " claimed-status)))
+            (let [exec-ats (filter #(= :runner/execution-attested (:attestation/predicate %)) attestations)
+                  repro-ats (filter #(= :runner/result-reproduced (:attestation/predicate %)) attestations)]
+              (doseq [ra repro-ats]
+                (let [claimed-status (:comparison-status (:assertion ra))
+                      original-ref (:original-attestation-ref (:assertion ra))
+                      orig (or (first (filter #(= (:attestation/ref %) original-ref) exec-ats))
+                               (att/resolve-attestation dir original-ref))]
+                  (if orig
+                    (do (pass! "reproduction-original-resolved")
+                        (when (and (not (some #(= (:attestation/ref orig) %) (map :attestation/ref exec-ats)))
+                                   (att/valid-attestation? orig))
+                          (println (str "  Original attestation resolved from disk (no RUNNER_RESULT message)"))))
+                    (fail! "reproduction-original-resolved" "Original attestation not found"))
+                  (if (contains? #{:matched :semantically-matched :mismatched :inconclusive} claimed-status)
+                    (pass! "reproduction-status-known")
+                    (fail! "reproduction-status-known" (str "Unknown status: " claimed-status)))
                 ;; Comparison policy known
-                (let [comp-policy (get-in ra [:assertion :comparison-policy])]
-                  (if (#{:stable-projection-v0 :strict-hash} comp-policy)
-                    (pass! "comparison-policy-known")
-                    (fail! "comparison-policy-known" (str "Unknown policy: " comp-policy))))
+                  (let [comp-policy (get-in ra [:assertion :comparison-policy])]
+                    (if (#{:stable-projection-v0 :strict-hash} comp-policy)
+                      (pass! "comparison-policy-known")
+                      (fail! "comparison-policy-known" (str "Unknown policy: " comp-policy))))
                 ;; Both projections present and consistent
-                (let [orig-proj (get-in ra [:assertion :original-result-projection-hash])
-                      repro-proj (get-in ra [:assertion :reproduction-result-projection-hash])]
-                  (if (and (att/valid-sha256? orig-proj) (att/valid-sha256? repro-proj))
-                    (do (pass! "comparison-projections-present")
-                        (let [projs-match? (= orig-proj repro-proj)
-                              status-matches? (= projs-match?
-                                                (#{:matched :semantically-matched} claimed-status))]
-                          (if status-matches?
-                            (pass! "comparison-consistent")
-                            (fail! "comparison-consistent" "Projection equality does not match claimed status"))))
-                    (fail! "comparison-projections-present" "Missing original or reproduction projection")))))
-            (when (and (seq exec-ats) (seq repro-ats))
-              (pass! "comparison-derived"))
-            (when (and (seq exec-ats) (not (seq repro-ats)))
-              (pass! "execution-attested-no-reproduction-yet")))
+                  (let [orig-proj (get-in ra [:assertion :original-result-projection-hash])
+                        repro-proj (get-in ra [:assertion :reproduction-result-projection-hash])]
+                    (if (and (att/valid-sha256? orig-proj) (att/valid-sha256? repro-proj))
+                      (do (pass! "comparison-projections-present")
+                          (let [projs-match? (= orig-proj repro-proj)
+                                status-matches? (= projs-match?
+                                                   (#{:matched :semantically-matched} claimed-status))]
+                            (if status-matches?
+                              (pass! "comparison-consistent")
+                              (fail! "comparison-consistent" "Projection equality does not match claimed status"))))
+                      (fail! "comparison-projections-present" "Missing original or reproduction projection")))))
+              (when (and (seq exec-ats) (seq repro-ats))
+                (pass! "comparison-derived"))
+              (when (and (seq exec-ats) (not (seq repro-ats)))
+                (pass! "execution-attested-no-reproduction-yet")))
           ;; 6. Evidence graph integrity
-          (let [g (graph/build-task-graph-projection
-                   {:task t :messages msgs :attestations attestations})
-                {:keys [valid? errors]} (graph/verify-task-graph g)]
-            (if valid?
-              (pass! "evidence-graph-integrity")
-              (fail! "evidence-graph-integrity" (str "Graph validation errors: " errors))))
-          (println)
-          (println "Summary:")
-          (println "──────────────────────────────────────────")
-          (doseq [c @checks]
-            (println (str "  " (if (:pass? c) "✓" "✗") "  " (:check c)
-                          (when (:reason c) (str " — " (:reason c))))))
-          (println)
-          (println (str "Status (messages):  " (name status)))
-          (println (str "Status (verified): " (name verified-status)))
-          (println (str "Passed: " (count (filter :pass? @checks)) "/" (count @checks)))
-          {:exit-code (if (empty? @errors) 0 1)}))))))
+            (let [g (graph/build-task-graph-projection
+                     {:task t :messages msgs :attestations attestations})
+                  {:keys [valid? errors]} (graph/verify-task-graph g)]
+              (if valid?
+                (pass! "evidence-graph-integrity")
+                (fail! "evidence-graph-integrity" (str "Graph validation errors: " errors))))
+            (println)
+            (println "Summary:")
+            (println "──────────────────────────────────────────")
+            (doseq [c @checks]
+              (println (str "  " (if (:pass? c) "✓" "✗") "  " (:check c)
+                            (when (:reason c) (str " — " (:reason c))))))
+            (println)
+            (println (str "Status (messages):  " (name status)))
+            (println (str "Status (verified): " (name verified-status)))
+            (println (str "Passed: " (count (filter :pass? @checks)) "/" (count @checks)))
+            {:exit-code (if (empty? @errors) 0 1)}))))))
 
 (defn generate-report
   [opts]
@@ -641,8 +665,16 @@
           (println graphml)
           {:exit-code 0})))))
 
+(defn clear-mailbox
+  [opts]
+  (let [dir (or (:mailbox-dir opts) default-mailbox-dir)]
+    (binding [mailbox/*mailbox-dir* dir]
+      (mailbox/clear-mailbox!)
+      (println (str "Mailbox cleared: " dir))
+      {:exit-code 0})))
+
 (defn- subcommand? [args]
-  (contains? #{"task:list" "task:show" "task:register" "run" "reproduce" "verify" "report" "graph:export"} (first args)))
+  (contains? #{"task:list" "task:show" "task:register" "run" "reproduce" "verify" "report" "graph:export" "mailbox:clear"} (first args)))
 
 (defn- print-help []
   (println "PRF Community CLI — External researcher participation")
@@ -658,6 +690,7 @@
   (println "  verify --task <ref>                    Verify evidence chain")
   (println "  report --task <ref>                    Generate evidence report")
   (println "  graph:export --task <ref>              Export evidence graph as GraphML for yEd")
+  (println "  mailbox:clear                           Clear all mailbox messages")
   (println)
   (println "Options:")
   (println "  -t, --task REF           Task reference")
@@ -683,6 +716,7 @@
         "verify" (System/exit (:exit-code (verify-task options)))
         "report" (System/exit (:exit-code (generate-report options)))
         "graph:export" (System/exit (:exit-code (export-graph options)))
+        "mailbox:clear" (System/exit (:exit-code (clear-mailbox options)))
         (do (println "Unknown command:" subcmd) (System/exit 1))))
     (let [{:keys [options errors]} (parse-opts args cli-options)]
       (cond
@@ -690,4 +724,4 @@
         (:help options) (System/exit (:exit-code (print-help)))
         :else (do (println "Usage: community <command> [options]")
                   (println "Run 'community --help' for available commands.")
-                   (System/exit 1))))))
+                  (System/exit 1))))))

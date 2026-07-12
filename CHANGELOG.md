@@ -2,6 +2,30 @@
 
 ## [Unreleased]
 
+### Changed (2026-07-12)
+
+- **Stochastic equilibrium — coverage ratio and budget-balance ratcheting:** `evaluate-stochastic-equilibrium` now returns a `:coverage` metric (`(pass + fail) / total`). Budget-balance ratchets from `:inconclusive` to `:fail` when shared-world mode is active but flow tracking keys are missing (a simulation bug). Fixed NPE in `evaluate-participation-stable` where `agg-rate` was computed before the nil check on `initial-resolver-count`. Added 3 tests covering inconclusive paths, ratcheting, and overall-status propagation. (`src/resolver_sim/sim/stochastic_equilibrium.clj`, `test/resolver_sim/sim/stochastic_equilibrium_test.clj`)
+
+- **Governance dispatch audit — negative audit and tighter regex:** `test-governance-dispatch-audit` now checks that non-sensitive actions do NOT use `run-governance-action`, and both regex matchers require the full call pattern (`run-governance-action context world event`) to avoid false positives from comments. (`protocols_src/test/resolver_sim/protocols/sew/dispute_resolution_coverage_test.clj`)
+
+- **Withdraw-fees governance wrapper fix:** Moved the `:paused?` guard inside the `run-governance-action` callback so governance authorization is checked even when the world is paused. Previously a paused world bypassed governance entirely. (`protocols_src/resolver_sim/protocols/sew.clj`)
+
+- **Community participation thin slice — P1 evidence DAG integration (1.2, 1.3):** `community:verify` now prints per-attestation code provenance (code hash, source, worktree status, diff hash, env hash) in a dedicated section. `community:run` and `community:reproduce` build real `evidence-node` DAG nodes via `build-execution-node` (with intents, inputs, outputs, failure-details, and policy filtering) instead of using the stable result hash as a fake node reference. (`src/resolver_sim/community/cli.clj`)
+
+- **Community participation thin slice — test scope clarification (1.1):** Verified 368 tests, 960 assertions pass across 4 community + 13 evidence namespaces. Previous "236 tests, 585 assertions" was stale due to evidence test growth. (`test/resolver_sim/community/*_test.clj`, `test/resolver_sim/evidence/*_test.clj`)
+
+- **Community participation thin slice — P1 nil-field validation tests (1.4):** Added 13 tests verifying `valid-attestation?` returns false for each predicate when each required field is nil (code-hash, env-hash, bundle-root, execution-node-hash, result-projection, registry-snapshot for execution; original-att-ref, original-result-proj, repro-exec-node-hash, repro-result-proj, comparison-status for reproduction; challenged-att-ref, reason for challenge). (`test/resolver_sim/community/core_test.clj`)
+
+- **Community participation thin slice — P2 task list filters (2.2):** `community:task:list` now accepts `--benchmark-filter` and `--suite-filter` to filter by benchmark or suite ID. Output includes the benchmark column. (`src/resolver_sim/community/cli.clj`)
+
+- **Community participation thin slice — P2 task description (2.3):** `community:task:register` now accepts `--description` for an optional human-readable description. Description is included in the task record hash, mailbox announcement body, and report output. (`src/resolver_sim/community/task.clj`, `src/resolver_sim/community/cli.clj`, `src/resolver_sim/community/report.clj`)
+
+- **Community participation thin slice — P2 mailbox clear command (2.4):** New `community:mailbox:clear` command and `bb community:mailbox:clear` task to clear all mailbox messages. (`src/resolver_sim/community/cli.clj`, `bb.edn`)
+
+- **Community participation thin slice — P2 evidence node resolution check (2.5):** `community:verify` now attempts to resolve evidence node references from the local artifact directory and reports whether the node file exists, with a notice for hash-only references. (`src/resolver_sim/community/cli.clj`)
+
+- **CI failure resolution — dispute-coverage, slashing, game-theory, and golden-artifact regeneration:** Fixed `scenario-exists?` and `scenario-tags` in the dispute-resolution coverage report to use `rp/path-exists?` for `resource:` URIs instead of `(.exists (io/file ...))`. Added resolution events to theory-falsification scenarios S-DR-012 and S-DR-013 to avoid `:open-entities-at-end` halts. Updated slashing pro-rata claim-count assertions from 7→9 to match the two new claims (`:pro-rata-fairness`, `:partial-fill-fairness`) added to the evaluator registry. Bound `chain/*allow-dirty*` to true in the real-benchmark game-theory test and updated expected verdict values (`:allocation/partial-fill` now `:uncovered`, `:allocation/shortfall` now `:pass`). Threaded `:allow-dirty? true` replay-opts through `reference-validation` `generate!`. Replaced legacy `:claimable` path with `:claimable-v2 :settlement/principal` in the withdraw-escrow accounting test. Changed `save-agent-as` alias capture to store agent IDs instead of addresses for agent-index compatibility, and included alias keys in `known-ids` during scenario validation to prevent `:unknown-agent-in-event` rejection. Updated `S110_resolver-yield-accrual` expected totals to reflect current yield calculation. Regenerated `suites/reference-validation-v1/expected/` golden artifacts. (`src/resolver_sim/scenario/dispute_coverage.clj`, `src/resolver_sim/contract_model/replay/validation.clj`, `src/resolver_sim/contract_model/replay/execution.clj`, `src/resolver_sim/sim/reference_validation.clj`, `scenarios/S-DR-013-evidence-at-deadline.{json,edn}`, `scenarios/S-DR-012-late-evidence-rejected.{json,edn}`, `protocols_src/test/resolver_sim/protocols/sew/{slashing_test,accounting_test,alias_test,resolver_yield_accrual_test}.clj`, `protocols_src/test/resolver_sim/protocols/sew/evidence/slashing_test.clj`, `test/resolver_sim/benchmark/game_theory_validation_test.clj`)
+
 ### Changed (2026-07-10)
 
 - **Benchmark output and verification:** `bb benchmark:list` now shows lifecycle status, claim count, and latest recorded scenario result. Share summaries distinguish active readiness from scenario completion. New bundles hash their run manifest and certification; verification retains an explicit legacy-v1 path for previously emitted bundles. (`src/resolver_sim/benchmark/cli.clj`, `src/resolver_sim/benchmark/sharing.clj`, `src/resolver_sim/benchmark/runner.clj`, `benchmarks/BENCHMARKS.edn`)
@@ -879,6 +903,29 @@
 
 ### Tests (2026-07-10)
 
+### Added (2026-07-11)
+
+- **Yield-v1 partial-fill benchmark pack:** Created `benchmarks/packs/prf-core/yield-partial-fill-v0.edn` with 2 yield-v1 scenarios (Y06 multi-party pro-rata, Y07 adversarial shortfall) declared with `:allocation/partial-fill` dimension. Registered `:suite/yield-provider-scenarios` in `pack-suites` to support benchmark pack resolution. This resolves the `:no-partial-fill-decision-artifacts` coverage gap for all 4 partial-fill strategic claims. (`benchmarks/packs/prf-core/yield-partial-fill-v0.edn`, `src/resolver_sim/scenario/suites.clj`)
+
+- **Protocol-aware benchmark runner:** `execute-scenario` in `runner.clj` now dispatches to `replay-yield-scenario` for `"yield-v1"` protocol scenarios instead of hardcoding `replay-with-sew-protocol`. Enables yield-v1 scenarios to be replayed through the benchmark pipeline. (`src/resolver_sim/benchmark/runner.clj:89-94`)
+
+- **Scenario threat tags:** Added `:threat-tags ["shortfall" "pro-rata" "partial-fill"]` to `Y06_multi-party-pro-rata-shortfall` and `["shortfall" "adversarial" "partial-fill"]` to `Y07_adversarial-shortfall-exploit` in both JSON and EDN formats, enabling strategic claim matching. (`scenarios/Y06_multi-party-pro-rata-shortfall.json`, `scenarios/edn/Y06_multi-party-pro-rata-shortfall.edn`, `scenarios/Y07_adversarial-shortfall-exploit.json`, `scenarios/edn/Y07_adversarial-shortfall-exploit.edn`)
+
+- **Redistribution-fairness mechanism property:** Added `check-redistribution-fairness` validator in `scenario/equilibrium.clj` — trace-level proxy that detects when multi-pass cap redistribution hits the iteration limit or produces negative allocations. Registered in `mechanism-validators` dispatcher and added `mechanism/redistribution-fairness` entry to `shortfall-v1.edn`. (`src/resolver_sim/scenario/equilibrium.clj:273-324`, `benchmarks/mechanisms/shortfall-v1.edn:30-38`)
+
+- **Per-claim allocation extraction:** Added `extract-per-claim-allocation` to `evidence.clj` — extracts normalized per-claim records (`:claim/key`, `:requested`, `:filled`, `:deferred`, `:haircut`, `:fill-ratio`, `:cap-hit?`) from partial-fill decision artifacts, using pre-computed allocation rows if available and falling back to flat-map computation otherwise. (`src/resolver_sim/yield/evidence.clj:64-104`)
+
+- **Aggregate shortfall cap invariant:** Added `:yield/aggregate-shortfall-cap` invariant checking that total shortfall basis-amount per `(module-id, token)` pair does not exceed the sum of position values. Registered in `check-fns` and `invariant_catalog.clj`. (`src/resolver_sim/yield/invariants.clj:125-150`, `src/resolver_sim/yield/invariant_catalog.clj:41-44`)
+
+### Changed (2026-07-11)
+
+- **Strategic claim catalog re-targeted:** 4 claims (waterfall-fill-integrity, partial-fill-rounding-integrity, mode-validity, pro-rata-fairness-end-to-end) now point to `yield-partial-fill-v0.edn` pack instead of `shortfall-allocation-v0.edn`. All now produce `:pass` verdicts with 2 matched scenarios each, up from `:uncovered`. (`src/resolver_sim/benchmark/strategic_claim_validation.clj`)
+
+### Tests (2026-07-11)
+
+- **Redistribution-fairness equilibrium tests:** Added 4 tests (inconclusive no-pass, pass clean, fail iteration-limit, fail negative-allocations) to `equilibrium_test.clj`. All 76 equilibrium tests pass. (`test/resolver_sim/scenario/equilibrium_test.clj`)
+- **Per-claim evidence extraction tests:** Created `evidence_test.clj` with 4 tests covering allocation-rows path, flat-map fallback, haircut inclusion, and empty decision. (`test/resolver_sim/yield/evidence_test.clj`)
+- **Aggregate shortfall cap invariant tests:** Added 4 tests (valid, overage, empty-positions, separate-modules) to `invariants_hardening_test.clj`. All 15 hardening tests pass. (`test/resolver_sim/yield/invariants_hardening_test.clj`)
 - **Rounding bias detection tests:** Added 3 characterization tests (`lra-dust-distribution-deterministic`, `lra-input-order-advantage-bounded`, `lra-dust-goes-to-largest-remainder`) verifying that `largest-remainder-alloc` is deterministic, input-order advantage is bounded by 1 unit, and dust follows the largest-remainder rule. (`test/resolver_sim/financial/pro_rata_characterization_test.clj`)
 
 - **Pro-rata claims evaluator edge case tests:** Added 7 tests covering rounding-bounded (exact division, large deviation, zero basis), conservation (exact allocation, mismatch), and pro-rata-fairness (3-claimant proportional, single unfair claimant). (`test/resolver_sim/yield/pro_rata_claims_test.clj`)

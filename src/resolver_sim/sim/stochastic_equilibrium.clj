@@ -418,9 +418,9 @@
         (mech-fail :budget-balance
                    {:batch-mode    batch-mode
                     :missing-keys  (vec (for [[k v] {:flow-total-fees-collected fees-col
-                                                      :flow-total-bond-loss     bond-loss
-                                                      :flow-total-fraud-upside  fraud-up}
-                                             :when (nil? v)]
+                                                     :flow-total-bond-loss     bond-loss
+                                                     :flow-total-fraud-upside  fraud-up}
+                                              :when (nil? v)]
                                           k))}
                    "flow tracking data missing in shared-world mode: simulation bug or missing flow plumbing")
         (mech-inconclusive :budget-balance

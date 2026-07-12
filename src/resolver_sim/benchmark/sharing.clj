@@ -17,7 +17,7 @@
   (let [bm-id (get-in evidence [:benchmark :benchmark/id])
         protocol-commit (get-in evidence [:repo :repo :commit])
         scenarios-pass? (= (get-in evidence [:metrics :passed])
-                            (get-in evidence [:metrics :total]))
+                           (get-in evidence [:metrics :total]))
         active? (= :active (get-in evidence [:benchmark :benchmark/status]))
         claims-pass? (coverage/required-claims-passed?
                       (:benchmark evidence)

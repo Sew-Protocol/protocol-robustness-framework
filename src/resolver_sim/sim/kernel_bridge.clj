@@ -143,7 +143,7 @@
          (vec (for [i (range n-samples)]
                 (let [_ (rng/next-long rng) ; consume rng for determinism
                       sc (generate-honest-scenario params (str "h" i))
-                       r  (replay/replay-with-protocol (default-protocol) sc {:skip-finalize true})]
+                      r  (replay/replay-with-protocol (default-protocol) sc {:skip-finalize true})]
                   {:scenario-id (:scenario-id sc)
                    :type        :honest
                    :outcome     (:outcome r)

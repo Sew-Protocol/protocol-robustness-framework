@@ -198,8 +198,10 @@ That gives PRF a useful separation of concerns:
 ## References
 
 - `src/resolver_sim/evidence/node.clj`
+- `docs/architecture/EVIDENCE_DAG_ARCHITECTURE.md` — Architecture doc (lifecycle, topology, validation, persistence, bundle integration)
 - `docs/specs/DAG_NODE_VALIDATION_SPEC_V1.md`
 - `docs/specs/evidence/EVIDENCE_NODE_SPEC_V1.md`
 - `docs/specs/RUN_BUNDLE_ROOT_SPEC_V1.md`
+- `docs/architecture/EVIDENCE_CHAIN_ARCHITECTURE.md`
 - `docs/architecture/FORENSIC_EVIDENCE.md`
 - `docs/specs/MECHANISM_PERSISTENCE_SPEC_V1.md`

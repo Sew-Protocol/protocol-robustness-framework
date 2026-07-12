@@ -102,6 +102,8 @@ Primary project framing and status live in the root `../README.md`.
 | `architecture/ADR-0003-canonical-scenario-generation-boundary.md` | ADR |
 | `architecture/ADR-0004-cross-protocol-funds-ledger-extraction.md` | ADR |
 | `architecture/EVIDENCE_CHAIN_ARCHITECTURE.md` | Evidence chain architecture |
+| `architecture/EVIDENCE_DAG_ARCHITECTURE.md` | Evidence DAG architecture (lifecycle, topology, validation, persistence) |
+| `architecture/REPLAY_ENGINE_ARCHITECTURE.md` | Replay engine and dual-engine architecture (deterministic replay + Monte Carlo) |
 | `architecture/EVIDENCE_CHAIN_REMEDIATION.md` | Evidence chain remediation plan |
 | `architecture/EVIDENCE_REGISTRY.md` | Evidence registry design |
 | `architecture/FORENSIC_EVIDENCE.md` | Forensic evidence pipeline |

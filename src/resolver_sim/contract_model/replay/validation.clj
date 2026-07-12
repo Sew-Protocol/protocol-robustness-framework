@@ -42,9 +42,9 @@
          version     (str (:schema-version scenario))
          agents      (:agents scenario)
          events      (sort-by :seq (:events scenario))
-          known-ids   (set (concat (map :id agents)
-                                   (keep :save-agent-as events)
-                                   (keep :save-id-as events)))
+         known-ids   (set (concat (map :id agents)
+                                  (keep :save-agent-as events)
+                                  (keep :save-id-as events)))
          init-time   (get scenario :initial-block-time 1000)
          agent-check (validate-agents agents)]
      (cond

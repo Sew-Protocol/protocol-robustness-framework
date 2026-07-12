@@ -173,3 +173,78 @@
            {:message/type :CHALLENGE :subject-task task-ref :sender "challenger"})]
     (mailbox/publish! m)
     (is (= :challenged (mailbox/task-status task-ref)))))
+
+;; ── Nil-required-field detection per predicate ────────────
+
+(deftest execution-attestation-rejects-nil-code-hash
+  (let [a (att/build-execution-attestation (valid-exec-spec))
+        tampered (assoc-in a [:assertion :code-hash] nil)]
+    (is (not (att/valid-attestation? tampered)))))
+
+(deftest execution-attestation-rejects-nil-env-hash
+  (let [a (att/build-execution-attestation (valid-exec-spec))
+        tampered (assoc-in a [:assertion :env-hash] nil)]
+    (is (not (att/valid-attestation? tampered)))))
+
+(deftest execution-attestation-rejects-nil-bundle-root
+  (let [a (att/build-execution-attestation (valid-exec-spec))
+        tampered (assoc-in a [:assertion :bundle-root] nil)]
+    (is (not (att/valid-attestation? tampered)))))
+
+(deftest execution-attestation-rejects-nil-execution-node-hash
+  (let [a (att/build-execution-attestation (valid-exec-spec))
+        tampered (assoc-in a [:assertion :execution-node-hash] nil)]
+    (is (not (att/valid-attestation? tampered)))))
+
+(deftest execution-attestation-rejects-nil-result-projection
+  (let [a (att/build-execution-attestation (valid-exec-spec))
+        tampered (assoc-in a [:assertion :result-projection-hash] nil)]
+    (is (not (att/valid-attestation? tampered)))))
+
+(deftest execution-attestation-rejects-nil-registry-snapshot
+  (let [a (att/build-execution-attestation (valid-exec-spec))
+        tampered (assoc-in a [:context :registry-snapshot/hash] nil)]
+    (is (not (att/valid-attestation? tampered)))))
+
+(deftest reproduction-attestation-rejects-nil-original-att-ref
+  (let [a (att/build-reproduction-attestation (valid-repro-spec))
+        tampered (assoc-in a [:assertion :original-attestation-ref] nil)]
+    (is (not (att/valid-attestation? tampered)))))
+
+(deftest reproduction-attestation-rejects-nil-original-result-proj
+  (let [a (att/build-reproduction-attestation (valid-repro-spec))
+        tampered (assoc-in a [:assertion :original-result-projection-hash] nil)]
+    (is (not (att/valid-attestation? tampered)))))
+
+(deftest reproduction-attestation-rejects-nil-repro-exec-node-hash
+  (let [a (att/build-reproduction-attestation (valid-repro-spec))
+        tampered (assoc-in a [:assertion :reproduction-execution-node-hash] nil)]
+    (is (not (att/valid-attestation? tampered)))))
+
+(deftest reproduction-attestation-rejects-nil-repro-result-proj
+  (let [a (att/build-reproduction-attestation (valid-repro-spec))
+        tampered (assoc-in a [:assertion :reproduction-result-projection-hash] nil)]
+    (is (not (att/valid-attestation? tampered)))))
+
+(deftest reproduction-attestation-rejects-nil-comparison-status
+  (let [a (att/build-reproduction-attestation (valid-repro-spec))
+        tampered (assoc-in a [:assertion :comparison-status] nil)]
+    (is (not (att/valid-attestation? tampered)))))
+
+(deftest challenge-attestation-rejects-nil-challenged-att-ref
+  (let [task-ref "research-task:sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        a (att/build-challenge-attestation
+           {:task/ref task-ref
+            :challenged-attestation-ref "attestation:sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+            :runner/id "runner-2" :reason "Evidence cannot be resolved"})
+        tampered (assoc-in a [:assertion :challenged-attestation-ref] nil)]
+    (is (not (att/valid-attestation? tampered)))))
+
+(deftest challenge-attestation-rejects-nil-reason
+  (let [task-ref "research-task:sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        a (att/build-challenge-attestation
+           {:task/ref task-ref
+            :challenged-attestation-ref "attestation:sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+            :runner/id "runner-2" :reason "Evidence cannot be resolved"})
+        tampered (assoc-in a [:assertion :reason] nil)]
+    (is (not (att/valid-attestation? tampered)))))

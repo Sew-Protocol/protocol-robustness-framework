@@ -358,12 +358,12 @@
                                                (if (map? s) (pred s) true)))
                                            inv-sc/all-scenarios))
                                 (catch Exception _ inv-sc/all-scenarios))
-inv-sc/all-scenarios)]
-                 (runner/run-collection
-                  {:entries entries
-                   :replay-fn (sew-replay-fn)
-                   :type-meta-fn (fn [sid] (get inv-sc/scenario-type-registry sid {}))}
-                  (merge {:suite-id (or suite-id :sew-invariants)} opts))))
+                              inv-sc/all-scenarios)]
+                (runner/run-collection
+                 {:entries entries
+                  :replay-fn (sew-replay-fn)
+                  :type-meta-fn (fn [sid] (get inv-sc/scenario-type-registry sid {}))}
+                 (merge {:suite-id (or suite-id :sew-invariants)} opts))))
    "yield-v1" (fn [opts]
                 (run-paths (suites/suite-paths :yield-provider-scenarios)
                            (assoc opts :protocol "yield-v1")))})
@@ -501,7 +501,7 @@ inv-sc/all-scenarios)]
                                      (pred scenario)
                                      true))
                                  enriched)]
-         (mapv :raw-path filtered))
+           (mapv :raw-path filtered))
          (catch Exception _ paths))
        paths)
      (assoc opts

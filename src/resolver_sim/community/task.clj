@@ -41,6 +41,7 @@
         body {:schema-version schema-version
               :task/type task-type
               :title title
+              :description (:description m)
               :subject (:subject m)
               :question (:question m)
               :benchmark/id (:benchmark/id m)

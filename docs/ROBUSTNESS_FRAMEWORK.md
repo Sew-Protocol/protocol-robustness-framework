@@ -66,7 +66,8 @@ testable without a running database or filesystem.
 ### What it is
 
 The replay engine (`resolver-sim.contract-model.replay`) is an open-world
-scenario harness. It accepts a scenario map — a sequence of timed events with
+scenario harness. See `docs/architecture/REPLAY_ENGINE_ARCHITECTURE.md` for the
+full architecture. It accepts a scenario map — a sequence of timed events with
 agents and protocol parameters — and drives a Sew world-state forward through
 each event, checking invariants between every step.
 

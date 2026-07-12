@@ -273,7 +273,7 @@
                                                  authority (assoc :authority-params authority)
                                                  actors (assoc :agents (vec (concat (:agents trace []) actors)))
                                                  token (assoc :token-params token))
-                                res (replay/replay-with-protocol effective-protocol effective-trace {:allow-dirty? true :skip-finalize true})
+                               res (replay/replay-with-protocol effective-protocol effective-trace {:allow-dirty? true :skip-finalize true})
                                trace-id (:scenario-id trace)
                                runner-opts (scenario-runner/runner-opts-for-scenario effective-trace opts)
                                threshold-validation (validate-thresholds res thresholds
@@ -356,7 +356,7 @@
                                state (assoc :initial-block-time (:block-time state 1000))
                                authority (assoc :authority-params authority)
                                actors (assoc :agents (vec (concat (:agents trace []) actors))))
-              replay-result (replay/replay-with-protocol effective-protocol effective-trace {:allow-dirty? true :skip-finalize true})]
+             replay-result (replay/replay-with-protocol effective-protocol effective-trace {:allow-dirty? true :skip-finalize true})]
          (when (and (= :fail (:outcome replay-result))
                     (= :invariant-violation (:halt-reason replay-result)))
            (let [minimized (minimizer/minimize effective-trace target-invariant)]

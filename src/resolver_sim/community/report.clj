@@ -29,6 +29,7 @@
      :report/generated-at (str (java.time.Instant/now))
      :task {:id (:task/hash task) :ref (:task/ref task)
             :type (:task/type task) :title (:title task)
+            :description (:description task)
             :benchmark/id (:benchmark/id task) :suite/id (:suite/id task)
             :claim-ids (:claim-ids task) :acceptance-criteria (:acceptance-criteria task)
             :registry-snapshot/hash (:registry-snapshot/hash task)}
@@ -81,6 +82,8 @@
   (println (str "  Ref:   " (get-in r [:task :ref])))
   (println (str "  Type:  " (name (get-in r [:task :type]))))
   (println (str "  Title: " (get-in r [:task :title])))
+  (when-let [desc (get-in r [:task :description])]
+    (println (str "  Description: " desc)))
   (println (str "  Benchmark: " (or (get-in r [:task :benchmark/id]) "(not specified)")))
   (println (str "  Suite: " (or (get-in r [:task :suite/id]) "(not specified)")))
   (println (str "  Registry snapshot: " (or (get-in r [:task :registry-snapshot/hash]) "(not recorded)")))
