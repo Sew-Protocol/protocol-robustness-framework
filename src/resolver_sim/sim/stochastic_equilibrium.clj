@@ -528,6 +528,111 @@
                      (format "malice pool ×%.2f of initial (≤1.1): no coalition growth detected"
                              growth-ratio)))))))
 
+;; ---------------------------------------------------------------------------
+;; Grim-trigger stability condition
+;; ---------------------------------------------------------------------------
+
+(defn evaluate-grim-trigger-stability
+  "Evaluate whether the grim-trigger strategy is stable under the current
+   economic parameters.
+
+   Grim-trigger stability condition:
+     discount-factor >= deviation-gain / (deviation-gain + punishment-loss)
+
+   Where:
+     deviation-gain = U_malicious - U_honest  (one-time gain from defecting)
+     punishment-loss = U_honest - U_honest-under-punishment
+                      (per-period loss during permanent punishment)
+
+   `multi-epoch-result` — result from run-multi-epoch with aggregated stats
+   `discount-factor` — per-period discount factor (default 0.95)
+
+   Returns {:status :pass | :fail | :inconclusive
+            :basis :single-simulation-evidence
+            :discount-factor double
+            :deviation-gain double
+            :punishment-loss double
+            :threshold double
+            :stable? bool
+            :detail string}"
+  [multi-epoch-result & {:keys [discount-factor]
+                         :or {discount-factor 0.95}}]
+  (let [agg (:aggregated-stats multi-epoch-result {})
+        honest-profit (double (get agg :honest-mean-profit 0))
+        malice-profit (double (get agg :malice-mean-profit 0))
+        ;; Deviation gain: one-time benefit of switching to malice
+        deviation-gain (max 0.0 (- malice-profit honest-profit))
+        ;; Punishment loss: per-period cost of being in punishment phase
+        ;; (modeled as earning 0 during punishment — worst case)
+        punishment-loss (max 0.0 honest-profit)
+        threshold (if (pos? (+ deviation-gain punishment-loss))
+                    (/ deviation-gain (+ deviation-gain punishment-loss))
+                    0.0)
+        stable? (>= discount-factor threshold)]
+    (if (and (zero? honest-profit) (zero? malice-profit))
+      {:status :inconclusive
+       :basis :single-simulation-evidence
+       :discount-factor discount-factor
+       :deviation-gain 0.0
+       :punishment-loss 0.0
+       :threshold 0.0
+       :stable? false
+       :detail "insufficient profit data to evaluate grim-trigger stability"}
+      {:status (if stable? :pass :fail)
+       :basis :single-simulation-evidence
+       :discount-factor discount-factor
+       :deviation-gain deviation-gain
+       :punishment-loss punishment-loss
+       :threshold threshold
+       :stable? stable?
+       :detail (format (str "grim-trigger %s: discount=%.3f, "
+                            "threshold=%.3f, deviation-gain=%.1f, "
+                            "punishment-loss=%.1f")
+                       (if stable? "stable" "unstable")
+                       discount-factor threshold
+                        deviation-gain punishment-loss)})))
+
+;; ---------------------------------------------------------------------------
+;; Folk-theorem region detection
+;; ---------------------------------------------------------------------------
+
+(defn evaluate-folk-theorem-region
+  "Identify the parameter region where cooperation is sustainable under the
+   grim-trigger Folk theorem.
+
+   Given a multi-epoch result, estimate whether the current parameter set
+   falls in the 'cooperation region' where:
+     discount-factor >= (U_malicious - U_honest) / U_honest
+
+   Also reports distance-to-boundary for sensitivity analysis.
+
+   `multi-epoch-result` — result from run-multi-epoch
+
+   Returns {:status :pass | :fail | :inconclusive
+            :basis :single-simulation-evidence
+            :cooperation-region? bool
+            :distance-to-boundary double
+            :binding-constraint kw | nil
+            :detail string}"
+  [multi-epoch-result]
+  (let [grim (evaluate-grim-trigger-stability multi-epoch-result)
+        df (:discount-factor grim)
+        threshold (:threshold grim)
+        distance (- df threshold)
+        cooperation? (and (:stable? grim) (pos? distance))]
+    {:status (if cooperation? :pass :fail)
+     :basis :single-simulation-evidence
+     :discount-factor df
+     :threshold threshold
+     :cooperation-region? cooperation?
+     :distance-to-boundary distance
+     :binding-constraint (when (not cooperation?) :discount-factor)
+     :grim-trigger-result grim
+     :detail (format (str "Folk theorem cooperation region: %s "
+                          "(discount=%.3f, threshold=%.3f, distance=%.4f)")
+                     (if cooperation? "inside" "outside")
+                     df threshold distance)}))
+
 (def ^:private mechanism-proxy-evaluators
   [evaluate-mech-budget-balance
    evaluate-mech-incentive-compatibility
@@ -578,8 +683,9 @@
 ;; ---------------------------------------------------------------------------
 
 (defn evaluate-stochastic-equilibrium
-  "Evaluate all stochastic equilibrium claims and mechanism-property proxies
-   against a multi-epoch result map.
+  "Evaluate all stochastic equilibrium claims, mechanism-property proxies,
+   grim-trigger stability, and Folk-theorem cooperation region against a
+   multi-epoch result map.
 
    The result map is the return value of resolver-sim.sim.multi-epoch/run-multi-epoch.
 
@@ -587,6 +693,8 @@
      {:claim-results           [{:claim-id :status :basis :evidence :detail} ...]
       :mechanism-proxy-results {property-kw → result-map}
       :mechanism-proxy-status  :pass | :fail | :inconclusive
+      :grim-trigger            result-map
+      :folk-theorem            result-map
       :overall-status          :pass | :fail | :inconclusive
       :pass-count              int
       :fail-count              int
@@ -596,6 +704,8 @@
   [multi-epoch-result]
   (let [claim-results    (mapv #(% multi-epoch-result) evaluators)
         mech-proxies     (evaluate-mechanism-proxies multi-epoch-result)
+        grim-trigger     (evaluate-grim-trigger-stability multi-epoch-result)
+        folk-theorem     (evaluate-folk-theorem-region multi-epoch-result)
         pass-count       (count (filter #(= :pass (:status %)) claim-results))
         fail-count       (count (filter #(= :fail (:status %)) claim-results))
         inc-count        (count (filter #(= :inconclusive (:status %)) claim-results))
@@ -604,9 +714,11 @@
                            (pos? inc-count)     :inconclusive
                            :else                :pass)
         summary          (format "%d/%d claims pass (%d fail, %d inconclusive)"
-                                 pass-count (count claim-results) fail-count inc-count)]
+                                  pass-count (count claim-results) fail-count inc-count)]
     (merge
      {:claim-results       claim-results
+      :grim-trigger        grim-trigger
+      :folk-theorem        folk-theorem
       :overall-status      overall
       :pass-count          pass-count
       :fail-count          fail-count

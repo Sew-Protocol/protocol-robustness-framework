@@ -68,6 +68,7 @@
              p-appeal-wrong p-l1-reversal has-kleros? p-l2-escalation p-l2-reversal
              lazy-correct-prob malicious-correct-prob collusive-correct-prob
              model-appeal-costs? appeal-bond-recovery-rate
+             use-endogenous-appeals? endogenous-appeal-recovery endogenous-appeal-cost
              oracle-fixture oracle-mode oracle-roll-sequence oracle-roll-on-exhaustion
              fixed-or oracle-roll-trace-enabled? evidence-quality?]
       :or {senior-resolver-skill 0.95
@@ -131,7 +132,14 @@
 
         ;; Appeal rate depends on verdict correctness
         appeal-prob (if verdict-correct? appeal-prob-correct appeal-prob-wrong)
-        appealed?   (< (rng/next-double rng) appeal-prob)
+        appealed?   (if use-endogenous-appeals?
+                      (let [recovery-amount (long (or endogenous-appeal-recovery escrow-wei))
+                            p-reversal (if verdict-correct? 0.0 p-l1-reversal)
+                            cost (long (or endogenous-appeal-cost 0))
+                            constraint (econ/appeal-participation-constraint
+                                        recovery-amount p-reversal cost)]
+                        (:should-appeal? constraint))
+                      (< (rng/next-double rng) appeal-prob))
 
         ;; ── Live-aligned appeal reversal (deterministic slash, stake basis) ──
         {:keys [l1-reversed? l2-escalated? l2-reversed? decision-reversed?]}

@@ -262,6 +262,50 @@
     (:net payoff)))
 
 ;; ---------------------------------------------------------------------------
+;; Coalition payoff from canonical model
+;; ---------------------------------------------------------------------------
+
+(defn coalition-ev-from-payoff
+  "Compute coalition expected value from the canonical payoff model.
+   Sums individual resolver payoffs and subtracts coordination costs.
+
+   `member-payoffs` — sequence of {:resolver-id kw :net-payoff long}
+   `coordination-cost` — fixed cost deducted from coalition total
+   `side-payments` — optional map of {:from kw :to kw :amount long} for
+                     internal redistribution
+
+   Returns {:coalition-total long :net-of-costs long :side-payment-adjusted long
+            :member-payoffs [{:resolver-id kw :net long :after-side-payment long}]}"
+  [member-payoffs & {:keys [coordination-cost side-payments]
+                     :or {coordination-cost 0, side-payments []}}]
+  (let [gross (reduce + 0 (map :net-payoff member-payoffs))
+        net (- gross (long coordination-cost))
+        ;; Apply side payments
+        initial-map (into {} (map (fn [m] [(:resolver-id m) (:net-payoff m)]) member-payoffs))
+        adjusted-map (reduce (fn [acc sp]
+                               (let [from-id (:from sp)
+                                     to-id (:to sp)
+                                     amt (long (:amount sp))
+                                     from-bal (- (get acc from-id 0) amt)
+                                     to-bal (+ (get acc to-id 0) amt)]
+                                 (-> acc
+                                     (assoc from-id from-bal)
+                                     (assoc to-id to-bal))))
+                             initial-map
+                             side-payments)
+        adjusted-members (mapv (fn [m]
+                                 (let [after-sp (get adjusted-map (:resolver-id m) (:net-payoff m))]
+                                   {:resolver-id (:resolver-id m)
+                                    :net (:net-payoff m)
+                                    :after-side-payment after-sp}))
+                               member-payoffs)
+        side-pay-adjustment (- net (reduce + 0 (map :after-side-payment adjusted-members)))]
+    {:coalition-total gross
+     :net-of-costs net
+     :side-payment-adjusted side-pay-adjustment
+     :member-payoffs adjusted-members}))
+
+;; ---------------------------------------------------------------------------
 ;; Incentive margin (replaces dominance ratio)
 ;; ---------------------------------------------------------------------------
 

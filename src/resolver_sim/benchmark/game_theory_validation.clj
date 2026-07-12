@@ -74,7 +74,19 @@
    {:id :pending-lifecycle-integrity
     :source :sew
     :title "Pending lifecycle integrity"
-    :summary "Pending settlement lifecycle guards prevent double-finalization and stale-state claims."}])
+    :summary "Pending settlement lifecycle guards prevent double-finalization and stale-state claims."}
+   {:id :coalition-aggregate-payoff
+    :source :framework
+    :title "Coalition aggregate payoff"
+    :summary "Coalition-level payoff aggregation with marginal contributions and side-payment feasibility."}
+   {:id :grim-trigger-stability
+    :source :framework
+    :title "Grim-trigger stability"
+    :summary "Repeated-game grim-trigger condition: discount >= deviation-gain / (deviation-gain + punishment-loss)."}
+   {:id :incentive-margin
+    :source :framework
+    :title "Incentive margin"
+    :summary "U_honest - max(U_deviation). Positive margin means honest strategy is strictly preferred."}])
 
 (def equilibrium-concepts
   "Available equilibrium-concept validators across generic and Sew-specific."
@@ -109,7 +121,15 @@
    {:id :cancellation-dominance
     :source :generic
     :title "Cancellation dominance"
-    :summary "Mutual cancel strictly dominates unilateral default for honest participants."}])
+    :summary "Mutual cancel strictly dominates unilateral default for honest participants."}
+   {:id :folk-theorem-cooperation-region
+    :source :framework
+    :title "Folk theorem cooperation region"
+    :summary "Cooperation is sustainable under grim trigger when discount >= (U_malicious - U_honest) / U_honest."}
+   {:id :trace-conditioned-epsilon-spe
+    :source :sew
+    :title "Trace-conditioned epsilon-SPE diagnostic"
+    :summary "Bounded regret analysis from a single observed trace at strategic checkpoint nodes."}])
 
 (def run-strategic-claim-validation strategic/run-strategic-claim-validation)
 
@@ -295,7 +315,7 @@
    {:title "Mechanism properties"
     :body "Properties of the protocol's incentive structure checked against terminal world state and accumulated metrics:\n\n- Budget balance — total funds in = total funds out + fees\n- Incentive compatibility — no actor profits from adversarial action\n- Individual rationality — honest participants don't end with negative payoff\n- Collusion resistance — coalitions don't profit relative to baseline\n- Sybil resistance — multiple identities don't increase payoff\n- Stake flow conservation — resolver stakes flow correctly through lifecycle"}
    {:title "Equilibrium concepts"
-    :body "Game-theoretic solution concepts checked against the trace:\n\n- Nash equilibrium — no unilateral profitable deviation\n- Dominant strategy — every player has a strategy optimal against all opponents\n- Subgame perfect equilibrium (SPE) — backward-induction: no ex-post profitable deviation at any subgame\n- Bounded epsilon-SPE — deviations must exceed epsilon threshold\n- Reputation SPE — resolver reputation penalties deter strategic slashing\n- Cancellation dominance — mutual cancel dominates unilateral default"}
+    :body "Game-theoretic solution concepts checked against the trace:\n\n- Nash equilibrium — no unilateral profitable deviation\n- Dominant strategy — every player has a strategy optimal against all opponents\n- Subgame perfect equilibrium (SPE) — backward-induction: no ex-post profitable deviation at any subgame\n- Bounded epsilon-SPE — deviations must exceed epsilon threshold\n- Reputation SPE — resolver reputation penalties deter strategic slashing\n- Cancellation dominance — mutual cancel dominates unilateral default\n- Folk theorem cooperation region — grim-trigger cooperation sustainability with discount factor\n- Trace-conditioned epsilon-SPE — bounded regret analysis from single observed trace"}
    {:title "Claim-strength taxonomy"
     :body "Each result declares its evidential basis:\n\n- :single-trace-terminal-proxy — terminal world state only\n- :single-trace-metric-proxy — accumulated metrics from one trace\n- :absent-evidence — required fields missing → inconclusive\n- :not-applicable — property cannot apply in this context\n- :multi-trace-required — only meaningful across N traces\n- :multi-epoch-required — only meaningful across epochs"}
    {:title "Severity"

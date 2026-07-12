@@ -355,6 +355,146 @@
         (or (seq param-sets) [{}])))
 
 ;; ---------------------------------------------------------------------------
+;; Coalition payoff aggregation
+;; ---------------------------------------------------------------------------
+
+(defn coalition-aggregate-payoff
+  "Compute total coalition utility and marginal contribution for a coalition
+   within a resolver population.
+
+   `resolver-payoffs` — sequence of {:resolver-id kw, :strategy kw, :net-payoff
+                        long, :coalition-id kw | nil}
+   `coalition-id` — the coalition to evaluate
+   `outside-option` — per-resolver outside-option utility (default 0)
+   `coordination-cost-fn` — function of coalition-size returning total
+                            coordination cost (default (constantly 0))
+
+   Returns {:coalition-id kw
+            :member-count n
+            :total-payoff long
+            :per-member-average double
+            :outside-option-total long
+            :coalition-surplus long
+            :marginal-contributions [{:resolver-id kw :contribution long} ...]
+            :side-payment-feasible? bool
+            :feasible-side-payments {:min long :max long}}"
+  [resolver-payoffs coalition-id
+   & {:keys [outside-option coordination-cost-fn]
+      :or {outside-option 0
+           coordination-cost-fn (constantly 0)}}]
+  (let [members     (filter #(= (:coalition-id %) coalition-id) resolver-payoffs)
+        member-ids  (set (map :resolver-id members))
+        non-members (remove #(member-ids (:resolver-id %)) resolver-payoffs)
+        member-payoffs    (map :net-payoff members)
+        total-payoff      (reduce + 0 member-payoffs)
+        member-count      (count members)
+        coord-cost        (coordination-cost-fn member-count)
+        coalition-net     (- total-payoff coord-cost)
+        outside-total     (* member-count outside-option)
+        surplus           (- coalition-net outside-total)
+        ;; Aggregate stats for non-members (total comparison baseline)
+        non-member-payoffs (map :net-payoff non-members)
+        total-non-member   (reduce + 0 non-member-payoffs)
+        total-all          (+ total-payoff total-non-member)
+        ;; Marginal contribution = what the coalition adds to total
+        ;; compared to the next-best alternative (members at outside option)
+        marginal-all       (- total-all (+ (* member-count outside-option) total-non-member))
+        ;; Per-resolver marginal contributions (approximate — assumes
+        ;; average surplus if individual contributions are not tracked)
+        per-member-marginal (if (pos? member-count)
+                              (mapv (fn [m]
+                                      {:resolver-id (:resolver-id m)
+                                       :contribution (long (/ marginal-all member-count))})
+                                    members)
+                              [])
+        ;; Side-payment feasibility: if total surplus > 0, side payments
+        ;; can redistribute to make every member at least as well off as
+        ;; outside option
+        side-pay-feasible? (pos? coalition-net)]
+    {:coalition-id           coalition-id
+     :member-count           member-count
+     :total-payoff           total-payoff
+     :coordination-cost      coord-cost
+     :coalition-net          coalition-net
+     :per-member-average     (if (pos? member-count)
+                               (double (/ coalition-net member-count))
+                               0.0)
+     :outside-option-total   outside-total
+     :coalition-surplus      surplus
+     :marginal-contributions per-member-marginal
+     :side-payment-feasible? side-pay-feasible?
+     :feasible-side-payments (if side-pay-feasible?
+                               (let [min-pay 0
+                                     max-pay coalition-net]
+                                 {:min min-pay :max max-pay})
+                               {:min 0 :max 0})}))
+
+;; ---------------------------------------------------------------------------
+;; Endogenous appeal participation
+;; ---------------------------------------------------------------------------
+
+(defn appeal-participation-constraint
+  "Determine whether a rational agent appeals an adverse outcome.
+
+   An agent appeals when the expected benefit exceeds the cost:
+     P(reversal) × recovery-amount > appeal-cost
+
+   Parameters:
+     `recovery-amount` — value the agent can recover if the appeal succeeds
+     `p-reversal` — probability the appeal reverses the outcome [0..1]
+     `appeal-cost` — total cost of filing and pursuing the appeal
+     `epsilon` — minimum surplus required to trigger appeal (default 0,
+                 use positive values for risk-aversion or opportunity cost)
+
+   Returns {:should-appeal? bool
+            :expected-benefit double
+            :net-benefit double
+            :breakdown {:recovery-amount long, :p-reversal double,
+                        :appeal-cost long}}"
+  [recovery-amount p-reversal appeal-cost & {:keys [epsilon] :or {epsilon 0}}]
+  (let [expected-benefit (* (double recovery-amount) (double p-reversal))
+        net-benefit (- expected-benefit (double appeal-cost))]
+    {:should-appeal? (> net-benefit (double epsilon))
+     :expected-benefit expected-benefit
+     :net-benefit net-benefit
+     :breakdown {:recovery-amount (long recovery-amount)
+                 :p-reversal (double p-reversal)
+                 :appeal-cost (long appeal-cost)}}))
+
+(defn derive-appeal-probability
+  "Derive the probability `p-appeal-wrong` from economic parameters,
+   assuming agents appeal when the participation constraint is met.
+
+   When the expected benefit of appeal exceeds the cost for the
+   declared agent population, `p-appeal-wrong` approaches 1.0 (all
+   affected agents appeal).  When it does not, it approaches 0.0.
+
+   Parameters:
+     `recovery-amount` — typical value at stake
+     `p-l1-reversal` — probability L1 reverses an incorrect outcome
+     `appeal-cost` — typical appeal cost
+     `agent-rational-fraction` — fraction of agents that are economically
+                                  rational (default 1.0)
+
+   Returns {:p-appeal-wrong double
+            :rational? bool
+            :participation-constraint map}
+   where `:p-appeal-wrong` is either 1.0 (if constraint met) or the
+   configured base rate (if not met)."
+  [recovery-amount p-l1-reversal appeal-cost
+   & {:keys [agent-rational-fraction base-rate]
+      :or {agent-rational-fraction 1.0
+           base-rate (:p-appeal-wrong (:base default-escalation-assumptions))}}]
+  (let [constraint (appeal-participation-constraint
+                    recovery-amount p-l1-reversal appeal-cost)
+        rational? (:should-appeal? constraint)]
+    {:p-appeal-wrong (if rational?
+                       (min 1.0 (* agent-rational-fraction 1.0))
+                       (* (- 1.0 agent-rational-fraction) base-rate))
+     :rational? rational?
+     :participation-constraint constraint}))
+
+;; ---------------------------------------------------------------------------
 ;; Backward-compatible wrappers (deprecated — use escalation-survival-probability)
 ;; ---------------------------------------------------------------------------
 

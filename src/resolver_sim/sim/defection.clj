@@ -5,6 +5,9 @@
    - :binary-payoff        (legacy compatibility selector)
    - :load-optimal         (load-aware strategy targeting)
    - :multi-strategy-payoff (reserved for future implementation)
+   - :grim-trigger         (defect forever after detecting opponent defection)
+   - :tit-for-tat          (mirror opponent's last epoch action)
+   - :forgiving            (tit-for-tat with probabilistic forgiveness)
 
    Preferred config shape:
      :strategy-adaptation
@@ -247,6 +250,58 @@
       :else
       {:to from :skip? true})))
 
+(defmethod select-next-strategy :repeated/grim-trigger
+  [_ {:keys [cfg epoch previous-epoch-strategies]} resolver]
+  (let [strategy (:strategy resolver)]
+    (if (and (pos? epoch) (seq previous-epoch-strategies))
+      (let [prev-total (count previous-epoch-strategies)
+            prev-malice (count (filter #{:malicious :lazy :collusive} previous-epoch-strategies))
+            prev-honest (- prev-total prev-malice)
+            defection-detected? (and (pos? prev-total)
+                                     (< (/ (double prev-honest) prev-total) 0.8))]
+        (if (and defection-detected? (= strategy :honest) (allowed-transition? cfg :malicious))
+          {:to :malicious :reason :grim-trigger-activated :selector :repeated/grim-trigger}
+          {:to strategy :skip? true}))
+      {:to strategy :skip? true})))
+
+(defmethod select-next-strategy :repeated/tit-for-tat
+  [_ {:keys [rate rng cfg epoch previous-epoch-strategies]} resolver]
+  (let [strategy (:strategy resolver)]
+    (if (<= epoch 1)
+      {:to strategy :skip? true}  ;; Cooperate in first epoch
+      (let [prev-total (count previous-epoch-strategies)
+            prev-malice (count (filter #{:malicious :lazy :collusive} previous-epoch-strategies))
+            malice-ratio (/ (double prev-malice) (max 1 prev-total))
+            ;; Tit-for-tat: if > 20% of resolvers defected last epoch, defect now
+            should-defect? (> malice-ratio 0.2)]
+        (if should-defect?
+          (if (and (= strategy :honest) (allowed-transition? cfg :malicious))
+            {:to :malicious :reason :tit-for-tat-retaliation :selector :repeated/tit-for-tat}
+            {:to strategy :skip? true})
+          ;; Return to cooperation if currently defecting
+          (if (= strategy :malicious)
+            {:to :honest :reason :tit-for-tat-return :selector :repeated/tit-for-tat}
+            {:to strategy :skip? true}))))))
+
+(defmethod select-next-strategy :repeated/forgiving
+  [_ {:keys [rate rng cfg epoch previous-epoch-strategies]} resolver]
+  (let [strategy (:strategy resolver)]
+    (if (<= epoch 1)
+      {:to strategy :skip? true}
+      (let [prev-total (count previous-epoch-strategies)
+            prev-malice (count (filter #{:malicious :lazy :collusive} previous-epoch-strategies))
+            malice-ratio (/ (double prev-malice) (max 1 prev-total))
+            should-defect? (> malice-ratio 0.2)
+            ;; Forgiveness probability: 10% chance to forgive each epoch
+            forgive? (< (rng/next-double rng) 0.1)]
+        (if (and (= strategy :malicious) forgive?)
+          {:to :honest :reason :forgiving-return :selector :repeated/forgiving}
+          (if should-defect?
+            (if (and (= strategy :honest) (allowed-transition? cfg :malicious))
+              {:to :malicious :reason :forgiving-retaliation :selector :repeated/forgiving}
+              {:to strategy :skip? true})
+            {:to strategy :skip? true}))))))
+
 (defmethod select-next-strategy :default
   [_ {:keys [epoch selector]} _]
   {:to nil
@@ -381,9 +436,13 @@
    Selectors:
    - :binary-payoff
    - :load-optimal
-   - :multi-strategy-payoff (returns diagnostic until implemented)"
+   - :multi-strategy-payoff (returns diagnostic until implemented)
+   - :repeated/grim-trigger
+   - :repeated/tit-for-tat
+   - :repeated/forgiving"
   [rng resolver-histories epoch params]
-  (let [{:keys [enabled? selector] :as cfg} (resolve-strategy-adaptation-config params)]
+  (let [{:keys [enabled? selector] :as cfg} (resolve-strategy-adaptation-config params)
+        previous-epoch-strategies (mapv :strategy (vals resolver-histories))]
     (if-not enabled?
       {:updated-histories resolver-histories
        :defection-events  []
@@ -397,6 +456,36 @@
         :load-optimal
         (assoc (apply-load-optimal rng resolver-histories epoch cfg params)
                :resolved-config cfg)
+
+        (:repeated/grim-trigger :repeated/tit-for-tat :repeated/forgiving)
+        (let [repeated-ctx {:rate (:rate cfg)
+                            :rng rng
+                            :cfg cfg
+                            :epoch epoch
+                            :previous-epoch-strategies previous-epoch-strategies}
+              result (reduce-kv
+                       (fn [acc id resolver]
+                         (let [from (:strategy resolver)
+                               decision (select-next-strategy selector repeated-ctx resolver)
+                               target (:to decision)]
+                           (cond
+                             (:blocked? decision)
+                             (assoc-in acc [:updated-histories id] resolver)
+
+                             (or (:skip? decision) (= from target))
+                             (assoc-in acc [:updated-histories id] resolver)
+
+                             :else
+                             (-> acc
+                                 (assoc-in [:updated-histories id]
+                                           (assoc resolver :strategy target))
+                                 (update :defection-events conj
+                                          (event-base epoch id from target
+                                                      selector (:reason decision)
+                                                      nil nil))))))
+                       {:updated-histories {} :defection-events [] :diagnostics []}
+                       resolver-histories)]
+          (assoc result :resolved-config cfg))
 
         :multi-strategy-payoff
         {:updated-histories resolver-histories
