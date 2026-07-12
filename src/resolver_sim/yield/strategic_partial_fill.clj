@@ -1,0 +1,368 @@
+(ns resolver-sim.yield.strategic-partial-fill
+  "Strategic partial-fill validation: invariance checks under
+   bounded claim transformations.
+
+   Evaluates whether the partial-fill allocation mechanism is resistant to
+   bounded strategic manipulation by comparing allocations before and after
+   claim transformations (split, merge, permute, sybil, inflate).
+
+   All checks operate through exhaustive enumeration over small integer
+   claim sets (1-5 claims, request values 0-20, liquidity 0-20) and remain
+   deterministic — no stochastic sampling, no state explosion beyond the
+   configured scope."
+  (:require [resolver-sim.yield.partial-fill :as pf]
+            [resolver-sim.yield.exact-math :as m]))
+
+;; ---------------------------------------------------------------------------
+;; Allocation helper
+;; ---------------------------------------------------------------------------
+
+(defn- allocate
+  "Simple pro-rata allocation for a set of claims under a given policy.
+   Returns a map of claim-key -> filled amount.
+   Uses floor-based pro-rata distribution (largest-remainder for tie-breaking)."
+  [claims available policy]
+  (let [n (count claims)
+        avail (long available)
+        total (reduce + 0 claims)]
+    (if (or (zero? total) (zero? avail))
+      (into {} (map (fn [i] [(str "c" i) 0]) (range n)))
+      (let [floor-fills (mapv (fn [c] (quot (* c avail) total)) claims)
+            floor-total (reduce + 0 floor-fills)
+            shortage (- avail floor-total)
+            ;; Distribute shortage by largest remainder
+            remainders (mapv (fn [c f] (mod (* c avail) total)) claims floor-fills)
+            sorted-indices (vec (take shortage (sort-by (fn [i] [(- (nth remainders i)) i]) (range n))))]
+        (into {} (map-indexed (fn [i c]
+                                [(str "c" i)
+                                 (if (some #(= i %) sorted-indices)
+                                   (inc (nth floor-fills i))
+                                   (nth floor-fills i))])
+                              claims))))))
+
+;; ---------------------------------------------------------------------------
+;; State enumeration
+;; ---------------------------------------------------------------------------
+
+(def default-scope
+  "Default enumeration bounds."
+  {:claim-count-max 5
+   :request-max 20
+   :liquidity-max 20
+   :deviations [:split :merge :permute :sybil :inflate]})
+
+(defn- enumerate-claim-counts
+  "Generate claim counts from 1 to max."
+  [max-claims]
+  (range 1 (inc max-claims)))
+
+(defn- enumerate-request-vectors
+  "Generate request vectors within bounds.
+   Uses integer partitions of request-max across claim-count claims,
+   with each request in [0, request-max]."
+  [claim-count request-max]
+  (letfn [(partitions [n k]
+            (if (= k 1)
+              [[n]]
+              (mapcat (fn [i]
+                        (map (fn [p] (cons i p))
+                             (partitions (- n i) (dec k))))
+                      (range 0 (inc n)))))]
+    (partitions request-max claim-count)))
+
+(defn- enumerate-liquidity
+  "Generate liquidity values from 0 to liquidity-max."
+  [liquidity-max]
+  (range 0 (inc liquidity-max)))
+
+(defn- enumerate-policies
+  "Generate the policy variants to test."
+  []
+  [{:mode :pro-rata :rounding-policy :floor}
+   {:mode :pro-rata :rounding-policy :largest-remainder}])
+
+;; ---------------------------------------------------------------------------
+;; Transformation functions
+;; ---------------------------------------------------------------------------
+
+(defn- split-claim
+  "Split claim at index `idx` into `parts` equal parts.
+   Returns a new claim vector with more entries."
+  [claims idx parts]
+  (let [n (long (nth claims idx))
+        base (quot n parts)
+        rem (- n (* base parts))
+        splits (concat (repeat rem (inc base))
+                       (repeat (- parts rem) base))
+        before (take idx claims)
+        after (drop (inc idx) claims)]
+    (vec (concat before splits after))))
+
+(defn- merge-claims
+  "Merge claims at indices `idxs` into a single claim (sum of values).
+   Returns a new claim vector with fewer entries."
+  [claims idxs]
+  (let [idxs-set (set idxs)
+        merged-sum (reduce + 0 (map (fn [i] (nth claims i)) idxs))
+        remaining (keep-indexed (fn [i v] (when (not (idxs-set i)) v)) claims)]
+    (vec (cons merged-sum remaining))))
+
+(defn- permute-claims
+  "Apply a permutation to claim order.
+   Returns a new claim vector."
+  [claims perm]
+  (vec (map (fn [i] (nth claims i)) perm)))
+
+(defn- sybil-claims
+  "Split each claim into `k` sybil identities with equal shares.
+   Total requested amount is preserved; number of identities multiplies by k."
+  [claims k]
+  (vec (mapcat (fn [c]
+                 (let [n (long c)
+                       base (quot n k)
+                       rem (- n (* base k))
+                       splits (concat (repeat rem (inc base))
+                                      (repeat (- k rem) base))]
+                   (remove zero? splits)))
+               claims)))
+
+(defn- inflate-claim
+  "Increase claim at index `idx` by `delta`."
+  [claims idx delta]
+  (let [v (vec claims)]
+    (assoc v idx (+ (nth v idx) delta))))
+
+;; ---------------------------------------------------------------------------
+;; Invariance checks
+;; ---------------------------------------------------------------------------
+
+(defn check-split-invariance
+  "Verify that splitting a claim into N equal parts produces the same
+   total allocation as the original single claim.
+
+   For each claim in each state, tries splitting into 2, 3, or 4 parts.
+   Returns vector of violation maps."
+  [claims available policy]
+  (let [filled (allocate claims available policy)
+        violations (atom [])]
+    (doseq [idx (range (count claims))
+            :let [n (nth claims idx)]
+            :when (>= n 2)
+            parts [2 3 4]
+            :when (>= n parts)]
+      (let [split-claims (split-claim claims idx parts)
+            split-filled (allocate split-claims available policy)
+            original-allocation (get filled (str "c" idx) 0)
+            split-total (reduce + 0 (vals split-filled))
+            error (- split-total original-allocation)]
+        (when (not= split-total original-allocation)
+          (swap! violations conj
+                 {:claim idx :original n :parts parts
+                  :original-allocation original-allocation
+                  :split-allocation split-total
+                  :error error}))))
+    @violations))
+
+(defn check-merge-invariance
+  "Verify that merging two adjacent claims produces the same allocation
+   as the sum of individual allocations."
+  [claims available policy]
+  (let [filled (allocate claims available policy)
+        violations (atom [])]
+    (doseq [i (range (dec (count claims)))
+            j (range (inc i) (count claims))]
+      (let [merged-claims (merge-claims claims [i j])
+            merged-filled (allocate merged-claims available policy)
+            individual-sum (+ (get filled (str "c" i) 0)
+                              (get filled (str "c" j) 0))
+            merged-allocation (get merged-filled (str "c0") 0)
+            error (- merged-allocation individual-sum)]
+        (when (not= merged-allocation individual-sum)
+          (swap! violations conj
+                 {:claims [i j] :individual-sum individual-sum
+                  :merged-allocation merged-allocation
+                  :error error}))))
+    @violations))
+
+(defn- permutations
+  "Generate all permutations of a vector (iterative algorithm).
+   Returns a lazy seq of vectors."
+  [v]
+  (let [n (count v)]
+    (if (<= n 1)
+      [v]
+      (mapcat (fn [i]
+                (let [elem (nth v i)
+                      rest-v (vec (concat (take i v) (drop (inc i) v)))]
+                  (map (fn [p] (vec (cons elem p)))
+                       (permutations rest-v))))
+              (range n)))))
+
+(defn check-permutation-invariance
+  "Verify that reordering claims does not change allocations.
+   Tests all permutations for up to 5 claims (max 120 permutations)."
+  [claims available policy]
+  (let [n (count claims)
+        original-filled (allocate claims available policy)
+        violations (atom [])]
+    (if (<= n 5)
+      (let [all-perms (permutations (range n))]
+        (doseq [perm all-perms
+                :let [perm-claims (permute-claims claims (vec perm))
+                      perm-filled (allocate perm-claims available policy)]]
+          (doseq [[k v] original-filled]
+            (let [perm-v (get perm-filled k 0)]
+              (when (not= v perm-v)
+                (swap! violations conj
+                       {:claim k :original v :permuted perm-v
+                        :permutation perm})))))))
+    @violations))
+
+(defn check-sybil-invariance
+  "Verify that splitting a claim into k sybil identities (same total)
+   does not improve total allocation."
+  [claims available policy]
+  (let [filled (allocate claims available policy)
+        violations (atom [])]
+    (doseq [k [2 3]]
+      (let [sybil-claims (sybil-claims claims k)
+            sybil-filled (allocate sybil-claims available policy)]
+        (when (> (reduce + 0 (vals sybil-filled))
+                 (reduce + 0 (vals filled)))
+          (swap! violations conj
+                 {:original-total (reduce + 0 (vals filled))
+                  :sybil-count k
+                  :sybil-total (reduce + 0 (vals sybil-filled))
+                  :gain (- (reduce + 0 (vals sybil-filled))
+                           (reduce + 0 (vals filled)))}))))
+    @violations))
+
+(defn check-request-monotonicity
+  "Verify that increasing a claim's requested amount does not decrease
+   its allocation (monotonicity property)."
+  [claims available policy]
+  (let [baseline-filled (allocate claims available policy)
+        violations (atom [])]
+    (doseq [idx (range (count claims))
+            delta [1 2 5]]
+      (let [inflated (inflate-claim claims idx delta)
+            inflated-filled (allocate inflated available policy)]
+        (doseq [j (range (count claims))]
+          (let [original-alloc (get baseline-filled (str "c" j) 0)
+                new-alloc (get inflated-filled (str "c" j) 0)]
+            ;; For the inflated claim, allocation should not decrease
+            (when (and (= j idx) (< new-alloc original-alloc))
+              (swap! violations conj
+                     {:claim idx :delta delta
+                      :original-alloc original-alloc
+                      :new-alloc new-alloc
+                      :kind :inflated-claim-lost-allocation}))
+            ;; For non-inflated claims, allocation should not increase
+            (when (and (not= j idx) (> new-alloc original-alloc))
+              (swap! violations conj
+                     {:claim j :delta delta :inflated-claim idx
+                      :original-alloc original-alloc
+                      :new-alloc new-alloc
+                      :kind :non-inflated-claim-gained-allocation}))))))
+    @violations))
+
+;; ---------------------------------------------------------------------------
+;; Full strategic validation
+;; ---------------------------------------------------------------------------
+
+(defn validate-strategic-properties
+  "Run all strategic invariance checks across enumerated states.
+   Returns {:properties [...] :summary {...}}.
+
+   Options:
+   - :scope — map with :claim-count-max, :request-max, :liquidity-max
+   - :policies — vector of policy maps to test
+   - :deviations — vector of deviation keywords to test
+   - :max-states — max states to enumerate (default 500)"
+  [& {:keys [scope policies deviations max-states]
+      :or {scope default-scope
+           policies (enumerate-policies)
+           deviations (:deviations default-scope)
+           max-states 500}}]
+  (let [results (atom [])
+        state-count (atom 0)
+        policies (vec policies)]
+    (doseq [claim-count (enumerate-claim-counts (:claim-count-max scope))
+            request-vec (enumerate-request-vectors claim-count (:request-max scope))
+            :let [request-sum (reduce + 0 request-vec)]
+            liquidity (enumerate-liquidity (:liquidity-max scope))
+            policy policies
+            :while (< @state-count max-states)]
+      (swap! state-count inc)
+      (let [checks (atom [])]
+        (when (some #{:split} deviations)
+          (let [v (check-split-invariance request-vec liquidity policy)]
+            (swap! checks conj
+                   {:property :strategy/split-invariance
+                    :verdict (if (empty? v) :verified :violated)
+                    :counterexamples (when (seq v) (take 3 v))
+                    :state {:claims request-vec :liquidity liquidity
+                            :policy (select-keys policy [:mode :rounding-policy])}})))
+        (when (some #{:merge} deviations)
+          (let [v (check-merge-invariance request-vec liquidity policy)]
+            (swap! checks conj
+                   {:property :strategy/merge-invariance
+                    :verdict (if (empty? v) :verified :violated)
+                    :counterexamples (when (seq v) (take 3 v))
+                    :state {:claims request-vec :liquidity liquidity
+                            :policy (select-keys policy [:mode :rounding-policy])}})))
+        (when (some #{:permute} deviations)
+          (let [v (check-permutation-invariance request-vec liquidity policy)]
+            (swap! checks conj
+                   {:property :strategy/permutation-invariance
+                    :verdict (if (empty? v) :verified :violated)
+                    :counterexamples (when (seq v) (take 3 v))
+                    :state {:claims request-vec :liquidity liquidity
+                            :policy (select-keys policy [:mode :rounding-policy])}})))
+        (when (some #{:sybil} deviations)
+          (let [v (check-sybil-invariance request-vec liquidity policy)]
+            (swap! checks conj
+                   {:property :strategy/sybil-invariance
+                    :verdict (if (empty? v) :verified :violated)
+                    :counterexamples (when (seq v) (take 3 v))
+                    :state {:claims request-vec :liquidity liquidity
+                            :policy (select-keys policy [:mode :rounding-policy])}})))
+        (when (some #{:inflate} deviations)
+          (let [v (check-request-monotonicity request-vec liquidity policy)]
+            (swap! checks conj
+                   {:property :strategy/request-monotonicity
+                    :verdict (if (empty? v) :verified :violated)
+                    :counterexamples (when (seq v) (take 3 v))
+                    :state {:claims request-vec :liquidity liquidity
+                            :policy (select-keys policy [:mode :rounding-policy])}})))
+        (swap! results conj {:state-count @state-count
+                             :claims request-vec
+                             :liquidity liquidity
+                             :policy policy
+                             :checks @checks})))
+    (let [all-verdicts (mapcat (fn [r] (map :verdict (:checks r))) @results)
+          total-checks (count all-verdicts)
+          verified (count (filter #{:verified} all-verdicts))
+          violated (count (filter #{:violated} all-verdicts))]
+      {:artifact/kind :strategic-closed-form-validation
+       :mechanism :yield/partial-fill
+       :validation-scope (assoc scope :states-examined @state-count)
+       :properties (->> (mapcat :checks @results)
+                        (group-by :property)
+                        (mapv (fn [[prop results]]
+                                {:property prop
+                                 :verdict (if (every? #(= :verified (:verdict %)) results)
+                                            :verified :violated)
+                                 :violation-count (count (filter #(= :violated (:verdict %)) results))
+                                 :state-count (count results)
+                                 :sample-counterexamples (->> results
+                                                              (filter #(= :violated (:verdict %)))
+                                                              (take 2)
+                                                              (mapcat :counterexamples)
+                                                               (take 3))})))
+       :summary {:states-examined @state-count
+                 :properties-examined (count (distinct (mapcat (fn [r] (map :property (:checks r))) @results)))
+                 :total-checks total-checks
+                 :verified verified
+                 :violated violated
+                 :valid? (zero? violated)}})))

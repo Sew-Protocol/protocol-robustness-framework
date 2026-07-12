@@ -542,11 +542,111 @@
        (filter (fn [[_ v]] (pos? (long v))))
        (into {})))
 
+(defn- compute-ideal-fills
+  "Compute the exact rational ideal fill for each claim.
+   Returns a map of claim-key -> {:requested N :ideal-exact N :ideal-floor N :fraction-remainder double}.
+   `ideal-exact` is the precise rational allocation: (claim / total-requested) * available.
+   `ideal-floor` is the floor of ideal-exact.
+   `fraction-remainder` is the fractional part of ideal-exact (0.0 to 1.0).
+   For sum-zero total-requested, all ideals are zero."
+  [positive-claims total-requested available]
+  (let [total (long (or total-requested 0))
+        avail (long (or available 0))]
+    (if (zero? total)
+      (into {} (map (fn [[k _]] [k {:requested 0 :ideal-exact 0 :ideal-floor 0 :fraction-remainder 0.0}]) positive-claims))
+      (let [total-dec (double total)
+            avail-dec (double avail)]
+        (into {} (map (fn [[k claim]]
+                        (let [claim-d (double claim)
+                              ideal-exact-d (/ (* claim-d avail-dec) total-dec)
+                              ideal-floor (long ideal-exact-d)
+                              frac-rem (- ideal-exact-d (double ideal-floor))]
+                          [k {:requested claim
+                              :ideal-exact ideal-exact-d
+                              :ideal-floor ideal-floor
+                              :fraction-remainder frac-rem}]))
+                      positive-claims))))))
+
+(defn- rounding-fairness-violations
+  "Check rounding fairness for integer allocation.
+   Returns a vector of violation maps (empty = pass).
+   For each claim, verifies that |actual_fill - ideal| <= max-rounding-error.
+   For largest-remainder, also verifies remainder-ranking correctness.
+
+   `positive-claims` — map of claim-key -> requested amount
+   `filled` — map of claim-key -> filled amount
+   `available` — available liquidity
+   `total-requested` — sum of all requested amounts
+   `rounding-policy` — :floor-and-carry | :floor | :largest-remainder | :principal-protective-floor"
+  [positive-claims filled available total-requested rounding-policy]
+  (when (seq positive-claims)
+    (let [ideals (compute-ideal-fills positive-claims total-requested available)
+          violations (atom [])
+          _ (doseq [[k {:keys [requested ideal-exact ideal-floor]}]
+                    (sort-by key ideals)]
+              (let [actual (long (get filled k 0))
+                    error (- actual ideal-floor)
+                    max-error (case rounding-policy
+                                :largest-remainder 1
+                                0)]
+                (when (> error max-error)
+                  (swap! violations conj
+                         {:claim k :requested requested :ideal-floor ideal-floor
+                          :actual actual :error error :max-error max-error
+                          :kind :ideal-floor-violation}))))
+          ;; Largest-remainder: verify remainder ranking
+          ranking-violations (when (= :largest-remainder rounding-policy)
+                               (let [remainders (->> ideals
+                                                     (sort-by (fn [[_ v]] (- (:fraction-remainder v))))
+                                                     (mapv (fn [[k v]]
+                                                             [k (:fraction-remainder v)])))
+                                     extra-count (- available (reduce + 0 (map :ideal-floor (vals ideals))))
+                                     top-n (take (max 0 extra-count) remainders)
+                                     top-ids (set (map first top-n))]
+                                 (->> (keep (fn [[k _]]
+                                              (let [actual-extra (- (long (get filled k 0))
+                                                                    (get-in ideals [k :ideal-floor] 0))]
+                                                (when (and (pos? actual-extra) (not (contains? top-ids k)))
+                                                  {:claim k :kind :unexpected-extra-unit
+                                                   :fraction-remainder (get-in ideals [k :fraction-remainder])
+                                                   :rank (some (fn [[i [ck _]]] (when (= ck k) i))
+                                                               (map-indexed vector remainders))})))
+                                            remainders)
+                                         vec)))]
+      (vec (concat @violations ranking-violations)))))
+
+(def ^:private check-class
+  "Maps each partial-fill check-id to its validation class.
+   Allocation-property checks verify the allocation rule itself;
+   algebraic-integrity checks verify arithmetic/structural consistency."
+  {:partial-fill/conservation            :validation.class/algebraic-integrity
+   :partial-fill/capacity-bound          :validation.class/algebraic-integrity
+   :partial-fill/per-claim-bound         :validation.class/algebraic-integrity
+   :partial-fill/per-claim-conservation  :validation.class/algebraic-integrity
+   :partial-fill/claim-key-consistency   :validation.class/algebraic-integrity
+   :partial-fill/non-negative-amounts    :validation.class/algebraic-integrity
+   :partial-fill/deferred-haircut-overlap :validation.class/algebraic-integrity
+   :partial-fill/evidence-self-consistency :validation.class/algebraic-integrity
+   :partial-fill/unrealized-bucket-valid :validation.class/algebraic-integrity
+   :partial-fill/decision-artifact-format :validation.class/algebraic-integrity
+   :partial-fill/settlement-mode-consistency :validation.class/algebraic-integrity
+   :partial-fill/settlement-mode-valid   :validation.class/algebraic-integrity
+   :partial-fill/mode-valid              :validation.class/algebraic-integrity
+   :partial-fill/pro-rata-cross-product  :validation.class/allocation-property
+   :partial-fill/rounding-fairness-ideal :validation.class/allocation-property
+   :partial-fill/rounding-fairness-remainder-ranking :validation.class/allocation-property
+   :partial-fill/principal-first-priority :validation.class/allocation-property
+   :partial-fill/waterfall-priority      :validation.class/allocation-property
+   :partial-fill/rounding-residual-bounded :validation.class/allocation-property})
+
 (defn- check-result
-  [check-id status details]
-  {:check/id check-id
-   :status status
-   :details details})
+  ([check-id status details]
+   (check-result check-id status details (get check-class check-id)))
+  ([check-id status details validation-class]
+   (cond-> {:check/id check-id
+            :status status
+            :details details}
+     validation-class (assoc :validation-class validation-class))))
 
 (defn partial-fill-closed-form-checks
   "Research-grade closed-form criteria for a partial-fill decision.
@@ -789,7 +889,38 @@
                                (check-result :partial-fill/pro-rata-cross-product
                                              :not-applicable
                                              {:mode mode})))
-          residual-ch (future
+           rounding-fairness-ideal-ch (future
+                                      (if (= :pro-rata mode)
+                                        (let [violations (rounding-fairness-violations
+                                                          positive-claims filled available
+                                                          total-requested rounding-policy)]
+                                          (check-result :partial-fill/rounding-fairness-ideal
+                                                        (if (empty? violations) :pass :fail)
+                                                        {:violations violations
+                                                         :max-allowed-error (case rounding-policy
+                                                                              :largest-remainder 1
+                                                                              0)
+                                                         :ideal-fills (compute-ideal-fills
+                                                                       positive-claims total-requested available)}))
+                                        (check-result :partial-fill/rounding-fairness-ideal
+                                                      :not-applicable {:mode mode})))
+           rounding-remainder-ch (future
+                                  (if (= :largest-remainder rounding-policy)
+                                    (let [violations (rounding-fairness-violations
+                                                      positive-claims filled available
+                                                      total-requested rounding-policy)
+                                          ranking-violations (filter #(= :unexpected-extra-unit (:kind %))
+                                                                      violations)]
+                                      (check-result :partial-fill/rounding-fairness-remainder-ranking
+                                                    (if (empty? ranking-violations) :pass :fail)
+                                                    {:violations ranking-violations
+                                                     :remainder-order (->> (compute-ideal-fills
+                                                                            positive-claims total-requested available)
+                                                                          (sort-by (fn [[_ v]] (- (:fraction-remainder v))))
+                                                                          (mapv (fn [[k v]] [k (:fraction-remainder v)])))}))
+                                    (check-result :partial-fill/rounding-fairness-remainder-ranking
+                                                  :not-applicable {:rounding-policy rounding-policy})))
+           residual-ch (future
                         (if rounding-applicable?
                           (check-result :partial-fill/rounding-residual-bounded
                                         (if residual-ok? :pass :fail)
@@ -863,7 +994,8 @@
       (mapv deref [conservation-ch capacity-ch per-claim-ch per-claim-conservation-ch
                    claim-key-ch non-negative-ch settlement-mode-ch settlement-mode-valid-ch
                    mode-valid-ch overlap-ch evidence-ch unrealized-ch artifact-format-ch
-                   cross-product-ch principal-first-ch waterfall-ch
+                   cross-product-ch rounding-fairness-ideal-ch rounding-remainder-ch
+                   principal-first-ch waterfall-ch
                    residual-ch]))))
 
 (defn post-partial-fill-position

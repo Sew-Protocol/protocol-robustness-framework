@@ -21,7 +21,7 @@
 
 (defn make-result
   "Build a validator result map with structured reason fields."
-  [property status severity basis & {:keys [reason reason-detail required available observed expected offending]}]
+  [property status severity basis & {:keys [reason reason-detail required available observed expected offending validation-class]}]
   (cond-> {:property  property
            :status    status
            :severity  severity
@@ -34,34 +34,39 @@
            :available (vec (or available []))}
     reason-detail (assoc :reason-detail reason-detail)
     (and (nil? reason) reason-detail) (assoc :reason :unspecified)
-    reason-detail (assoc :requires [reason-detail])))
+    reason-detail (assoc :requires [reason-detail])
+    validation-class (assoc :validation-class validation-class)))
 
 (defn pass-result
-  [property basis observed expected]
+  [property basis observed expected & {:keys [validation-class]}]
   (make-result property :pass :hard basis
-               :observed observed :expected expected))
+               :observed observed :expected expected
+               :validation-class validation-class))
 
 (defn fail-result
-  [property basis observed expected offending]
+  [property basis observed expected offending & {:keys [validation-class]}]
   (make-result property :fail :hard basis
                :reason :property-violated
-               :observed observed :expected expected :offending offending))
+               :observed observed :expected expected :offending offending
+               :validation-class validation-class))
 
 (defn inconclusive-result
-  [property basis reason & {:keys [detail required available]}]
+  [property basis reason & {:keys [detail required available validation-class]}]
   (make-result property :inconclusive :soft basis
                :reason reason
                :reason-detail detail
                :required required
-               :available available))
+               :available available
+               :validation-class validation-class))
 
 (defn not-applicable-result
-  [property reason & {:keys [detail required available]}]
+  [property reason & {:keys [detail required available validation-class]}]
   (make-result property :not-applicable :soft :not-applicable
                :reason reason
                :reason-detail detail
                :required required
-               :available available))
+               :available available
+               :validation-class validation-class))
 
 (defn validator-error-result
   [property throwable]

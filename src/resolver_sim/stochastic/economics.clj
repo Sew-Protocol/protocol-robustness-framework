@@ -171,6 +171,9 @@
   "Returns the probability that an incorrect lower-layer outcome is corrected
    through appeal and, if enabled, L2 escalation.
 
+   DEPRECATED: Use `correction-probability` (derived from canonical
+   `escalation-survival-probability`) instead.
+
    Formula:
    appeal * (L1 reversal + L1 failure * L2 escalation * L2 reversal)"
   [{:keys [p-appeal-wrong
@@ -188,6 +191,9 @@
 
 (defn fraud-survival-probability
   "Probability that a malicious L0 verdict survives all active escalation tiers.
+
+   DEPRECATED: Use `escalation-survival-probability` (canonical recursive
+   formulation) instead. This function is preserved for backward compatibility.
 
    Three-layer path (has-kleros? true):
      P = P(no appeal)
@@ -263,6 +269,94 @@
             p-l2-upholds (- 1.0 p-l2-reversal)]
         (+ p-no-appeal (* p-after-l1 (+ p-no-l2 (* p-l2-escalation p-l2-upholds)))))
       (+ p-no-appeal p-after-l1))))
+
+;; ---------------------------------------------------------------------------
+;; Unified Escalation Probability Tree
+;; ---------------------------------------------------------------------------
+
+(defn- clamp-prob
+  "Clamp a value to [0.0, 1.0]."
+  [x]
+  (-> x double (max 0.0) (min 1.0)))
+
+(defn escalation-survival-probability
+  "Canonical recursive escalation survival probability.
+
+   Models the probability that an incorrect lower-layer outcome survives
+   through all active escalation tiers. The recursion is:
+
+     survival(tier k) =
+       P(no challenge at k)
+       + P(challenge at k)
+         × P(tier k fails to correct)
+         × survival(tier k+1)
+
+   For the standard three-tier model (L0 → L1 → Kleros/L2):
+
+     survival(L0) =
+       (1 - p-appeal-wrong)
+       + p-appeal-wrong
+         × (1 - p-l1-reversal)
+         × survival(L1)
+
+     survival(L1) =
+       (1 - p-l2-escalation)
+       + p-l2-escalation
+         × (1 - p-l2-reversal)
+         × 1.0    (terminal tier — fraud survives if L2 fails)
+
+   Parameters (map):
+     :p-appeal-wrong    P(aggrieved party appeals an incorrect outcome)
+     :p-l1-reversal     P(L1 reverses the incorrect outcome | appealed)
+     :has-kleros?       whether L2/Kleros backstop is active
+     :p-l2-escalation   P(party escalates to L2 | L1 failed to correct)
+     :p-l2-reversal     P(Kleros/L2 reverses | escalated)
+
+   Missing keys default to the :base band of default-escalation-assumptions.
+   All probability inputs are clamped to [0.0, 1.0]."
+  [params]
+  (let [base (:base default-escalation-assumptions)
+        p-appeal   (clamp-prob (get params :p-appeal-wrong  (:p-appeal-wrong base)))
+        p-l1-rev   (clamp-prob (get params :p-l1-reversal   (:p-l1-reversal base)))
+        has-l2?    (boolean (get params :has-kleros?        (:has-kleros? base)))
+        p-l2-esc   (clamp-prob (get params :p-l2-escalation (:p-l2-escalation base)))
+        p-l2-rev   (clamp-prob (get params :p-l2-reversal   (:p-l2-reversal base)))
+        ;; Terminal tier survival
+        survive-l2 (if has-l2?
+                     (+ (- 1.0 p-l2-esc)
+                        (* p-l2-esc (- 1.0 p-l2-rev)))
+                     1.0)
+        ;; L1 survival
+        survive-l1 (+ (- 1.0 p-appeal)
+                      (* p-appeal (- 1.0 p-l1-rev) survive-l2))]
+    survive-l1))
+
+(defn correction-probability
+  "Probability that an incorrect lower-layer outcome IS corrected.
+   Complementary to escalation-survival-probability: correction = 1 - survival."
+  [params]
+  (- 1.0 (escalation-survival-probability params)))
+
+(defn verify-escalation-identities
+  "Verify that the survival and correction identities hold for a set of
+   parameter vectors. Returns a vector of result maps with :pass? and :delta."
+  [& param-sets]
+  (mapv (fn [params]
+          (let [survival  (escalation-survival-probability params)
+                correction (correction-probability params)
+                sum (+ survival correction)
+                pass? (< (Math/abs (- sum 1.0)) 1e-10)]
+            {:params    (select-keys params [:p-appeal-wrong :p-l1-reversal])
+             :survival  survival
+             :correction correction
+             :sum       sum
+             :pass?     pass?
+             :delta     (- sum 1.0)}))
+        (or (seq param-sets) [{}])))
+
+;; ---------------------------------------------------------------------------
+;; Backward-compatible wrappers (deprecated — use escalation-survival-probability)
+;; ---------------------------------------------------------------------------
 
 (defn breakeven-detection
   "Minimum detection probability for honest EV to exceed full malicious EV.

@@ -95,15 +95,40 @@
 ;; Result constructors (delegate to equilibrium-result)
 ;; ---------------------------------------------------------------------------
 
+(def ^:private property-class
+  "Maps equilibrium property keywords to their validation class."
+  {:incentive-compatibility       :validation.class/payoff-property
+   :sybil-resistance              :validation.class/payoff-property
+   :dominant-strategy-equilibrium :validation.class/payoff-property
+   :nash-equilibrium              :validation.class/equilibrium
+   :bayesian-nash-equilibrium     :validation.class/equilibrium
+   :pro-rata-fairness             :validation.class/algebraic-integrity
+   :redistribution-fairness       :validation.class/algebraic-integrity
+   :individual-rationality        :validation.class/payoff-property
+   :collusion-resistance           :validation.class/deviation-resistance
+   :stake-flow-conservation        :validation.class/algebraic-integrity
+   :budget-balance                 :validation.class/payoff-property
+   :force-refund-path-integrity    :validation.class/algebraic-integrity
+   :pending-lifecycle-integrity    :validation.class/algebraic-integrity
+   :subgame-perfect-equilibrium    :validation.class/equilibrium
+   :bounded-public-state-epsilon-spe :validation.class/equilibrium
+   :bounded-backward-induction-spe  :validation.class/equilibrium
+   :resolver-reputation-spe         :validation.class/equilibrium
+   :resolver-reputation-profile-matrix :validation.class/equilibrium
+   :cancellation-dominance          :validation.class/deviation-resistance})
+
 (defn- pass [property basis observed expected]
-  (eq-result/pass-result property basis observed expected))
+  (eq-result/pass-result property basis observed expected
+                         :validation-class (get property-class property)))
 
 (defn- fail [property basis observed expected offending]
-  (eq-result/fail-result property basis observed expected offending))
+  (eq-result/fail-result property basis observed expected offending
+                         :validation-class (get property-class property)))
 
 (defn- inconclusive [property basis reason-kw detail & {:keys [required available]}]
   (eq-result/inconclusive-result property basis reason-kw
-                                 :detail detail :required required :available available))
+                                 :detail detail :required required :available available
+                                 :validation-class (get property-class property)))
 
 (defn- not-applicable [property reason-kw detail & opts]
   (eq-result/not-applicable-result property reason-kw

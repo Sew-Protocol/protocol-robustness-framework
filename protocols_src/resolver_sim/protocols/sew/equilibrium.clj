@@ -30,6 +30,22 @@
 ;; avoid a circular dependency between sew/* and scenario/*)
 ;; ---------------------------------------------------------------------------
 
+(def ^:private property-class
+  {:individual-rationality              :validation.class/payoff-property
+   :collusion-resistance                :validation.class/deviation-resistance
+   :stake-flow-conservation             :validation.class/algebraic-integrity
+   :subgame-perfect-equilibrium         :validation.class/equilibrium
+   :bounded-public-state-epsilon-spe    :validation.class/equilibrium
+   :bounded-backward-induction-spe      :validation.class/equilibrium
+   :resolver-reputation-spe             :validation.class/equilibrium
+   :resolver-reputation-profile-matrix  :validation.class/equilibrium
+   :budget-balance                      :validation.class/payoff-property
+   :budget-balance-detailed             :validation.class/payoff-property
+   :force-refund-path-integrity         :validation.class/algebraic-integrity
+   :force-reversal-path-integrity       :validation.class/algebraic-integrity
+   :pending-lifecycle-integrity         :validation.class/algebraic-integrity
+   :cancellation-dominance              :validation.class/deviation-resistance})
+
 (defn- pass [property basis observed expected]
   {:property  property
    :status    :pass
@@ -38,7 +54,8 @@
    :observed  observed
    :expected  expected
    :offending []
-   :requires  []})
+   :requires  []
+   :validation-class (get property-class property)})
 
 (defn- fail [property basis observed expected offending]
   {:property  property
@@ -48,7 +65,8 @@
    :observed  observed
    :expected  expected
    :offending (vec offending)
-   :requires  []})
+   :requires  []
+   :validation-class (get property-class property)})
 
 (defn- inconclusive [property basis reason]
   {:property  property
@@ -58,7 +76,8 @@
    :observed  nil
    :expected  nil
    :offending []
-   :requires  [reason]})
+   :requires  [reason]
+   :validation-class (get property-class property)})
 
 (defn- not-applicable [property reason]
   {:property  property
