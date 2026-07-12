@@ -17,7 +17,8 @@
    :world-checkpoint-policy  :decision-nodes-only
    :projection-mode          :full
    :require-event-id?        false
-   :include-telemetry-evidence? false})
+   :include-telemetry-evidence? false
+  :evidence-mode              :all})
 
 (def fast-regression-flags
   "Fast regression: theory deferred (or disabled)."
@@ -40,14 +41,15 @@
    :replay/audit           audit-flags})
 
 (def minimal-replay-flags
-  "Library-style replay: no temporal enforcement, no theory DSL, relaxed validation."
+  "Library-style replay: no temporal enforcement, no theory DSL, relaxed validation, no evidence."
   (assoc default-replay-flags
          :evaluate-theory?         false
          :temporal-enabled?        false
          :strict-validation?       false
          :metrics-profile          :yield-provider
          :world-checkpoint-policy  :omit
-         :require-event-id?        false))
+         :require-event-id?        false
+         :evidence-mode            :none))
 
 (def external-log-replay-flags
   "External log / chain-ingestion replay: require event-id on replay-sensitive actions."
@@ -118,7 +120,11 @@
                                              (if (or (:minimal replay-opts) (= profile :minimal)) :finalize-only :full))
                                 :full)))
              :require-event-id?
-             (boolean (flag-lookup scenario replay-opts :require-event-id? false))}))))
+             (boolean (flag-lookup scenario replay-opts :require-event-id? false))
+             :evidence-mode
+             (keyword (name (or (flag-lookup scenario replay-opts :evidence-mode
+                                              (if (or (:minimal replay-opts) (= profile :minimal)) :none :all))
+                                   :all)))}))))
 
 (defn runner-opts-from-flags
   "Map replay flags to `scenario.runner` theory opts."

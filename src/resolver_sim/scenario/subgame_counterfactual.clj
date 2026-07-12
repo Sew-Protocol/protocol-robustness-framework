@@ -694,20 +694,24 @@
   "Compute bounded local regret evidence for strategic decision nodes.
 
    Returns:
-   {:status       :pass|:fail|:inconclusive          (backward-compat)
-    :spe-result   :spe/pass|:spe/epsilon-pass|...    (Phase H rich vocab)
-    :basis        kw
-    :regret-table [...]
-    :max-regret   n
-    :threshold    n
-    :checked-nodes n
-    :strategy-profile  map                           (Phase G)
-    :proper-subgames-checked n                       (Phase F)
-    :information-set-nodes-checked n                 (Phase F)
-    :not-checkable-nodes n                           (Phase F)
-    :off-path-coverage map                           (Phase J)
-    :counterexamples [...]                           (Phase I)
-    :requires [...]}"
+   {:status                :pass|:fail|:inconclusive  (backward-compat)
+    :spe-result            :spe/pass|...              (Phase H rich vocab)
+    :result-strength       :pass|:epsilon-pass|:profitable-deviation|:inconclusive
+    :basis                 kw
+    :regret-table          [...]
+    :max-regret            n
+    :threshold             n
+    :candidate-deviations  long                       (distinct alternatives across rows)
+    :coverage              {:evaluated N :total N :fraction 0.xx}
+    :continuation/mode     :forward|:backward-induction
+    :checked-nodes         n
+    :strategy-profile      map                        (Phase G)
+    :proper-subgames-checked n                        (Phase F)
+    :information-set-nodes-checked n                  (Phase F)
+    :not-checkable-nodes n                            (Phase F)
+    :off-path-coverage     map                        (Phase J)
+    :counterexamples       [...]                      (Phase I)
+    :requires              [...]}"
   [{:keys [raw-trace decisions terminal-world spe-config world-checkpoints
            protocol agents protocol-params scenario-id]}]
   (let [decision-nodes (->> decisions
@@ -750,6 +754,7 @@
                                :inconclusive-undefined-utility 0
                                :inapplicable-node-type 0
                                :evaluated 0}
+                :result-strength :inconclusive
                 :counterexamples []
                 :off-path-coverage {:nodes-generated 0
                                     :nodes-evaluated 0
@@ -758,6 +763,9 @@
                                     :proper-subgames-checked 0
                                     :information-set-nodes-checked 0
                                     :max-depth max-depth}
+                :candidate-deviations 0
+                :coverage {:evaluated 0 :total 0 :fraction 0.0}
+                :continuation/mode eval-mode
                 :evaluation-mode eval-mode
                 :backward-induction-depth nil
                 :deviation-terminal-count nil
@@ -907,9 +915,17 @@
             ;; The minimum penalty that would close every profitable-deviation gap.
             ;; Only meaningful when utility-spec type is :resolver-reputation-v1.
             rep-penalties    (keep :min-reputation-penalty-required rows)
-            min-rep-penalty-for-spe-pass (when (seq rep-penalties) (apply max rep-penalties))]
+            min-rep-penalty-for-spe-pass (when (seq rep-penalties) (apply max rep-penalties))
+            ;; Derived diagnostic keys
+            result-strength  (cond
+                               (= :pass status) (if (pos? exceed-count) :epsilon-pass :pass)
+                               (= :fail status) (if (pos? evaluated-count) :profitable-deviation :inconclusive)
+                               :else :inconclusive)
+            total-nodes      (long (count rows))
+            cov-fraction     (if (pos? total-nodes) (/ (double evaluated-count) (double total-nodes)) 0.0)]
         {:status status
          :spe-result spe-result
+         :result-strength result-strength
          :basis :single-trace-node-counterfactual-proxy
          :regret-table rows
          :max-regret max-regret
@@ -934,7 +950,12 @@
                                :positive (count (filter pos? regrets))}
          :counterexamples counterexamples
          :off-path-coverage off-path-coverage
-         :checked-nodes (count rows)
+         :candidate-deviations (long (count (distinct (mapcat :alternatives rows))))
+         :coverage {:evaluated evaluated-count
+                    :total total-nodes
+                    :fraction cov-fraction}
+         :continuation/mode eval-mode
+         :checked-nodes total-nodes
          :requires requires
          ;; Phase K
          :evaluation-mode eval-mode

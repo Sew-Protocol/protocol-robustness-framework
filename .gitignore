@@ -110,3 +110,6 @@ workspaces/private-discovery-template/export/
 .codacy
 .cursor/rules/codacy.mdc
 .github/instructions/codacy.instructions.md
+
+# Temporarily ignored
+docs/game-theory/CLOSED_FORM_VALIDATION.md

@@ -142,95 +142,112 @@
   [entry]
   (execution/trace-entry->replay-event entry))
 
+(defn replay-events
+  "Replay a scenario and return trace + metrics without evidence chain or I/O.
+
+   Accepts optional opts map — passed through to `resolve-replay-flags`:
+   - :flags   — replay flag overrides (see `replay.flags`)
+   - :minimal — use minimal replay flags
+   - :run-id  — identifier for the replay run
+
+   Returns the full simulation result including :trace, :metrics, :outcome,
+   and (when `:evaluate-expectations?` is true) expectation and theory analysis.
+
+   This is a pure computation — no evidence chain, no I/O, no risk monitoring.
+   Callers (e.g. `replay-with-protocol`) add those layers externally."
+  [protocol scenario & [opts]]
+  (let [flags              (replay-flags/resolve-replay-flags scenario opts)
+        vocab              (if (satisfies? proto/EconomicModel protocol)
+                             (proto/metric-vocabulary protocol)
+                             #{})
+        effective-metrics  (into (into metrics/base-metrics vocab)
+                                 (or (metrics/expectation-metric-keys scenario) #{}))
+        validation         (validate-scenario scenario effective-metrics
+                                              {:strict-validation? (:strict-validation? flags)})
+        temporal-cfg       (:temporal-evidence scenario)
+        temporal-enabled?  (:temporal-enabled? flags)]
+    (if-not (:ok validation)
+      {:outcome :invalid :scenario-id (:scenario-id scenario) :events-processed 0 :trace [] :metrics (metrics/zero-metrics protocol (:metrics-profile flags)) :halt-reason (:error validation) :protocol protocol}
+      (let [agents   (:agents scenario)
+            p-params (get scenario :protocol-params {})
+            context  (-> (proto/build-execution-context protocol agents p-params)
+                         (assoc :replay-flags flags))
+            agent-index (:agent-index context)
+            world0  (proto/init-world protocol scenario)
+            events  (sort-by :seq (:events scenario))
+            scenario-id (:scenario-id scenario)
+            expected-errors-set (set (map expected-error-key (:expected-errors scenario [])))
+            strict-expected-errors? (boolean (:strict-expected-errors? scenario false))
+            run-id  (or (:run-id opts) (:run-id scenario) (str scenario-id "-run"))
+            options {:expected-errors-set expected-errors-set
+                     :strict-expected-errors? strict-expected-errors?
+                     :allow-open-entities? (:allow-open-entities? scenario)
+                     :allow-open-disputes? (:allow-open-disputes? scenario)
+                     :agents agents
+                     :temporal-cfg temporal-cfg
+                     :temporal-enabled? temporal-enabled?
+                     :agent-index agent-index
+                     :scenario scenario
+                     :run-id run-id
+                     :replay-flags flags}
+            raw-result (execution/run-simulation-loop protocol context scenario-id events world0 [] (metrics/zero-metrics protocol (:metrics-profile flags)) options)
+            trimmed-result (replay-checkpoints/apply-checkpoint-policy-to-result
+                            (:world-checkpoint-policy flags)
+                            raw-result)]
+        (if (:evaluate-expectations? flags true)
+          (finalize-scenario-result scenario trimmed-result flags)
+          trimmed-result)))))
+
 (defn replay-with-protocol
   "Replay a scenario map using tiered protocol implementations.
 
    Optional third argument `replay-opts` may include `:flags` (see `replay.flags`).
-   Scenario `:options {:minimal true}` or `:options {:flags {...}}` merge the same way."
+   Scenario `:options {:minimal true}` or `:options {:flags {...}}` merge the same way.
+
+   Layers evidence chain, I/O, and risk monitoring on top of `replay-events`."
   ([protocol scenario] (replay-with-protocol protocol scenario {}))
   ([protocol scenario replay-opts]
    (chain/with-fresh-registry
      (chain/with-fresh-chain-cursor
        (risk/with-fresh-risk-context
-         (let [flags              (replay-flags/resolve-replay-flags scenario replay-opts)
-               vocab              (if (satisfies? proto/EconomicModel protocol)
-                                    (proto/metric-vocabulary protocol)
-                                    #{})
-               effective-metrics  (into (into metrics/base-metrics vocab)
-                                        (or (metrics/expectation-metric-keys scenario) #{}))
-               validation         (validate-scenario scenario effective-metrics
-                                                     {:strict-validation? (:strict-validation? flags)})
-               temporal-cfg       (:temporal-evidence scenario)
-               temporal-enabled?    (:temporal-enabled? flags)]
-           (if-not (:ok validation)
-             {:outcome :invalid :scenario-id (:scenario-id scenario) :events-processed 0 :trace [] :metrics (metrics/zero-metrics protocol) :halt-reason (:error validation) :protocol protocol}
-             (let [agents   (:agents scenario)
-                   p-params (get scenario :protocol-params {})
-                   context  (-> (proto/build-execution-context protocol agents p-params)
-                                (assoc :replay-flags flags))
-                   agent-index (:agent-index context)
-                   world0  (proto/init-world protocol scenario)
-                   events  (sort-by :seq (:events scenario))
-                   scenario-id (:scenario-id scenario)
-                   expected-errors-set (set (map expected-error-key (:expected-errors scenario [])))
-                   strict-expected-errors? (boolean (:strict-expected-errors? scenario false))
-                   run-id  (or (:run-id replay-opts) (:run-id scenario) (str scenario-id "-run"))
-                   raw-result (execution/run-simulation-loop protocol context scenario-id events world0 [] (metrics/zero-metrics protocol)
-                                                             {:expected-errors-set expected-errors-set
-                                                              :strict-expected-errors? strict-expected-errors?
-                                                              :allow-open-entities? (:allow-open-entities? scenario)
-                                                              :allow-open-disputes? (:allow-open-disputes? scenario)
-                                                              :agents agents
-                                                              :temporal-cfg temporal-cfg
-                                                              :temporal-enabled? temporal-enabled?
-                                                              :agent-index agent-index
-                                                              :scenario scenario
-                                                              :run-id run-id
-                                                              :replay-flags flags})
-                   trimmed-result (replay-checkpoints/apply-checkpoint-policy-to-result
-                                   (:world-checkpoint-policy flags)
-                                   raw-result)]
-               (attr/with-attribution
-                 {:ctx/scenario-id scenario-id
-                  :ctx/run-id run-id}
-                 (attr/log-with-attr :info "scenario/start" {:id scenario-id}))
-               (let [result (if (:evaluate-expectations? flags true)
-                              (finalize-scenario-result scenario trimmed-result flags)
-                              trimmed-result)]
-             ;; Phase 2: Register Theory Evaluation and Results
-             ;; TODO: Move this I/O to the caller level — replay-with-protocol
-             ;; should be a pure computation.
-                 (when-let [theory (:diagnostics result)]
-                   (try
-                     (let [f (io/file (evcfg/artifact-path :theory-eval))]
-                       (.mkdirs (.getParentFile f))
-                       (spit f (json/write-str theory {:indent true})))
-                     (catch Exception e
-                       (log/warn! :theory-diagnostics-write-failed
-                                  {:path (evcfg/artifact-path :theory-eval)
-                                   :error (.getMessage e)}))))
-
-                 (when-not (:skip-finalize replay-opts)
-                   (let [signing-key (or (:signing-key replay-opts)
-                                         chain/*signing-key*
-                                         (System/getenv "PRF_SIGNING_KEY"))
-                         signing-pw (or (:signing-password replay-opts)
-                                        chain/*signing-password*
-                                        (System/getenv "PRF_SIGNING_PASSWORD"))
-                         tsa-url (or (:tsa-url replay-opts)
-                                     ts/*tsa-url*
-                                     (System/getenv "PRF_TSA_URL"))
-                         allow-dirty? (:allow-dirty? replay-opts)]
-                     (chain/finalize-and-attest!
-                      :run-id run-id
-                      :private-key-path signing-key
-                      :password signing-pw
-                      :tsa-url tsa-url
-                      :allow-dirty? allow-dirty?)))
-                  ;; Always register scenario snapshot (zero I/O, preserves
-                  ;; test depth for accumulation and reconciliation).
-                 (chain/register-scenario-snapshot!)
-                 (assoc result :risk-events (risk/events)))))))))))
+          (let [result (replay-events protocol scenario replay-opts)]
+            (if (= :invalid (:outcome result))
+              result
+              (let [run-id (get-in result [:context/source :run-id])
+                    scenario-id (or (:scenario-id result)
+                                    (get-in result [:context/source :scenario-id]))]
+                (attr/with-attribution
+                  {:ctx/scenario-id scenario-id
+                   :ctx/run-id run-id}
+                  (attr/log-with-attr :info "scenario/start" {:id scenario-id}))
+                (when-let [theory (:diagnostics result)]
+                  (try
+                    (let [f (io/file (evcfg/artifact-path :theory-eval))]
+                      (.mkdirs (.getParentFile f))
+                      (spit f (json/write-str theory {:indent true})))
+                    (catch Exception e
+                      (log/warn! :theory-diagnostics-write-failed
+                                 {:path (evcfg/artifact-path :theory-eval)
+                                  :error (.getMessage e)}))))
+                (when-not (:skip-finalize replay-opts)
+                  (let [signing-key (or (:signing-key replay-opts)
+                                        chain/*signing-key*
+                                        (System/getenv "PRF_SIGNING_KEY"))
+                        signing-pw (or (:signing-password replay-opts)
+                                       chain/*signing-password*
+                                       (System/getenv "PRF_SIGNING_PASSWORD"))
+                        tsa-url (or (:tsa-url replay-opts)
+                                    ts/*tsa-url*
+                                    (System/getenv "PRF_TSA_URL"))
+                        allow-dirty? (:allow-dirty? replay-opts)]
+                    (chain/finalize-and-attest!
+                     :run-id run-id
+                     :private-key-path signing-key
+                     :password signing-pw
+                     :tsa-url tsa-url
+                     :allow-dirty? allow-dirty?)))
+                (chain/register-scenario-snapshot!)
+                (assoc result :risk-events (risk/events))))))))))
 
 (defn replay-yield-scenario
   "Thin sequential replay for `yield-v1` (see `replay.yield`)."
@@ -239,11 +256,11 @@
 
 (defn simple-replay
   "Replay with library-style defaults: no temporal enforcement, no theory DSL, relaxed validation.
-   
+
    For `yield-v1`, delegates to `replay-yield-scenario` (thin runner). Other protocols
-   use `replay-with-protocol` with `minimal-replay-flags`. Caller `replay-opts` apply
-   only on the generic path.
-   
+   use `replay-events` with `minimal-replay-flags`. Caller `replay-opts` apply
+   on the generic path.
+
    Auto-defaults :schema-version to \"1.0\" when missing so hand-built
    notebook scenarios work without an explicit version key."
   [protocol scenario & [replay-opts]]
@@ -252,10 +269,10 @@
                    (assoc scenario :schema-version "1.0"))]
     (if (= "yield-v1" (proto/protocol-id protocol))
       (yield-replay/replay-yield-scenario protocol scenario)
-      (replay-with-protocol protocol scenario
-                            (merge {:minimal true
-                                    :flags replay-flags/minimal-replay-flags}
-                                   replay-opts)))))
+      (replay-events protocol scenario
+                     (merge {:minimal true
+                             :flags replay-flags/minimal-replay-flags}
+                            replay-opts)))))
 (defn resume-from-snapshot
   "Resume a simulation from a world snapshot and a sequence of events.
    Useful for exploring counterfactual subgames."

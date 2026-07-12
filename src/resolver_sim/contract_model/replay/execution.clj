@@ -17,6 +17,16 @@
 ;; Action Dispatch with Evidence
 ;; ---------------------------------------------------------------------------
 
+(defn- evidence-mode-allows?
+  "Check whether `evidence-type` is allowed under the given replay flags'
+   `:evidence-mode`.  `:all` permits everything; `:essential` permits only
+   `:transition` and `:invariant-failure`; `:none` permits nothing."
+  [flags evidence-type]
+  (case (:evidence-mode flags :all)
+    :all       true
+    :essential (#{:transition :invariant-failure} evidence-type)
+    :none      false))
+
 (defn apply-action-with-evidence
   "Dispatch an action through the protocol layer and emit a content-hashed
    evidence record for the transition.
@@ -27,13 +37,17 @@
 
    The :evidence key in the result contains the evidence record (or nil if
    attribution context was insufficient for evidence emission). The dispatch
-   itself always proceeds — evidence is best-effort at this layer."
+   itself always proceeds — evidence is best-effort at this layer.
+
+   Evidence emission is conditional on the `:evidence-mode` replay flag."
   [protocol context world event]
   (let [action (:action event)
         pre-world world
         result (proto/dispatch-action protocol context world event)
         post-world (:world result)
-        evidence (when (map? post-world)
+        flags  (or (:replay-flags context) replay-flags/default-replay-flags)
+        evidence (when (and (map? post-world)
+                            (evidence-mode-allows? flags :transition))
                    (try
                      (attr/with-attribution
                        {:ctx/step (:seq event)
@@ -302,11 +316,12 @@
                              (merge (when-not (:ok? inv-single) (:violations inv-single))
                                     (when-not (:ok? inv-trans)  (:violations inv-trans))))]
 
-        ;; Emit invariant attestation evidence (best-effort)
+        ;; Emit invariant attestation evidence (best-effort, :all evidence-mode only)
         ;; Links back to the transition evidence from apply-action-with-evidence
         (let [tx-evidence-hash (:evidence-hash (:evidence result))]
-          (emit-invariant-attestation! (:seq event) inv-single inv-trans
-                                       (and ok? check-inv?) tx-evidence-hash))
+          (when (evidence-mode-allows? flags :invariant-attestation)
+            (emit-invariant-attestation! (:seq event) inv-single inv-trans
+                                         (and ok? check-inv?) tx-evidence-hash)))
 
         (let [result-kw    (cond violated? :invariant-violated ok? :ok :else :rejected)
               error-kw     (when-not ok? (:error result))
@@ -320,8 +335,8 @@
               metadata     (if (satisfies? proto/AnalysisModule protocol)
                              (proto/classify-transition protocol (:action event) result-kw)
                              nil)]
-          ;; Emit projection evidence (best-effort)
-          (when ph
+          ;; Emit projection evidence (best-effort, :all evidence-mode only)
+          (when (and ph (evidence-mode-allows? flags :projection))
             (emit-projection-evidence! (:seq event)
                                        (hc/hash-with-intent {:hash/intent :world-structure} final-world)
                                        ph))
@@ -370,7 +385,12 @@
 ;; ---------------------------------------------------------------------------
 
 (defn run-simulation-loop
-  "Execute the core simulation loop from a given world state and event sequence."
+  "INTERNAL KERNEL — execute the core simulation loop from a given world state
+   and event sequence.
+
+   This is an internal function. Prefer `replay-events` or `replay-with-protocol`
+   in `resolver-sim.contract-model.replay` for the public API.  `resume-from-snapshot`
+   and this kernel form the low-level entry points for counterfactual and forked replays."
   [protocol context scenario-id events world trace metrics options]
   (let [{:keys [expected-errors-set strict-expected-errors?
                 allow-open-entities? allow-open-disputes?
@@ -378,6 +398,7 @@
                 scenario replay-flags run-id]} options
         context (assoc context :run-id run-id)
         check-inv? (:check-invariants? (or replay-flags replay-flags/default-replay-flags) true)
+        metrics-profile (:metrics-profile replay-flags :sew-integrated)
         supports-alias? (satisfies? proto/SimulationAdapter protocol)]
     (loop [world world
            events events
@@ -462,7 +483,7 @@
                                                                         [(:seq event) (:action event) :batch-conflict])))]
                                         (-> acc
                                             (update :trace conj entry)
-                                            (assoc :metrics (metrics/accum-metrics protocol (:metrics acc) event entry agent-index working-world))
+                                            (assoc :metrics (metrics/accum-metrics protocol (:metrics acc) event entry agent-index working-world metrics-profile))
                                             (assoc :states (assoc (:states acc) (:seq event) (proto/world-snapshot protocol working-world)))
                                             (assoc :world-checkpoints (assoc (:world-checkpoints acc) (:seq event) working-world))))
 
@@ -472,7 +493,7 @@
                                               entry (assoc entry0 :commit-status :rejected)]
                                           (-> acc
                                               (update :trace conj entry)
-                                              (assoc :metrics (metrics/accum-metrics protocol (:metrics acc) event entry agent-index working-world))))
+                                              (assoc :metrics (metrics/accum-metrics protocol (:metrics acc) event entry agent-index working-world metrics-profile))))
 
                                         (let [step (process-step protocol context working-world event)
                                               entry0 (:trace-entry step)
@@ -509,8 +530,8 @@
                                                                        (and alias-key new-id) (assoc alias-key new-id)
                                                                        (and agent-alias-key new-agent-id) (assoc agent-alias-key new-agent-id))))
                                               (update :trace conj entry)
-                                              (assoc :metrics (metrics/accum-metrics protocol (:metrics acc) event entry agent-index working-world))
-                                              (assoc :states (assoc (:states acc) (:seq event) (proto/world-snapshot protocol new-world)))
+                                               (assoc :metrics (metrics/accum-metrics protocol (:metrics acc) event entry agent-index working-world metrics-profile))
+                                               (assoc :states (assoc (:states acc) (:seq event) (proto/world-snapshot protocol new-world)))
                                               (assoc :world-checkpoints (assoc (:world-checkpoints acc) (:seq event) working-world)))))))))
                               {:world base-world
                                :trace trace
@@ -526,9 +547,10 @@
                 (temporal/maybe-record-temporal! temporal-cfg temporal-enabled? scenario-id :fail (:world batch-result) (:metrics batch-result) (:trace batch-result))
                 (let [failed-entry (some (fn [e] (when (seq (:violations e)) e))
                                          (reverse (:trace batch-result)))]
-                  (emit-invariant-failure-evidence!
-                   (or (:seq failed-entry) 0) scenario-id
-                   (:violations failed-entry)))
+                  (when (evidence-mode-allows? replay-flags :invariant-failure)
+                    (emit-invariant-failure-evidence!
+                     (or (:seq failed-entry) 0) scenario-id
+                     (:violations failed-entry))))
                 {:outcome :fail :scenario-id scenario-id :events-processed (count (:trace batch-result)) :halt-reason :invariant-violation :trace (:trace batch-result) :metrics (:metrics batch-result) :execution {:mode :deterministic-batch :batch-policy batch-commit-policy} :protocol protocol :world-checkpoints (:world-checkpoints batch-result) :last-valid-world (:world batch-result)})
               (let [post-single (when check-inv?
                                   (proto/check-invariants-single protocol (:world batch-result)))
@@ -606,7 +628,7 @@
                                                    :expected-revert
                                                    :unexpected-revert))))
                 new-trace (conj trace entry)
-                new-metrics (metrics/accum-metrics protocol metrics event entry agent-index world)
+                new-metrics (metrics/accum-metrics protocol metrics event entry agent-index world metrics-profile)
                 new-world (:world step)
                 states-result (replay-checkpoints/secure-checkpoint-update
                                {:states states :checkpoint-log log-after-wc :diagnostics diag-after-wc}
@@ -614,9 +636,10 @@
                 new-states (:states states-result)
                 checkpoint-log' (:checkpoint-log states-result)
                 diagnostics' (:diagnostics states-result)]
-            ;; Emit checkpoint evidence at strategic decision points (best-effort)
-            (replay-checkpoints/emit-checkpoint-evidence-at-strategic-point!
-             checkpoint-log' event)
+            ;; Emit checkpoint evidence at strategic decision points (best-effort, :all evidence-mode only)
+            (when (evidence-mode-allows? replay-flags :checkpoint)
+              (replay-checkpoints/emit-checkpoint-evidence-at-strategic-point!
+               checkpoint-log' event))
             (if (:halted? step)
               (do
                 (temporal/maybe-record-temporal! temporal-cfg temporal-enabled? scenario-id :fail (:world step) new-metrics new-trace)
@@ -624,9 +647,10 @@
                   {:ctx/scenario-id scenario-id
                    :ctx/run-id run-id}
                   (attr/log-with-attr :error "scenario/halt" {:id scenario-id :seq (:seq event) :reason :invariant-violation}))
-                (emit-invariant-failure-evidence!
-                 (:seq event) scenario-id
-                 (get-in step [:trace-entry :violations]))
+                (when (evidence-mode-allows? replay-flags :invariant-failure)
+                  (emit-invariant-failure-evidence!
+                   (:seq event) scenario-id
+                   (get-in step [:trace-entry :violations])))
                 {:outcome :fail
                  :scenario-id scenario-id
                  :events-processed (count new-trace)

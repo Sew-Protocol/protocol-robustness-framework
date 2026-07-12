@@ -71,58 +71,71 @@
   (metric-key (or (get-in scenario [:theory :metric-scope]) :trace)))
 
 (defn zero-metrics
-  "Initialise the metrics accumulator for one replay run."
-  [protocol]
-  (let [base {:attack-attempts      0
-              :attack-successes     0
-              :rejected-attacks     0
-              :reverts              0
-              :invariant-violations 0
-              :batch-buckets        0
-              :batch-events         0
-              :batch-conflicts      0
-              :invariant-results    {}}
-        vocab (if (satisfies? proto/EconomicModel protocol)
-                (proto/metric-vocabulary protocol)
-                #{})]
-    (into base (map #(vector % 0) vocab))))
+  "Initialise the metrics accumulator for one replay run.
+   Optional second arg `metrics-profile` (:sew-integrated by default):
+     - :sew-integrated / :yield-provider — include protocol vocab metrics
+     - :base — only base metrics (no protocol vocab)"
+  ([protocol] (zero-metrics protocol :sew-integrated))
+  ([protocol metrics-profile]
+   (let [base {:attack-attempts      0
+               :attack-successes     0
+               :rejected-attacks     0
+               :reverts              0
+               :invariant-violations 0
+               :batch-buckets        0
+               :batch-events         0
+               :batch-conflicts      0
+               :invariant-results    {}}
+         vocab (if (and (satisfies? proto/EconomicModel protocol)
+                        (not= :base metrics-profile))
+                 (proto/metric-vocabulary protocol)
+                 #{})]
+     (into base (map #(vector % 0) vocab)))))
 
-(defn accum-metrics [protocol metrics event trace-entry agent-index world-before]
-  (let [result-kw (:result trace-entry)
-        accepted? (= result-kw :ok)
-        agent     (get agent-index (:agent event))
-        attack?   (if (satisfies? proto/EconomicModel protocol)
-                    (proto/adversarial-event? protocol event agent)
-                    false)
-        tags      (:event-tags trace-entry)
-        world-after (:world trace-entry)
-        base (cond-> metrics
-               (and attack? accepted?)
-               (update :attack-successes inc)
+(defn accum-metrics
+  "Accumulate metrics after processing one event.
+   Optional last arg `metrics-profile` (:sew-integrated by default):
+     - :sew-integrated / :yield-provider — call protocol accum
+     - :base — skip protocol accum (base metrics only)"
+  ([protocol metrics event trace-entry agent-index world-before]
+   (accum-metrics protocol metrics event trace-entry agent-index world-before :sew-integrated))
+  ([protocol metrics event trace-entry agent-index world-before metrics-profile]
+   (let [result-kw (:result trace-entry)
+         accepted? (= result-kw :ok)
+         agent     (get agent-index (:agent event))
+         attack?   (if (satisfies? proto/EconomicModel protocol)
+                     (proto/adversarial-event? protocol event agent)
+                     false)
+         tags      (:event-tags trace-entry)
+         world-after (:world trace-entry)
+         base (cond-> metrics
+                (and attack? accepted?)
+                (update :attack-successes inc)
 
-               attack?
-               (update :attack-attempts inc)
+                attack?
+                (update :attack-attempts inc)
 
-               (and attack? (not accepted?))
-               (update :rejected-attacks inc)
+                (and attack? (not accepted?))
+                (update :rejected-attacks inc)
 
-               (not accepted?)
-               (update :reverts inc)
+                (not accepted?)
+                (update :reverts inc)
 
-               (= :batch-conflict (:error trace-entry))
-               (update :batch-conflicts inc)
+                (= :batch-conflict (:error trace-entry))
+                (update :batch-conflicts inc)
 
-               (:violations trace-entry)
-               (-> (update :invariant-violations inc)
-                   (update :invariant-results
-                           (fn [acc]
-                             (reduce (fn [m [kw r]]
-                                       (if (:holds? r) m (assoc m kw :fail)))
-                                     acc
-                                     (:violations trace-entry))))))]
-    (if (satisfies? proto/EconomicModel protocol)
-      (proto/accum-protocol-metrics protocol base tags event accepted? attack? world-before world-after)
-      base)))
+                (:violations trace-entry)
+                (-> (update :invariant-violations inc)
+                    (update :invariant-results
+                            (fn [acc]
+                              (reduce (fn [m [kw r]]
+                                        (if (:holds? r) m (assoc m kw :fail)))
+                                      acc
+                                      (:violations trace-entry))))))]
+     (if (and (satisfies? proto/EconomicModel protocol)
+              (not= :base metrics-profile))
+       (proto/accum-protocol-metrics protocol base tags event accepted? attack? world-before world-after)
+       base))))
 
 (defn expectation-metric-keys [scenario]
   (when-let [metrics (get-in scenario [:expectations :metrics])]

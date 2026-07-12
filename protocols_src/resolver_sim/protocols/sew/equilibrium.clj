@@ -163,14 +163,16 @@
   "Heuristic: No Profitable Regret (Trace-level SPE Proxy).
    Delegates to resolver-sim.scenario.subgame-counterfactual."
   [projection]
-  (let [{:keys [status basis regret-table max-regret mean-regret threshold checked-nodes requires
+  (let [spe-result-map (subgame-cf/evaluate-subgame-counterfactual projection)
+        {:keys [status basis regret-table max-regret mean-regret threshold checked-nodes requires
                 continuation-policy replay-boundary utility-spec class-counts
                 exceed-epsilon-count regret-distribution epsilon-abs epsilon-rel
                 max-deviation-depth memoization
-                spe-result strategy-profile
+                spe-result result-strength strategy-profile
                 proper-subgames-checked information-set-nodes-checked not-checkable-nodes
-                counterexamples off-path-coverage]}
-        (subgame-cf/evaluate-subgame-counterfactual projection)
+                counterexamples off-path-coverage candidate-deviations coverage]}
+        spe-result-map
+        continuation-mode (:continuation/mode spe-result-map)
         proof-sketch (str
                       "Claim: Bounded public-state SPE proxy under declared strategy profile "
                       (or (:id strategy-profile) "unknown") ".\n\n"
@@ -229,11 +231,15 @@
                   :spe-exceed-epsilon-count exceed-epsilon-count
                   :spe-memoization memoization
                   :spe-regret-distribution regret-distribution
-                  :spe-counterexamples (vec counterexamples)
-                  :spe-off-path-coverage off-path-coverage
-                  :spe-proof-sketch proof-sketch
-                  :decisions-checked checked-nodes
-                  :spe-violations   (vec (filter (fn [r] (pos? (long (or (:local-regret r) 0)))) regret-table))}]
+                   :spe-counterexamples (vec counterexamples)
+                   :spe-off-path-coverage off-path-coverage
+                   :result-strength result-strength
+                   :candidate-deviations candidate-deviations
+                   :coverage coverage
+                   :continuation/mode continuation-mode
+                   :spe-proof-sketch proof-sketch
+                   :decisions-checked checked-nodes
+                   :spe-violations   (vec (filter (fn [r] (pos? (long (or (:local-regret r) 0)))) regret-table))}]
     (case status
       :pass
       (pass :subgame-perfect-equilibrium basis
@@ -253,14 +259,17 @@
   "Phase K: Bounded public-state epsilon-SPE proxy.
    Delegates to resolver-sim.scenario.subgame-counterfactual."
   [projection]
-  (let [{:keys [status basis regret-table max-regret threshold checked-nodes requires
+  (let [spe-result-map (subgame-cf/evaluate-subgame-counterfactual projection)
+        {:keys [status basis regret-table max-regret threshold checked-nodes requires
                 continuation-policy replay-boundary utility-spec
-                spe-result strategy-profile
+                spe-result result-strength strategy-profile
                 proper-subgames-checked information-set-nodes-checked not-checkable-nodes
-                counterexamples off-path-coverage epsilon-abs epsilon-rel
+                counterexamples off-path-coverage candidate-deviations coverage
+                epsilon-abs epsilon-rel
                 class-counts exceed-epsilon-count memoization regret-distribution
                 max-deviation-depth mean-regret]}
-        (subgame-cf/evaluate-subgame-counterfactual projection)
+        spe-result-map
+        continuation-mode (:continuation/mode spe-result-map)
         eq-concept :bounded-public-state-epsilon-spe]
     (cond
       (zero? (long (or proper-subgames-checked 0)))
@@ -271,6 +280,10 @@
       (= status :pass)
       (pass eq-concept basis
             {:spe-result spe-result
+             :result-strength result-strength
+             :candidate-deviations candidate-deviations
+             :coverage coverage
+             :continuation/mode continuation-mode
              :spe-max-regret max-regret
              :spe-threshold threshold
              :spe-epsilon-abs epsilon-abs
@@ -287,6 +300,10 @@
       (= status :fail)
       (fail eq-concept basis
             {:spe-result spe-result
+             :result-strength result-strength
+             :candidate-deviations candidate-deviations
+             :coverage coverage
+             :continuation/mode continuation-mode
              :spe-max-regret max-regret
              :spe-threshold threshold
              :counterexamples counterexamples

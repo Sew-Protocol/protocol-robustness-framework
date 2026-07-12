@@ -2,19 +2,20 @@
 
 ## 1. Dual-Engine Design
 
-The framework operates two complementary simulation engines that share the same
-economic formulas but address fundamentally different questions:
+The framework operates two complementary simulation engines that use common
+economic primitives where explicitly shared, while applying different execution
+and analysis models:
 
 | Aspect | Deterministic Replay | Statistical (Monte Carlo) |
 |--------|---------------------|---------------------------|
 | **Purpose** | Deterministic executable invariant checking | Economic incentive analysis |
 | **Input** | Scenario event sequences | Parameter maps + strategies |
-| **RNG** | None (deterministic) | Seeded PRNG (reproducible) |
-| **Invariants** | 47 per step | None |
-| **Evidence** | Full evidence DAG with signatures | Aggregate statistics |
-| **Results** | Per-step trace | Mean/std-dev over N trials |
+| **RNG** | Replay core consumes an already-defined event sequence; scenario generation may occur upstream | Seeded PRNG (reproducible) |
+| **Checks** | Protocol-supplied per-step and post-replay invariants via `SimulationAdapter` | Aggregate economic, equilibrium, participation, and stability checks |
+| **Evidence** | Per-step trace and content-addressed evidence artifacts/DAG; attestations and signatures where configured | Reproducible run metadata, aggregate distributions, epoch trajectories, and economic diagnostics |
+| **Results** | Per-step trace | Distributions and confidence summaries over N trials, plus population and strategy trajectories |
 | **Code** | `contract_model/replay/` | `sim/`, `stochastic/` |
-| **Use case** | Bug finding, regression, audit | Parameter sensitivity, game theory |
+| **Use case** | Bug finding, regression, audit, invariant validation, and execution substrate for counterfactual and mechanism-property analysis | Parameter sensitivity, population equilibrium, strategy adaptation |
 
 The two engines are not redundant — they address different threat models.
 Deterministic replay demonstrates for the executed trace that a *specific event sequence* does not violate
@@ -28,20 +29,43 @@ protocol invariants. Monte Carlo estimates or tests under the modelled distribut
 
 ### 2.1 Public API
 
-The replay engine lives in `contract_model/replay/` and exposes a single main
-entry point:
+The replay engine lives in `contract_model/replay/` and exposes a two-tier
+API:
+
+**Tier 1 — Pure computation (no I/O, no evidence chain):**
 
 ```clojure
-(replay-with-protocol protocol scenario replay-opts?)
+(replay-events protocol scenario opts?)
 ```
+
+Runs the simulation loop and returns the full result map (trace, metrics,
+outcome, expectations, theory diagnostics) without evidence chain, risk
+monitoring, or filesystem I/O. Evidence chain functions called during
+execution use whatever dynamic context is active (callers like
+`replay-with-protocol` supply the context externally).
 
 | Parameter | Type | Description |
 |-----------|------|-------------|
 | `protocol` | `SimulationAdapter` instance | Protocol adapter |
 | `scenario` | map | Scenario with events, agents, params |
-| `replay-opts` | map (optional) | Flags, evidence chain, profiles |
+| `opts` | map (optional) | Flags, profiles, run-id — passed to `resolve-replay-flags` |
 
-**Return map:**
+**Tier 2 — Full orchestration with evidence, risk, and I/O:**
+
+```clojure
+(replay-with-protocol protocol scenario replay-opts?)
+```
+
+Layers evidence chain finalization, risk monitoring, theory diagnostics file
+I/O, and scenario snapshot registration on top of `replay-events`.
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `protocol` | `SimulationAdapter` instance | Protocol adapter |
+| `scenario` | map | Scenario with events, agents, params |
+| `replay-opts` | map (optional) | Flags, signing keys, TSA, profiles |
+
+**Return map** (same shape for both tiers; Tier 2 adds `:risk-events`):
 
 ```clojure
 {:outcome :pass | :fail | :invalid
@@ -55,36 +79,47 @@ entry point:
  :world-checkpoints {seq -> pre-decision-world}
  :last-valid-world <world>
  :expected-error-analysis {:expected [] :unexpected [] :missing []}
- :risk-events [...]}
+ :risk-events [...]}  ;; Tier 2 only
 ```
 
 Additional entry points:
 
 | Function | Purpose |
 |----------|---------|
-| `simple-replay` | Lightweight wrapper with relaxed defaults |
+| `simple-replay` | Lightweight wrapper calling `replay-events` with relaxed defaults |
 | `resume-from-snapshot` | Continue from an existing world for SPE forks |
 | `replay-idempotent-same-trace?` | Run twice and verify byte-for-byte equality |
 | `validate-scenario` | Validate scenario structure before replay |
 
 ### 2.2 Simulation Loop
 
-`replay-with-protocol` orchestrates the full replay:
+The replay engine is factored into two layers:
+
+**Pure computation** (`replay-events`):
+
+```
+replay-events
+  1. Merge replay flags from opts + scenario :options + profile defaults
+  2. Build metric vocabulary (base + protocol-specific via EconomicModel)
+  3. Validate scenario structure (agents, events, params)
+  4. Build execution context (proto/build-execution-context)
+  5. Initialize world (proto/init-world)
+  6. Delegate to execution/run-simulation-loop
+  7. Apply world checkpoint policy (trim per flag)
+  8. Evaluate expectations (expected-error analysis, theory diagnostics)
+```
+
+**I/O orchestration** (`replay-with-protocol` wraps `replay-events`):
 
 ```
 replay-with-protocol
   1. Setup fresh evidence chain context (with-fresh-registry,
      with-fresh-chain-cursor, with-fresh-risk-context)
-  2. Merge replay flags from opts + scenario :options + profile defaults
-  3. Build metric vocabulary (base + protocol-specific via EconomicModel)
-  4. Validate scenario structure (agents, events, params)
-  5. Build execution context (proto/build-execution-context)
-  6. Initialize world (proto/init-world)
-  7. Delegate to execution/run-simulation-loop
-  8. Apply world checkpoint policy (trim per flag)
-  9. Evaluate expectations (expected-error analysis, theory diagnostics)
-  10. Finalize evidence (write diagnostics, optionally sign + timestamp)
-  11. Attach risk events
+  2. Call replay-events (pure computation above)
+  3. Write theory diagnostics to disk
+  4. Finalize evidence chain (sign + timestamp)
+  5. Register scenario snapshot
+  6. Attach risk events
 ```
 
 The simulation loop (`execution/run-simulation-loop`) processes events one by
@@ -138,7 +173,16 @@ interface. The replay engine does not know what specific invariants exist.
 
 ### 2.4 Evidence Capture During Replay
 
-Every replay step produces layered evidence records:
+Every replay step can produce layered evidence records, controlled by the
+`:evidence-mode` replay flag (see §2.5):
+
+| Mode | Transition | Invariant failure | Invariant attestation | Projection | Checkpoint |
+|------|-----------|-------------------|----------------------|------------|-----------|
+| `:all` | Yes | Yes | Yes | Yes | Yes |
+| `:essential` | Yes | Yes | — | — | — |
+| `:none` | — | — | — | — | — |
+
+The five evidence layers:
 
 | Layer | Evidence | When | Fields |
 |-------|----------|------|--------|
@@ -157,14 +201,18 @@ RFC 3161. These artifacts feed into the evidence DAG (see
 
 Three replay profiles control which features are enabled:
 
-| Profile | Invariants | Expectations | Theory | Temporal | Projections | Checkpoints |
-|---------|-----------|-------------|--------|----------|-------------|-------------|
-| `:golden-full` | Yes | Yes | Yes | Yes | Yes | Yes |
-| `:fast-regression` | Yes | Yes | Deferred | Yes | Limited | No |
-| `:minimal` | Yes | No | No | No | No | No |
+| Profile | Checks | Expectations | Theory | Temporal | Evidence | Projections | Checkpoints |
+|---------|-----------|-------------|--------|----------|---------|-------------|-------------|
+| `:golden-full` | Yes | Yes | Yes | Yes | `:all` | Yes | Yes |
+| `:fast-regression` | Yes | Yes | Deferred | Yes | `:all` | Limited | No |
+| `:minimal` | Yes | No | No | No | `:none` | No | No |
 
 Flags are resolved from explicit opts, scenario `:options`, and profile defaults
 via `replay-flags/resolve-replay-flags`.
+
+| Flag | Values | Default | Description |
+|------|--------|---------|-------------|
+| `:evidence-mode` | `:all`, `:essential`, `:none` | `:all` (full profile), `:none` (minimal) | Controls evidence emission during replay. `:all` emits all five evidence types; `:essential` emits only transition + invariant failure; `:none` skips all emission entirely. |
 
 ### 2.6 Deterministic Batch Mode
 
@@ -180,7 +228,8 @@ the engine groups them and applies a deterministic-first-wins ordering:
 
 ### 2.7 Idempotency
 
-Eight actions are subject to `apply-once` deduplication (`REPLAY_SENSITIVE_ACTIONS.md`):
+Actions subject to `apply-once` deduplication are declared by the protocol
+adapter (`REPLAY_SENSITIVE_ACTIONS.md`). The current catalogue includes:
 
 | Action | Dedupe key fields |
 |--------|-------------------|
@@ -291,9 +340,9 @@ vs `:exploratory`) determines which phases are included in evidence packs.
 ### 4.1 Shared Arithmetic
 
 The engines share fee, bond, slashing, and appeal-bond formulas via
-`stochastic/economics.clj`. Cross-engine calibration tests (over 700
-assertions) verify that both engines produce identical arithmetic results
-for the same inputs.
+`stochastic/economics.clj`. Cross-engine calibration tests verify that both
+engines produce identical arithmetic results for the same inputs (the
+current catalogue is reported by the benchmark artifacts).
 
 ### 4.2 Complementary Threat Models
 
@@ -308,12 +357,84 @@ for the same inputs.
 
 ### 4.3 Calibration Link
 
-The Monte Carlo model uses `fraud-success-rate` (default 0.0) calibrated from
-deterministic adversarial scenario results. The adversarial suite's 41 attack
-scenarios produce an effective fraud-success-rate bound that feeds into MC
-parameter selection.
+The Monte Carlo model accepts a `fraud-success-rate` parameter (default 0.0).
+Rather than being empirically calibrated from deterministic results (which
+would treat scenario-suite coverage as a probability estimate), this rate
+should be treated as an explicit sensitivity parameter in Monte Carlo sweeps.
 
-At baseline params: detection must be ≥ 70% or bond 21× current to deter fraud through incentives alone. No successful fraud was observed in the covered adversarial scenarios for the 41 modelled attack vectors — making the state machine the load-bearing mechanism for economic security.
+Deterministic scenarios can eliminate or demonstrate specific mechanistic
+attack paths. They cannot determine the frequency of unknown attacks. The
+bridge between the two engines is therefore expressed as a coverage-qualified
+model input, not a measured frequency:
+
+```clojure
+{:fraud-model
+ {:covered-attack-classes #{:dispute-resolution :fee-manipulation ...}
+  :successful-covered-scenarios 0
+  :total-covered-scenarios <suite-count>
+  :residual-risk-assumption 0.01
+  :residual-risk-source :analyst-assumption
+  :scenario-suite-hash "..."
+  :model-version "..."}}
+```
+
+The Monte Carlo engine can then sweep residual fraud risk rather than treating
+deterministic success counts as a probability bound. The state machine remains
+the load-bearing mechanism for economic security, but the coverage claim is
+qualified by the scenario-suite metadata above.
+
+### 4.4 Game-Theory Applications by Engine
+
+Game-theory concepts are applied across both engines, with different scope
+depending on the analysis mode (single trace vs. distributional population).
+
+All SPE-related implementations below are **trace-conditioned epsilon-SPE
+analysis** — they fork from a single observed trace at strategic checkpoint
+nodes and evaluate regret for encoded alternative actions, using the original
+trace as the continuation where possible. They do not enumerate a complete
+game tree or represent information sets. See §8.9.
+
+| Concept | Deterministic Engine | Stochastic Engine | Shared? |
+|---------|-------------------|-------------------|---------|
+| **Trace-Conditioned Regret** | `scenario/subgame_counterfactual.clj` — forks from observed trace at strategic checkpoints, computes local regret per decision node, classifies deviations | N/A (requires explicit trace) | No |
+| **Bounded Local Deviation Regret** | Absolute and relative epsilon thresholds via `regret-exceeds-epsilon?` for encoded alternatives | N/A | No |
+| **Continuation-Utility Comparison** | `compute-backward-alt-utility` — compares terminal and continuation payoffs for encoded deviations | N/A | No |
+| **Reputation-Aware Utility** | `compute-reputation-utility` — wealth + reputation penalties | N/A | No |
+| **Strategy Profile Matrix** | `run-profile-matrix` — trace-conditioned epsilon-SPE diagnostic across multiple reputation profiles | N/A | No |
+| **Empirical Strategy Dominance** | No encoded adversarial deviation improves utility on the evaluated traces | Honest strategy has higher expected utility across sampled populations and parameter regimes | Concepts differ |
+| **Empirical Incentive Alignment** | No adversarial profit exceeds honest baseline on evaluated traces | Multi-epoch: honest EV > malice EV across sampled populations | Concepts differ |
+| **Individual Rationality** | No honest participant has negative net payoff (outside option defaults to zero) | Honest cumulative profit > 0 (outside option defaults to zero) | No |
+| **Bounded Nash Diagnostic** | No profitable unilateral deviation among the encoded alternatives at the evaluated state or strategy profile | N/A (not established from distributions alone) | No |
+| **Bayesian Nash Equilibrium** | Not currently established | Not currently established; stochastic population results may inform future Bayesian best-response analysis | No |
+| **Sybil Resistance** | Not directly checked — `attack-successes = 0` is not a sufficient Sybil test; requires comparing utility across identity splits | Ring/collusion models may contribute evidence, but Sybil and collusion resistance remain separate properties | No |
+| **Collusion Resistance** | No evaluated coalition deviation increases total coalition utility relative to the non-collusive baseline (within configured coalition and side-payment model) | Ring-model sweeps over coalition size and side-payment assumptions | No |
+| **Shortfall Conservation** | Allocated + residual amounts reconcile with available value | Closed-form conservation across parameter sweeps | Same — both check accounting conservation |
+| **Pro-rata Allocation Correctness** | Trace output matches the specified weight/cap allocation rule | Closed-form proportionality, cap, redistribution, and monotonicity checks | Same metric definition, independently evaluated |
+| **Cancellation-Specific Deviation Analysis** | Sew adapter: regret filtered to cancel-specific nodes; establishes cancellation dominance only over encoded alternatives | N/A | No |
+| **Fraud Detection** | Closed-form `fraud-survival-probability`, `breakeven-detection` | Same formulas in `resolve-dispute` | **Yes** — shared implementation |
+| **Strategy Dominance** | Referenced in adversarial hill-climb search | `strategy-dominance-score` = EV(honest)/EV(malicious) | Same metric definition, independently evaluated |
+| **Adversarial Hill-Climb** | Cross-run search layer — uses deterministic replay batches as the evaluation function | N/A | No |
+| **Adversary Policies** | Explicit scripted attackers on concrete traces (Static, Bribery, Evidence, Adaptive) | Population-level malicious, collusive, lazy, and adaptive agent policies | No |
+| **Strategy Adaptation** | N/A | Agents switch strategies based on payoff | No |
+| **Liveness Incentives** | N/A | Incentive strength classification | No |
+| **Evidence Costs** | N/A | Load-dependent rational threshold | No |
+| **Result Strength** | `:pass`, `:epsilon-pass`, `:profitable-deviation`, `:inconclusive`, `:not-checkable` | N/A | No |
+| **Coverage** | `:off-path-coverage` with evaluated/total node counts and fraction | N/A | No |
+| **Continuation Mode** | `:forward` (trace-follow) or `:backward-induction` | N/A | No |
+
+The deterministic engine provides the execution and evidence substrate for
+explicit-trace counterfactual analysis, bounded deviation-regret checks,
+mechanism-property evaluation, and adversarial strategy testing. The
+stochastic engine complements this with population-level expected-utility,
+adaptation, collusion, participation, and stability analysis. Results should
+distinguish formal guarantees from scenario-conditioned checks and empirical
+proxies.
+
+The "Shared?" column indicates whether both engines call the same underlying
+pure function or validated equivalent implementation ("shared implementation"),
+use the same metric definition evaluated independently ("same metric
+definition"), or apply the same conceptual idea through different means
+("concepts differ").
 
 ---
 
@@ -404,7 +525,7 @@ core.clj                     ← CLI entry point (impure shell)
   ├── core/phases.clj        ← Phase registration, I/O orchestration (impure)
   │
   ├── contract_model/replay/ ← Deterministic replay engine
-  │   ├── replay.clj         ← Public API, orchestration (contains some I/O)
+  │   ├── replay.clj         ← Public API: replay-events (pure), replay-with-protocol (I/O layer)
   │   ├── execution.clj      ← Simulation loop, step processing (pure-ish)
   │   ├── flags.clj          ← Replay profile resolution (pure)
   │   ├── checkpoints.clj    ← World checkpoint management (pure)
@@ -525,9 +646,12 @@ and RFC 3161 timestamps. This makes replay output independently verifiable.
 
 ### 8.4 Separation of I/O from Computation
 
-The intended architecture is a pure replay core with I/O at the caller level.
-Currently `replay-with-protocol` writes theory diagnostics to disk (a known
-deviation documented in a TODO comment at `replay.clj:200`).
+The replay engine separates pure computation from I/O. `replay-events` is a
+pure function that runs the simulation loop and returns trace + metrics without
+side effects. `replay-with-protocol` layers evidence chain finalization, theory
+diagnostics file I/O, and risk monitoring on top of `replay-events`. Library
+consumers (notebooks, `simple-replay`) can use `replay-events` directly and
+skip the I/O layer.
 
 ### 8.5 Deterministic Batch Ordering
 
@@ -538,7 +662,19 @@ ordering. Unknown actions get the conservative `[:global :unknown]` domain.
 
 Base metrics (event counts, acceptance, invariant violations) are engine-owned.
 Protocol-specific metrics via `EconomicModel/accum-protocol-metrics` extend the
-set. The `:metrics-profile` flag selects the accumulation path.
+set. The `:metrics-profile` flag selects the accumulation path:
+
+| Profile | Protocol vocab in `zero-metrics` | `accum-protocol-metrics` called | Yield/provider merges |
+|---------|--------------------------------|--------------------------------|----------------------|
+| `:sew-integrated` | Yes | Yes | Yield |
+| `:yield-provider` | Yes | Yes | Yield + provider |
+| `:base` | No | No | None |
+
+The `:base` profile produces only the 8 universal counters
+(`:attack-attempts`, `:attack-successes`, `:rejected-attacks`, `:reverts`,
+`:invariant-violations`, `:batch-buckets`, `:batch-events`, `:batch-conflicts`)
+and is suitable for library-style usage where only structural event counts
+matter. Pass `{:metrics-profile :base}` in replay opts to activate it.
 
 ### 8.7 Three Replay Profiles
 
@@ -552,11 +688,76 @@ closed-form stochastic models of dispute resolution. This is a deliberate
 simplification: the MC engine measures *directional incentive alignment*, not
 *mechanistic protocol adherence*. The deterministic engine covers the latter.
 
+### 8.9 Trace-Conditioned SPE
+
+The SPE implementation is trace-conditioned epsilon-SPE analysis, not full
+game-theoretic SPE. It evaluates deviations from a single observed trace at
+strategic checkpoint nodes identified by the protocol adapter. It does not
+enumerate the full game tree or represent information sets.
+
+The `:equilibrium-claim-tier` metadata on each equilibrium result documents
+whether deviations were actually evaluated (`:trace-conditioned`) or only
+single-trace heuristics were applied (`:proxy`). The `:off-path-coverage`
+map reports how many decision nodes were examined and how many could be fully
+evaluated.
+
+Full mechanism-wide SPE is not a tractable target for the unrestricted
+protocol model. The protocol has an effectively unbounded state and action
+space: arbitrary numbers of escrows and resolvers, large parameterised token
+amounts, repeated interactions, appeal sequences, reputation-dependent
+histories, and cross-workflow economic dependencies. Complete extensive-form
+analysis would also require explicit observation models, information sets,
+continuation strategies, beliefs, and utility functions for every participant
+role.
+
+The practical development frontier:
+
+1. **Strategic action generation** — connect adapter-defined actions to the
+   fork machinery while canonicalising and bounding parameterised alternatives.
+2. **Policy- or simulation-based continuation values** — replace mechanically
+   following the original trace with declared actor policies or seeded
+   stochastic rollouts.
+3. **Selective multi-ply search** — evaluate deviations and responses at
+   important decision nodes under explicit depth, branch, pruning, and horizon
+   limits.
+4. **Finite mechanism-specific game abstractions** — define bounded game
+   profiles for high-value mechanisms such as cancellation, appeals, resolver
+   selection, and shortfall allocation.
+
+Results must expose their analytical scope: decision nodes examined, candidate
+actions, continuation model, search horizon, omitted alternatives, utility
+assumptions, and statistical uncertainty. The term "SPE" should be reserved
+for finite, explicitly defined game abstractions in which all relevant
+subgames and deviations have been evaluated. Current unrestricted-protocol
+results should be described as trace-conditioned, policy-conditioned, bounded,
+or statistical sequential-rationality diagnostics.
+
+### 8.10 Replay Core vs. Analysis Layers
+
+The replay engine (`contract_model/replay/`) is a deterministic event processor:
+it takes a protocol adapter and event sequence, applies actions one by one,
+checks invariants, accumulates metrics, and optionally emits evidence. It
+knows nothing about game theory, equilibrium concepts, or adversarial search.
+
+Higher-level analysis modules use the replay engine as an evaluator:
+
+| Module | Uses replay as | Located in |
+|--------|---------------|------------|
+| Trace-conditioned epsilon-SPE (`subgame-counterfactual`) | Calls `resume-from-snapshot` to fork at decision nodes, runs continuation traces | `scenario/subgame_counterfactual.clj` |
+| Mechanism property checks | Wraps replay result in equilibrium vocabulary | `scenario/equilibrium.clj`, `protocols_src/.../sew/equilibrium.clj` |
+| Adversarial hill-climb | Evaluates each parameter set via batch replay | `sim/adversarial.clj` |
+
+These layers are not part of the replay kernel. The architecture doc groups
+them under "deterministic replay" because they share the replay engine as
+their evaluation substrate, but their analytical claims (SPE, dominance,
+adversarial optimality) are produced by the analysis layer, not by the replay
+core itself.
+
 ---
 
 ## 9. References
 
-- `src/resolver_sim/contract_model/replay.clj` — Replay engine public API
+- `src/resolver_sim/contract_model/replay.clj` — Public API: `replay-events` (pure), `replay-with-protocol` (I/O layer)
 - `src/resolver_sim/contract_model/replay/execution.clj` — Simulation loop
 - `src/resolver_sim/contract_model/replay/flags.clj` — Replay profile resolution
 - `src/resolver_sim/contract_model/replay/checkpoints.clj` — World checkpoints
