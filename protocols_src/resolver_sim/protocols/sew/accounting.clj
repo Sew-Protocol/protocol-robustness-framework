@@ -15,11 +15,12 @@
             [resolver-sim.protocols.sew.related-claims :as rc]
             [resolver-sim.util.attribution :as attr]
             [resolver-sim.evidence.capture :as cap]
-            [resolver-sim.hash.canonical :as hash]))
+            [resolver-sim.hash.canonical :as hash]
+            [resolver-sim.time.context :as time-ctx]))
 
 (declare sub-held record-fee record-claimable)
 
-(def ^:private held-custody-artifact-version "held-custody-adjustment.artifact.v1")
+(def ^:private held-custody-artifact-version "held-custody-adjustment.artifact.v2")
 
 ;; ---------------------------------------------------------------------------
 ;; total-held tracking
@@ -58,6 +59,10 @@
                               :scope-keys [:held/workflow-id]}
    :force-authorised-refund {:held/account :escrow-principal
                              :scope-keys [:held/workflow-id]}
+   :deferred-yield-reclassified-out {:held/account :escrow-principal
+                                     :scope-keys [:held/workflow-id]}
+   :deferred-yield-reserved {:held/account :yield-custody
+                             :scope-keys [:held/workflow-id]}
    :appeal-bond-posted {:held/account :appeal-bond
                         :scope-keys [:held/slash-id :held/bond-id :held/workflow-id :held/actor]}
    :appeal-bond-returned {:held/account :appeal-bond
@@ -66,12 +71,16 @@
                          :scope-keys [:held/slash-id :held/bond-id :held/workflow-id :held/actor]}
    :appeal-bond-forfeited {:held/account :appeal-bond
                            :scope-keys [:held/slash-id :held/bond-id :held/workflow-id :held/actor]}
+   :yield-accrued {:held/account :yield-custody
+                   :scope-keys [:held/workflow-id]}
    :yield-distributed {:held/account :yield-custody
                        :scope-keys [:held/workflow-id]}
    :deferred-yield-claimed {:held/account :yield-custody
-                            :scope-keys [:held/owner-id :held/workflow-id]}
-   :resolver-yield-withdrawn {:held/account :resolver-yield
-                              :scope-keys [:held/owner-id :held/resolver]}
+                            :scope-keys [:held/workflow-id]}
+    :resolver-yield-accrued {:held/account :resolver-yield
+                             :scope-keys [:held/owner-id :held/resolver]}
+    :resolver-yield-withdrawn {:held/account :resolver-yield
+                               :scope-keys [:held/owner-id :held/resolver]}
    :resolver-slash-custody-debited {:held/account :resolver-slash-custody
                                      :scope-keys [:held/resolver :held/workflow-id]}
    :partial-fill-principal-loss {:held/account :escrow-principal
@@ -106,17 +115,88 @@
     (not= expected actual)))
 
 (defn- ensure-force-authorisation-usable!
-  "Guard: check authorization not consumed and scope hash matches.
-   Supports two scope kinds:
-     :single-claim (default) — checks whole auth not consumed, scope hash matches.
-     :related-claims        — checks relationship active, member scope hash in
-                               authorized set, and member not yet consumed.
-   Throws on already-consumed, scope mismatch, or inactive relationship.
-   Does NOT short-circuit for idempotent replay — that is handled at the
-   outer command layer (dispatch-action / force-authorised entry point)."
+  "Guard a forced custody adjustment with the persisted authorization record.
+
+   The caller-supplied provenance is evidence only; it is never authority on
+   its own.  For a single claim, the active record must commit to precisely the
+   scope derived from this adjustment.  Related-claims retain their explicit
+   member-scope consumption model.
+
+   Does NOT short-circuit for idempotent replay — that is handled at the outer
+   command layer."
   [world auth-provenance scope-map]
   (let [auth-id (:authorization/id auth-provenance)
-        scope-kind (:authorization/scope-kind auth-provenance :single-claim)]
+        scope-kind (:authorization/scope-kind auth-provenance :single-claim)
+        record (get-in world [:force-authorisations auth-id])
+        now (time-ctx/block-ts world)]
+    (when-not record
+      (throw (ex-info "force-authorisation record not found"
+                      {:type :authorization/not-found
+                       :authorization/id auth-id})))
+    (when-not (= :active (:authorization/status record))
+      (throw (ex-info (if (and (= :related-claims scope-kind)
+                               (= :consumed (:authorization/status record)))
+                        "force-authorisation related-claims members already consumed"
+                        "force-authorisation record is not active")
+                      {:type (if (= :consumed (:authorization/status record))
+                               :authorization/already-consumed
+                               :authorization/not-active)
+                       :authorization/id auth-id
+                       :status (:authorization/status record)})))
+    (when (:consumed? record)
+      (throw (ex-info "force-authorisation record already consumed"
+                      {:type :authorization/already-consumed
+                       :authorization/id auth-id})))
+    (when (< now (:starts-at record))
+      (throw (ex-info "force-authorisation record not yet active"
+                      {:type :authorization/not-yet-started
+                       :authorization/id auth-id
+                       :starts-at (:starts-at record)
+                       :now now})))
+    (when (and (:expires-at record) (>= now (:expires-at record)))
+      (throw (ex-info "force-authorisation record expired"
+                      {:type :authorization/expired
+                       :authorization/id auth-id
+                       :expires-at (:expires-at record)
+                       :now now})))
+    (when (= :related-claims scope-kind)
+      (when-not (= :related-claims (:authorization/scope-kind record))
+        (throw (ex-info "force-authorisation record is not a related-claims grant"
+                        {:type :authorization/related-claims-scope-kind-mismatch
+                         :authorization/id auth-id})))
+      (when-not (and (= (:relationship/id record) (:relationship/id auth-provenance))
+                     (= (:relationship/hash record) (:relationship/hash auth-provenance))
+                     (= (set (:member-scope-hashes record))
+                        (set (:member-scope-hashes auth-provenance))))
+        (throw (ex-info "related-claims authorization provenance differs from grant"
+                        {:type :authorization/related-claims-grant-mismatch
+                         :authorization/id auth-id}))))
+    (when (= :single-claim scope-kind)
+      (let [record-scope (:authorization/scope record)
+            record-hash (:authorization/scope-hash record)
+            derived-hash (force-authorisation-scope-hash scope-map)]
+        (when-not (and record-scope record-hash)
+          (throw (ex-info "force-authorisation record lacks an immutable scope"
+                          {:type :authorization/missing-scope
+                           :authorization/id auth-id})))
+        (when-not (= record-scope scope-map)
+          (throw (ex-info "force-authorisation scope differs from grant"
+                          {:type :authorization/grant-scope-mismatch
+                           :authorization/id auth-id
+                           :granted-scope record-scope
+                           :attempt scope-map})))
+        (when-not (= record-hash derived-hash)
+          (throw (ex-info "force-authorisation grant scope hash mismatch"
+                          {:type :authorization/grant-scope-hash-mismatch
+                           :authorization/id auth-id
+                           :granted-scope-hash record-hash
+                           :derived-scope-hash derived-hash})))
+        (when-not (= record-hash (:authorization/scope-hash auth-provenance))
+          (throw (ex-info "force-authorisation provenance does not match grant"
+                          {:type :authorization/provenance-scope-mismatch
+                           :authorization/id auth-id
+                           :granted-scope-hash record-hash
+                           :provenance-scope-hash (:authorization/scope-hash auth-provenance)})))))
     (if (= :related-claims scope-kind)
       ;; Related-claims: per-member consumption tracking
       (let [rel-id (:relationship/id auth-provenance)
@@ -188,27 +268,34 @@
               :held/reason (:held/reason adjustment)
               :consumed/action (:held/action adjustment)}]
     (if (= :related-claims scope-kind)
-      ;; Per-member consumption: add member scope hash to consumed set
-      (let [member-hash (member-scope-hash-from-adjustment auth-provenance adjustment)]
-        (update-in world [:force-authorisations/consumed auth-id]
-                   (fn [existing]
-                      (let [existing (or existing
-                                         {:consumed? false
-                                          :authorization/id auth-id
-                                          :authorization/type :force-authorisation
-                                          :authorization/scope-hash (:authorization/scope-hash auth-provenance)
-                                          :authorization/scope-kind :related-claims
-                                          :relationship/id (:relationship/id auth-provenance)
-                                          :relationship/hash (:relationship/hash auth-provenance)
-                                          :member-scope-hashes (:member-scope-hashes auth-provenance [])
-                                          :consumed-members #{} :member-count 0})]
-                       (-> existing
-                           (assoc :consumed? true
-                                  :last-consumed-at (:held-adjustment/id adjustment))
-                           (update :consumed-members conj member-hash)
-                           (update :member-count inc)
-                           (assoc :last-consumed-adjustment-id (:held-adjustment/id adjustment)
-                                  :last-consumed-workflow-id (:held/workflow-id adjustment)))))))
+      ;; Per-member consumption: add member scope hash to consumed set. The
+      ;; grant remains active while members remain, then becomes terminally consumed.
+      (let [member-hash (member-scope-hash-from-adjustment auth-provenance adjustment)
+            existing (or (get-in world [:force-authorisations/consumed auth-id])
+                         {:consumed? false
+                          :authorization/id auth-id
+                          :authorization/type :force-authorisation
+                          :authorization/scope-hash (:authorization/scope-hash auth-provenance)
+                          :authorization/scope-kind :related-claims
+                          :relationship/id (:relationship/id auth-provenance)
+                          :relationship/hash (:relationship/hash auth-provenance)
+                          :member-scope-hashes (:member-scope-hashes auth-provenance [])
+                          :consumed-members #{} :member-count 0})
+            updated (-> existing
+                        (assoc :consumed? true
+                               :last-consumed-at (:held-adjustment/id adjustment))
+                        (update :consumed-members conj member-hash)
+                        (update :member-count inc)
+                        (assoc :last-consumed-adjustment-id (:held-adjustment/id adjustment)
+                               :last-consumed-workflow-id (:held/workflow-id adjustment)))
+            committed-members (set (get-in world [:force-authorisations auth-id :member-scope-hashes] []))
+            all-members-consumed? (= committed-members (:consumed-members updated))]
+        (cond-> (assoc-in world [:force-authorisations/consumed auth-id] updated)
+          all-members-consumed?
+          (assoc-in [:force-authorisations auth-id]
+                    (assoc (get-in world [:force-authorisations auth-id])
+                           :authorization/status :consumed
+                           :consumed? true))))
       ;; Single-claim: consume entire auth (current behavior)
       (assoc-in world [:force-authorisations/consumed auth-id]
                 (merge base
@@ -314,6 +401,9 @@
             :held/after after
             :held/reason (or reason :held/unspecified)
             :held/action action}
+           (when-let [previous-id (some-> world :held-adjustments last :held-adjustment/id)]
+             (when-let [previous-hash (get-in world [:held-artifacts previous-id :artifact/hash])]
+               {:held/previous-artifact-hash previous-hash}))
            position-fields
            (when authorization-provenance
              {:authorization/provenance authorization-provenance})
@@ -350,10 +440,18 @@
                (:owner/address adjustment)
                (assoc :owner/address (:owner/address adjustment))
 
+               (:held/previous-artifact-hash adjustment)
+               (assoc :held/previous-artifact-hash (:held/previous-artifact-hash adjustment))
+
                (:authorization/provenance adjustment)
                (assoc :authorization/provenance
                       (select-keys (:authorization/provenance adjustment)
-                                   [:authorization/type
+                                   [:authorization/schema-version
+                                    :authorization/type
+                                    :authorization/id
+                                    :authorization/scope-hash
+                                    :authorization/workflow-id
+                                    :authorization/allowed-action
                                     :authorization/basis
                                     :authorization/check
                                     :authorization/actor-id
@@ -378,6 +476,57 @@
                  [(:held-adjustment/id artifact) artifact])))
         adjustments))
 
+(defn- validate-held-position!
+  "Enforce reason-derived custody partitioning before a ledger mutation."
+  [world token amount direction reason extra]
+  (let [extra (or extra {})
+        policy (get held-position-policy reason)
+        derived-components (held-position-components token reason (dissoc extra :held/account :held/position-id))
+        components (held-position-components token reason extra)
+        expected-account (:held/account policy)
+        position-id (:held/position-id components)
+        derived-position-id (:held/position-id derived-components)
+        owner-address (:owner/address components)]
+    (when (and expected-account
+               (contains? extra :held/account)
+               (not= expected-account (:held/account extra)))
+      (throw (ex-info "held account conflicts with reason policy"
+                      {:type :invalid-held-adjustment
+                       :reason reason
+                       :expected-account expected-account
+                       :actual-account (:held/account extra)})))
+    (when (and expected-account
+               (contains? extra :held/position-id)
+               (not= derived-position-id (:held/position-id extra)))
+      (throw (ex-info "held position conflicts with reason policy"
+                      {:type :invalid-held-adjustment
+                       :reason reason
+                       :expected-position-id derived-position-id
+                       :actual-position-id (:held/position-id extra)})))
+    (when (and expected-account (nil? position-id))
+      (throw (ex-info "held adjustment requires complete position scope"
+                      {:type :invalid-held-adjustment
+                       :reason reason
+                       :scope-keys (:scope-keys policy)
+                       :extra extra})))
+    (when (and (contains? address-scoped-held-reasons reason)
+               (nil? owner-address))
+      (throw (ex-info "held adjustment requires explicit owner address"
+                      {:type :invalid-held-adjustment
+                       :reason reason
+                       :extra extra})))
+    (when (and (= direction :out) position-id)
+      (let [position-held (or (get-in world [:held-ledger/index :by-position position-id])
+                              (get-in world [:held/positions position-id])
+                              0)]
+        (when (< position-held amount)
+          (throw (ex-info "sub-held position underflow"
+                          {:type :sub-held-position-underflow
+                           :token token
+                           :position-id position-id
+                           :held position-held
+                           :amount amount})))))))
+
 (defn- adjust-held
   [world token amount direction {:keys [action reason authorization-provenance extra]
                                  :or {action "adjust-held"}}]
@@ -388,12 +537,6 @@
                     {:type :invalid-held-adjustment
                      :reason :missing-authorization-provenance
                      :held/reason reason})))
-  (when (and (contains? address-scoped-held-reasons reason)
-             (nil? (:owner/address (held-position-components token reason (or extra {})))))
-    (attr/log-with-attr
-      :warn "address-scoped held reason missing :owner/address — owner may be misattributed"
-      {:held/reason reason
-       :extra extra}))
   (let [is-force-auth? (= :force-authorisation (:authorization/type authorization-provenance))]
     (when is-force-auth?
       (let [components (held-position-components token reason (or extra {}))
@@ -414,6 +557,7 @@
                          :token  token
                          :held   current
                          :amount amount})))
+      (validate-held-position! world token amount direction reason extra)
       (let [adjustment (build-held-adjustment world
                                               token
                                               amount
@@ -538,6 +682,14 @@
   ([world token amount opts]
    (adjust-held world token amount :out (merge {:action "sub-held"} opts))))
 
+(defn- held-adjustment-order
+  "Numeric sequence order for canonical held-adjustment IDs; lexical ordering
+   would incorrectly place held-adjustment-10 before held-adjustment-2."
+  [adjustment]
+  (let [id (:held-adjustment/id adjustment)
+        match (and (string? id) (re-matches #"held-adjustment-(\\d+)" id))]
+    [(if match (Long/parseLong (second match)) Long/MAX_VALUE) (str id)]))
+
 (defn held-custody-closed-form-checks
   "Deterministic closed-form checks for derived held custody artifacts.
    These checks do not replace the canonical held-adjustment ledger; they
@@ -550,7 +702,7 @@
    - :held-custody/non-negative-after
    - :held-custody/sequence-replay"
   [artifacts]
-  (let [ordered (sort-by :held-adjustment/id artifacts)
+  (let [ordered (sort-by held-adjustment-order artifacts)
         artifact-hash-payload
         (fn [artifact]
           (cond-> {:schema-version (:schema-version artifact)
@@ -574,6 +726,9 @@
 
             (:owner/address artifact)
             (assoc :owner/address (:owner/address artifact))
+
+            (:held/previous-artifact-hash artifact)
+            (assoc :held/previous-artifact-hash (:held/previous-artifact-hash artifact))
 
             (:authorization/provenance artifact)
             (assoc :authorization/provenance (:authorization/provenance artifact))))
@@ -625,6 +780,19 @@
                     (assoc state token expected-after)))
                 {}
                 ordered)
+        predecessor-violations
+        (loop [previous-hash nil
+               remaining ordered
+               violations []]
+          (if-let [artifact (first remaining)]
+            (recur (:artifact/hash artifact)
+                   (next remaining)
+                   (cond-> violations
+                     (not= previous-hash (:held/previous-artifact-hash artifact))
+                     (conj {:held-adjustment/id (:held-adjustment/id artifact)
+                            :expected-previous-artifact-hash previous-hash
+                            :actual-previous-artifact-hash (:held/previous-artifact-hash artifact)})))
+            violations))
         sequence-replay-violations
         (loop [state {}
                remaining ordered
@@ -658,6 +826,9 @@
      {:check/id :held-custody/non-negative-after
       :status (if (empty? negative-after-violations) :pass :fail)
       :details {:violations negative-after-violations}}
+     {:check/id :held-custody/predecessor-continuity
+      :status (if (empty? predecessor-violations) :pass :fail)
+      :details {:violations predecessor-violations}}
      {:check/id :held-custody/sequence-replay
       :status (if (empty? sequence-replay-violations) :pass :fail)
       :details {:violations sequence-replay-violations
@@ -871,10 +1042,10 @@
                             :evidence/reason :bond-posted}
       (cap/capture-event-evidence!
        :bond-posted
-       {:bond/before {:bond-balance (get-in world [:bond-balances workflow-id appellant] 0)
-                      :total-held (get-in world [:total-held token])}}
-       {:bond/after  {:bond-balance (get-in world' [:bond-balances workflow-id appellant] 0)
-                      :total-held (get-in world' [:total-held token])}}
+        {:bond/before {:bond-balance (get-in world [:bond-balances workflow-id appellant] 0)
+                       :total-held (get-in world [:total-held token] 0)}}
+        {:bond/after  {:bond-balance (get-in world' [:bond-balances workflow-id appellant] 0)
+                       :total-held (get-in world' [:total-held token] 0)}}
        {:bond/workflow-id workflow-id
         :bond/appellant appellant
         :bond/amount amount

@@ -626,6 +626,7 @@
    :partial-fill/claim-key-consistency   :validation.class/algebraic-integrity
    :partial-fill/non-negative-amounts    :validation.class/algebraic-integrity
    :partial-fill/deferred-haircut-overlap :validation.class/algebraic-integrity
+   :partial-fill/deferred-haircut-sum-bound :validation.class/algebraic-integrity
    :partial-fill/evidence-self-consistency :validation.class/algebraic-integrity
    :partial-fill/unrealized-bucket-valid :validation.class/algebraic-integrity
    :partial-fill/decision-artifact-format :validation.class/algebraic-integrity
@@ -662,6 +663,7 @@
    - :partial-fill/settlement-mode-valid
    - :partial-fill/mode-valid
    - :partial-fill/deferred-haircut-overlap
+   - :partial-fill/deferred-haircut-sum-bound
    - :partial-fill/evidence-self-consistency
    - :partial-fill/unrealized-bucket-valid
    - :partial-fill/decision-artifact-format
@@ -832,13 +834,23 @@
                      (when (neg? (:value entry))
                        entry)))
              vec)
-        deferred-haircut-overlap-violations
-        (->> (keys deferred)
-             (filter (fn [k] (and (contains? haircut k)
-                                  (pos? (long (get deferred k 0)))
-                                  (pos? (long (get haircut k 0))))))
-             (mapv (fn [k] {:claim k :deferred (long (get deferred k 0)) :haircut (long (get haircut k 0))})))
-        evidence (:evidence decision)
+         deferred-haircut-overlap-violations
+         (->> (keys deferred)
+              (filter (fn [k] (and (contains? haircut k)
+                                   (pos? (long (get deferred k 0)))
+                                   (pos? (long (get haircut k 0))))))
+              (mapv (fn [k] {:claim k :deferred (long (get deferred k 0)) :haircut (long (get haircut k 0))})))
+         deferred-haircut-sum-violations
+         (->> positive-claims
+              (keep (fn [[k claim]]
+                      (let [r (long claim)
+                            d (long (get deferred k 0))
+                            h (long (get haircut k 0))
+                            sum (+ d h)]
+                        (when (< r sum)
+                          {:claim k :requested r :deferred d :haircut h :combined-sum sum :excess (- sum r)}))))
+              vec)
+         evidence (:evidence decision)
         evidence-violations
         (let [computed-shortage (max 0 (- total-requested available))]
           (cond-> []
@@ -975,11 +987,15 @@
                                      (check-result :partial-fill/settlement-mode-valid
                                                    (if (empty? settlement-mode-valid-violations) :pass :fail)
                                                    {:violations settlement-mode-valid-violations}))
-          overlap-ch (future
-                       (check-result :partial-fill/deferred-haircut-overlap
-                                     (if (empty? deferred-haircut-overlap-violations) :pass :fail)
-                                     {:violations deferred-haircut-overlap-violations}))
-          evidence-ch (future
+           overlap-ch (future
+                        (check-result :partial-fill/deferred-haircut-overlap
+                                      (if (empty? deferred-haircut-overlap-violations) :pass :fail)
+                                      {:violations deferred-haircut-overlap-violations}))
+           deferred-haircut-sum-ch (future
+                                     (check-result :partial-fill/deferred-haircut-sum-bound
+                                                   (if (empty? deferred-haircut-sum-violations) :pass :fail)
+                                                   {:violations deferred-haircut-sum-violations}))
+           evidence-ch (future
                         (check-result :partial-fill/evidence-self-consistency
                                       (if (empty? evidence-violations) :pass :fail)
                                       {:violations evidence-violations}))
@@ -993,7 +1009,7 @@
                                              {:violations decision-artifact-violations}))]
       (mapv deref [conservation-ch capacity-ch per-claim-ch per-claim-conservation-ch
                    claim-key-ch non-negative-ch settlement-mode-ch settlement-mode-valid-ch
-                   mode-valid-ch overlap-ch evidence-ch unrealized-ch artifact-format-ch
+                    mode-valid-ch overlap-ch deferred-haircut-sum-ch evidence-ch unrealized-ch artifact-format-ch
                    cross-product-ch rounding-fairness-ideal-ch rounding-remainder-ch
                    principal-first-ch waterfall-ch
                    residual-ch]))))

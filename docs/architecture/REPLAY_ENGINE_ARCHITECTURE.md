@@ -446,7 +446,7 @@ via `satisfies?` — protocols opt in to features they support.
 
 ### 5.1 SimulationAdapter (Mandatory)
 
-11 methods required for deterministic replay. The replay engine knows nothing
+12 methods required for deterministic replay. The replay engine knows nothing
 about protocol semantics — all domain logic is injected through this interface.
 
 | Method | Purpose |

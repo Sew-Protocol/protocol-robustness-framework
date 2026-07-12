@@ -26,11 +26,12 @@
   "Evaluate yield-v1 partial-fill behavior: pro-rata allocation fairness
    under multi-party shortfall, and robustness against adversarial
    withdrawal timing during shortfall."
-  :benchmark/concepts        [:allocation/partial-fill
-                              :allocation/shortfall
-                              :allocation/pro-rata-fairness
-                              :consensus/evidence
-                              :verifiable-assurance/forensic-confidence]
+   :benchmark/concepts        [:allocation/partial-fill
+                               :allocation/shortfall
+                               :allocation/pro-rata-fairness
+                               :allocation/redistribution-fairness
+                               :consensus/evidence
+                               :verifiable-assurance/forensic-confidence]
   :benchmark/scenarios
   [{:scenario/id "Y06_multi-party-pro-rata-shortfall"
     :dimension   :allocation/partial-fill

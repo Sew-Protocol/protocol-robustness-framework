@@ -18,11 +18,12 @@
 
  :concept/protocols #{:protocol/sew-v1 :protocol/prf}
 
- :concept/related
- [:allocation/partial-fill
-  :allocation/shortfall
-  :consensus/finality
-  :verifiable-assurance/forensic-confidence]
+  :concept/related
+  [:allocation/partial-fill
+   :allocation/shortfall
+   :allocation/redistribution-fairness
+   :consensus/finality
+   :verifiable-assurance/forensic-confidence]
 
  :concept/roles
  {:claimant
@@ -124,12 +125,19 @@
     :protocol-mechanisms [:pro-rata-allocation :cap-enforcement]
     :stakeholder-impact "Fill ratios diverge across same-priority claimants; the divergence should be explained by declared caps."}
 
-   {:failure/id :capped-excess-not-redistributed
-    :failure/name "Capped excess not redistributed"
+    {:failure/id :capped-excess-not-redistributed
+     :failure/name "Capped excess not redistributed"
+     :failure/summary
+     "When a claimant hits their cap, the excess beyond the cap is not redistributed to remaining uncapped claimants; it is left unallocated or returned to the pool."
+     :protocol-mechanisms [:pro-rata-allocation :redistribution]
+     :stakeholder-impact "Uncapped claimants receive less than their proportional share, and total recovery is reduced."}
+
+   {:failure/id :all-capped-excess-not-redistributed
+    :failure/name "All claimants capped, excess not redistributed"
     :failure/summary
-    "When a claimant hits their cap, the excess beyond the cap is not redistributed to remaining uncapped claimants; it is left unallocated or returned to the pool."
-    :protocol-mechanisms [:pro-rata-allocation :redistribution]
-    :stakeholder-impact "Uncapped claimants receive less than their proportional share, and total recovery is reduced."}]
+    "When every claimant at a priority level hits their cap, the remaining value is left unallocated rather than redistributed to any other level or recorded as surplus."
+    :protocol-mechanisms [:pro-rata-allocation :cap-enforcement :redistribution]
+    :stakeholder-impact "Available value is left on the table, reducing total recovery, and no evidence records whether this was a deliberate policy choice or an unintended gap."}]
 
  :concept/metrics
  {:fill-ratio-variance

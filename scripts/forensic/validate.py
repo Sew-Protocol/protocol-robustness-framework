@@ -18,6 +18,7 @@ Usage:
 
 from __future__ import annotations
 
+import hashlib
 import json
 import sys
 from pathlib import Path
@@ -128,6 +129,109 @@ def validate_bundle_root(
     return checks
 
 
+def _field(mapping: dict[str, Any], name: str, default: Any = None) -> Any:
+    """Read a JSON or EDN-keyword-normalized field."""
+    return mapping.get(name, mapping.get(f":{name}", default))
+
+
+def canonical_protocol_state_hash(state: dict) -> str:
+    """Cross-language SHA-256 commitment for the JSON-native state witness."""
+    encoded = json.dumps(state, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+    return hashlib.sha256(encoded.encode("utf-8")).hexdigest()
+
+
+def _scoped_protocol_state(state: dict) -> list[tuple[str, dict, dict, list]]:
+    """Normalize legacy flat and v2 scenario-keyed protocol-state witnesses."""
+    records = _field(state, "force-authorisations", {}) or {}
+    consumed = _field(state, "force-authorisations/consumed", {}) or {}
+    adjustments = _field(state, "held-adjustments", None)
+    is_flat = (not records
+               or all(isinstance(record, dict) and _field(record, "authorization/id")
+                      for record in records.values()))
+    if is_flat:
+        return [("legacy", records, consumed, adjustments or [])]
+
+    scoped_adjustments = adjustments if isinstance(adjustments, dict) else {}
+    scenario_ids = set(records) | set(consumed) | set(scoped_adjustments)
+    return [(str(scenario_id), records.get(scenario_id, {}) or {},
+             consumed.get(scenario_id, {}) or {}, scoped_adjustments.get(scenario_id, []) or [])
+            for scenario_id in sorted(scenario_ids)]
+
+
+def validate_protocol_state(bundle: dict, require_witness: bool = False) -> list[dict]:
+    """Verify the exported force-authorisation state witness semantically.
+
+    The witness is committed by :protocol/state-hashes in the bundle root. This
+    check deliberately validates relationships rather than treating a non-empty
+    hash string as proof of a valid authorization lifecycle.
+    """
+    state = _field(bundle, "protocol/state")
+    if state is None:
+        return [{"check/key": "protocol-state-witness-present",
+                 "check/status": "fail" if require_witness else "skip",
+                 "check/message": "protocol/state witness is missing"}]
+
+    witness_hash = _field(bundle, "protocol/state-witness-hash")
+    hash_violations: list[dict] = []
+    if require_witness and not witness_hash:
+        hash_violations.append({"type": "missing-state-witness-hash"})
+    elif witness_hash and witness_hash != canonical_protocol_state_hash(state):
+        hash_violations.append({"type": "state-witness-hash-mismatch",
+                                "expected": canonical_protocol_state_hash(state),
+                                "actual": witness_hash})
+
+    violations: list[dict] = list(hash_violations)
+    valid_statuses = {"active", "consumed", "revoked", ":active", ":consumed", ":revoked"}
+    for scenario_id, records, consumed, adjustments in _scoped_protocol_state(state):
+        adjustments_by_id = {_field(a, "held-adjustment/id"): a for a in adjustments}
+        adjustments_by_auth: dict[str, list[dict]] = {}
+        for adjustment in adjustments:
+            provenance = _field(adjustment, "authorization/provenance", {}) or {}
+            auth_id = _field(provenance, "authorization/id")
+            if auth_id:
+                adjustments_by_auth.setdefault(auth_id, []).append(adjustment)
+        for auth_id, record in records.items():
+            status = _field(record, "authorization/status")
+            is_consumed = bool(_field(record, "consumed?", False))
+            scope = _field(record, "authorization/scope")
+            scope_hash = _field(record, "authorization/scope-hash")
+            linked = adjustments_by_auth.get(auth_id, [])
+            entry = consumed.get(auth_id)
+            if (_field(record, "authorization/id") != auth_id
+                    or status not in valid_statuses
+                    or not scope
+                    or not scope_hash):
+                violations.append({"scenario/id": scenario_id, "authorization/id": auth_id, "type": "invalid-record"})
+                continue
+            if status in {"active", ":active"} and (is_consumed or entry is not None):
+                violations.append({"scenario/id": scenario_id, "authorization/id": auth_id, "type": "active-record-consumed"})
+            if status in {"consumed", ":consumed"}:
+                adjustment_id = _field(entry or {}, "held-adjustment/id")
+                if (not is_consumed or entry is None or len(linked) != 1
+                        or adjustment_id not in adjustments_by_id
+                        or _field(_field(linked[0], "authorization/provenance", {}) or {},
+                                  "authorization/scope-hash") != scope_hash):
+                    violations.append({"scenario/id": scenario_id,
+                                       "authorization/id": auth_id,
+                                       "type": "invalid-consumption-link",
+                                       "linked-adjustments": len(linked)})
+
+        for auth_id, entry in consumed.items():
+            record = records.get(auth_id)
+            if (record is None
+                    or _field(record, "authorization/status") not in {"consumed", ":consumed"}
+                    or _field(entry, "held-adjustment/id") not in adjustments_by_id):
+                violations.append({"scenario/id": scenario_id,
+                                   "authorization/id": auth_id,
+                                   "type": "orphan-consumption"})
+
+    return [{"check/key": "force-authorisation-state-witness-consistent",
+             "check/status": "pass" if not violations else "fail",
+             "check/message": "authorization, consumption, and held-adjustment links verified"
+                              if not violations else "protocol state witness has lifecycle violations",
+             "check/details": violations}]
+
+
 def validate_evidence_lifecycle(
     events: list[dict],
 ) -> list[dict]:
@@ -208,6 +312,49 @@ def validate_evidence_lifecycle(
     return checks
 
 
+def validate_evidence_against_protocol_state(bundle: dict, events: list[dict]) -> list[dict]:
+    """Cross-check force-authorisation evidence against the committed witness."""
+    if not events:
+        return []
+    state = _field(bundle, "protocol/state", {}) or {}
+    scoped = _scoped_protocol_state(state)
+    violations: list[dict] = []
+    for event in events:
+        auth_id = event.get("auth-id")
+        if not auth_id:
+            violations.append({"type": "evidence-missing-auth-id", "event": event.get("file")})
+            continue
+        matches = [(scenario_id, records.get(auth_id), consumed)
+                   for scenario_id, records, consumed, _ in scoped
+                   if auth_id in records]
+        scenario_id, record, consumed = matches[0] if len(matches) == 1 else (None, None, {})
+        event_type = event.get("type", "")
+        if len(matches) > 1:
+            violations.append({"authorization/id": auth_id,
+                               "type": "ambiguous-evidence-state-record",
+                               "event/type": event_type})
+        elif record is None:
+            violations.append({"authorization/id": auth_id,
+                               "type": "evidence-without-state-record",
+                               "event/type": event_type})
+        elif event_type == "force-authorisation-executed":
+            if (_field(record, "authorization/status") not in {"consumed", ":consumed"}
+                    or auth_id not in consumed):
+                violations.append({"scenario/id": scenario_id,
+                                   "authorization/id": auth_id,
+                                   "type": "execute-evidence-state-mismatch"})
+        elif event_type == "force-authorisation-revoked":
+            if _field(record, "authorization/status") not in {"revoked", ":revoked"}:
+                violations.append({"scenario/id": scenario_id,
+                                   "authorization/id": auth_id,
+                                   "type": "revoke-evidence-state-mismatch"})
+    return [{"check/key": "force-authorisation-evidence-state-consistent",
+             "check/status": "pass" if not violations else "fail",
+             "check/message": "force-authorisation evidence agrees with protocol-state witness"
+                              if not violations else "evidence and protocol-state witness disagree",
+             "check/details": violations}]
+
+
 def run_pre_checks(
     bundle_root_path: Path,
     run_dir: Path | None = None,
@@ -245,9 +392,11 @@ def run_pre_checks(
             "bundle root has no :protocol/state-hashes",
         })
 
-    # Step 4: evidence lifecycle consistency
+    # Step 4: verify the committed state witness and evidence lifecycle.
+    checks.extend(validate_protocol_state(bundle, require_witness=force_auth_used))
     lifecycle_checks = validate_evidence_lifecycle(events)
     checks.extend(lifecycle_checks)
+    checks.extend(validate_evidence_against_protocol_state(bundle, events))
 
     # Summary
     passed = sum(1 for c in checks if c["check/status"] == "pass")

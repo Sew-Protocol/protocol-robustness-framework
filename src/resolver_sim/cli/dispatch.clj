@@ -34,8 +34,18 @@
              :run-scenario          (requiring-resolve 'resolver-sim.commands.scenario/run)
              :run-invariants        (requiring-resolve 'resolver-sim.commands.invariants/run)
              :run-benchmark         (requiring-resolve 'resolver-sim.commands.run-benchmark/run)
-             :fmt-check             (requiring-resolve 'resolver-sim.commands.validate/fmt-check)
-             :lint                  (requiring-resolve 'resolver-sim.commands.validate/lint)}))
+              :fmt-check             (requiring-resolve 'resolver-sim.commands.validate/fmt-check)
+              :lint                  (requiring-resolve 'resolver-sim.commands.validate/lint)
+              :run-simulation        (requiring-resolve 'resolver-sim.commands.run-simulation/run)
+              :community-task-list   (requiring-resolve 'resolver-sim.commands.community/task-list)
+              :community-task-show   (requiring-resolve 'resolver-sim.commands.community/task-show)
+              :community-task-register (requiring-resolve 'resolver-sim.commands.community/task-register)
+              :community-task-run    (requiring-resolve 'resolver-sim.commands.community/task-run)
+              :community-task-reproduce (requiring-resolve 'resolver-sim.commands.community/task-reproduce)
+              :community-task-verify (requiring-resolve 'resolver-sim.commands.community/task-verify)
+              :community-task-report (requiring-resolve 'resolver-sim.commands.community/task-report)
+              :community-graph-export (requiring-resolve 'resolver-sim.commands.community/graph-export)
+              :community-mailbox-clear (requiring-resolve 'resolver-sim.commands.community/mailbox-clear)}))
   @handler-cache)
 
 ;; ---------------------------------------------------------------------------
@@ -78,27 +88,12 @@
 
 (defn resolve-command
   "Turn a path like 'evidence verify-chain' into [command-id positional-args].
+   Uses the command registry as the authoritative source for path-to-command
+   mapping. Any registered command is automatically routable.
    Returns nil if no command matches."
   [path-str]
-  (let [parts (str/split path-str #" ")
-        cmd (first parts)
-        args (rest parts)]
-    (case path-str
-      "backstop"              [:backstop args]
-      "commands validate"     [:commands-validate args]
-      "evidence verify-chain" [:evidence-verify-chain args]
-      "evidence validate"     [:evidence-validate args]
-      "evidence coverage"     [:evidence-coverage args]
-      "evidence backstop"     [:evidence-backstop args]
-      "validate"              [:validate args]
-      "concepts validate"     [:concepts-validate args]
-      "benchmark validate"    [:benchmark-validate args]
-      ;; Single-word commands with optional positional args
-      (case cmd
-        "run-scenario"   [:run-scenario args]
-        "run-invariants" [:run-invariants args]
-        "run-benchmark"  [:run-benchmark args]
-        nil))))
+  (when-let [cmd-id (get (registry/path->command-id-map) path-str)]
+    [cmd-id []]))
 
 ;; ---------------------------------------------------------------------------
 ;; Help
@@ -112,7 +107,8 @@
   (println "Usage: java -jar prf.jar <command> [options]")
   (println)
   (println "Commands:")
-  (doseq [{:keys [path description]} (registry/list-commands)]
+  (doseq [{:keys [path description surface]} (sort-by (comp #(str/join " " %) :path) (registry/list-commands))
+          :when (or (nil? surface) (= :prf surface))]
     (printf "  %-30s %s\n" (str/join " " path) description))
   (println)
   (println "Use: java -jar prf.jar <command> --help for command-specific help.")
@@ -142,12 +138,15 @@
 ;; ---------------------------------------------------------------------------
 
 (defn- run-command
-  "Execute a resolved command handler. Returns exit code."
-  [handler-var opts cmd-path cmd-args]
+  "Execute a resolved command handler. Returns exit code.
+   Passes :cmd/raw-args (unparsed tokens after command path)
+   so handlers can do their own option parsing if needed."
+  [handler-var opts cmd-path cmd-args raw-args]
   (try
     (let [result (handler-var (assoc opts
                                      :cmd/path cmd-path
-                                     :cmd/args cmd-args))]
+                                     :cmd/args cmd-args
+                                     :cmd/raw-args raw-args))]
       (or (:exit-code result) 0))
     (catch Exception e
       (println "Error executing command:" (.getMessage e))
@@ -186,11 +185,11 @@
             sub-parsed (cli/parse-opts raw-opts cli-options)
             merged-opts (merge options (:options sub-parsed))
             resolved (resolve-command cmd-path)]
-        (if resolved
+          (if resolved
           (let [[cmd-id cmd-args] resolved
                 handler-var (get (get-command-handlers) cmd-id)]
             (if handler-var
-              (run-command handler-var merged-opts cmd-path cmd-args)
+              (run-command handler-var merged-opts cmd-path cmd-args raw-opts)
               (do (println "Unknown command:" cmd-path)
                   (println "Run 'java -jar prf.jar help' for available commands.")
                   2)))

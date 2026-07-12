@@ -15,7 +15,9 @@
              [resolver-sim.protocols.sew.snapshot-fixtures :as snap-fix]
              [resolver-sim.run.bundle-root :as br]
              [resolver-sim.time.context :as time-ctx]
-             [resolver-sim.hash.canonical :as hc]))
+             [resolver-sim.hash.canonical :as hc]
+             [resolver-sim.protocols.sew.related-claims :as rc]
+             [resolver-sim.protocols.sew.invariants :as inv]))
 
 (def gov-addr "0xGov")
 (def alice-addr "0xAlice")
@@ -50,9 +52,10 @@
 
 (defn- grant-force-auth
   "Call apply-action to grant a force-authorisation and return the world + auth-id."
-  [world & {:keys [workflow-id reason starts-at duration expires-at]
+  [world & {:keys [workflow-id reason starts-at duration expires-at is-release]
             :or {workflow-id 0 reason :resolver-overcapacity}}]
   (let [params (merge {:workflow-id workflow-id :reason reason}
+                      (when (some? is-release) {:is-release is-release})
                       (when starts-at {:starts-at starts-at})
                       (when duration {:duration duration})
                       (when expires-at {:expires-at expires-at}))
@@ -116,6 +119,18 @@
             (is (= auth-id (:authorization/id consumed)) "consumed registry should reference auth-id"))
 
           (is (= :released (t/escrow-state world2 0)) "escrow should be released"))))))
+
+(deftest force-auth-grant-release-cannot-execute-refund
+  (let [world0 (disputed-world)
+        {:keys [world auth-id]} (grant-force-auth world0 :is-release true)
+        record (get-in world [:force-authorisations auth-id])
+        result (execute-force-auth world auth-id :is-release false)]
+    (is (= :force-authorised-release
+           (get-in record [:authorization/scope :held/reason])))
+    (is (= :force-authorisation-grant-scope-mismatch (:error result))
+        "a release-scoped grant must not authorize a refund")
+    (is (= :disputed (t/escrow-state world 0))
+        "a rejected scope mismatch must not mutate the escrow")))
 
 ;; ── Scenario 2: grant -> revoke -> execute (rejected) ────────────────────────
 
@@ -222,3 +237,104 @@
         bundle (br/build-bundle-root request result)
         proto (get bundle :protocol/state-hashes)]
     (is (nil? proto) ":protocol/state-hashes should be absent when no force-auth state")))
+
+;; ── Related-claims force-authorisation lifecycle ──────────────────────────────
+
+(deftest force-auth-related-claims-lifecycle-invariants
+  (let [snap (snap-fix/escrow-snapshot {:escrow-fee-bps 50})
+        usdc-kw :0xUSDC
+        w0 (t/empty-world 1000)
+        cr0 (lc/create-escrow w0 alice-addr usdc-kw bob-addr 10000
+                              (t/make-escrow-settings {}) snap)
+        w1 (:world cr0)
+        cr1 (lc/create-escrow w1 alice-addr usdc-kw bob-addr 10000
+                              (t/make-escrow-settings {}) snap)
+        w2 (:world cr1)
+        wf-0 0 wf-1 1
+        rel-result (rc/create-related-claims! w2
+                     {:type :same-incident
+                      :members [{:claim/kind :sew/workflow :workflow/id wf-0}
+                                {:claim/kind :sew/workflow :workflow/id wf-1}]
+                      :reason "test-force-auth-lifecycle"
+                      :created-by {:actor/type :test :actor/address "0xGov"}
+                      :created-at-step 0})
+        w3 (:world rel-result)
+        rel-id (:relationship-id rel-result)
+        rel (rc/get-related-claims w3 rel-id)
+        auth-id "fa-rel-lifecycle"
+        ;; sub-held needs to match the keyword key that create-escrow stores
+        held-amount (get-in w3 [:total-held usdc-kw] 0)
+        sub-0 (quot held-amount 4)
+        sub-1 (quot held-amount 4)
+        scope-0 {:authorization/id auth-id
+                 :authorization/type :force-authorisation
+                 :held/direction :out
+                 :token usdc-kw :amount sub-0
+                 :held/account :escrow-principal
+                 :owner/address bob-addr
+                 :held/reason :force-authorised-release
+                 :held/workflow-id wf-0}
+        scope-1 {:authorization/id auth-id
+                 :authorization/type :force-authorisation
+                 :held/direction :out
+                 :token usdc-kw :amount sub-1
+                 :held/account :escrow-principal
+                 :owner/address bob-addr
+                 :held/reason :force-authorised-release
+                 :held/workflow-id wf-1}
+        hash-0 (hc/domain-hash "force-authorisation-scope" scope-0)
+        hash-1 (hc/domain-hash "force-authorisation-scope" scope-1)
+        w4 (-> w3
+               (assoc-in [:force-authorisations auth-id]
+                         {:authorization/id auth-id
+                          :authorization/type :force-authorisation
+                          :authorization/status :active
+                          :consumed? false
+                                                    :starts-at 0
+                                                    :authorization/scope-kind :related-claims
+                                                    :relationship/id rel-id
+                                                    :relationship/hash (:relationship/hash rel)
+                                                    :member-scope-hashes [hash-0 hash-1]
+                                                    :authorization/scope scope-0
+                                                    :authorization/scope-hash hash-0})
+               (assoc :next-force-authorisation-id 1))
+        auth-prov {:authorization/type :force-authorisation
+                   :authorization/id auth-id
+                   :authorization/scope-kind :related-claims
+                   :authorization/scope-hash hash-0
+                   :relationship/id rel-id
+                   :relationship/hash (:relationship/hash rel)
+                   :member-scope-hashes [hash-0 hash-1]}
+        w5 (acct/sub-held w4 usdc-kw sub-0
+                          {:action "finalize-released"
+                           :reason :force-authorised-release
+                           :authorization-provenance auth-prov
+                           :extra {:held/workflow-id wf-0
+                                   :owner/address bob-addr}})
+        c1 (get-in w5 [:force-authorisations/consumed auth-id])
+        w6 (acct/sub-held w5 usdc-kw sub-1
+                          {:action "finalize-released"
+                           :reason :force-authorised-release
+                           :authorization-provenance auth-prov
+                           :extra {:held/workflow-id wf-1
+                                   :owner/address bob-addr}})
+        c2 (get-in w6 [:force-authorisations/consumed auth-id])
+        scope-closed (inv/related-claims-authorisation-scope-closed? w6)
+        consumed (get-in w6 [:force-authorisations/consumed auth-id])]
+    ;; After first member: per-member tracking with partial consumption
+    (is (true? (:consumed? c1)) "first member consumption recorded")
+    (is (contains? (:consumed-members c1) hash-0) "first member hash tracked")
+    (is (not (contains? (:consumed-members c1) hash-1)) "second member not yet consumed")
+    (is (= 1 (:member-count c1)) "one member consumed after first execution")
+    ;; After both members: full consumption tracking
+    (is (true? (:consumed? c2)) "second member consumption recorded")
+    (is (contains? (:consumed-members c2) hash-1) "second member hash tracked")
+    (is (= 2 (:member-count c2)) "both members consumed")
+    ;; related-claims invariant: consumed entry references valid relationship
+    (is (true? (:holds? scope-closed))
+        (str "related-claims-authorisation-scope-closed should hold: " (:violations scope-closed)))
+    (is (some? consumed) "consumed registry entry should exist")
+    (is (= :consumed (get-in w6 [:force-authorisations auth-id :authorization/status]))
+        "grant is terminal only after every committed member is consumed")
+    (is (true? (:holds? (inv/force-authorisations-lifecycle-consistent? w6)))
+        "persisted member commitments and held adjustments remain linked")))

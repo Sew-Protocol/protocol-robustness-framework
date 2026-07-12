@@ -3,11 +3,11 @@
             [clojure.test :refer [deftest is testing]]
             [resolver-sim.scenario.report :as report]
             [resolver-sim.scenario.runner :as runner]
-            [resolver-sim.sim.fixtures :as fixtures]
+            [resolver-sim.io.fixtures :as fixtures]
             [resolver-sim.sim.result-display :as display]))
 
 (deftest fixture-suite-unified-summary-shape
-  (let [summary (fixtures/run-suite :suites/equivalence-escalation-boundaries nil nil {:silent? true})]
+  (let [summary (fixtures/run-suite-from-key :suites/equivalence-escalation-boundaries nil nil {:silent? true})]
     (is (contains? summary :passed))
     (is (contains? summary :total))
     (is (contains? summary :elapsed-ms))
@@ -18,7 +18,7 @@
       (is (every? #(contains? % :checks) (:results summary))))))
 
 (deftest fixture-pass-aligned-with-scenario-pass
-  (let [summary (fixtures/run-suite :suites/equivalence-escalation-boundaries nil nil {:silent? true})]
+  (let [summary (fixtures/run-suite-from-key :suites/equivalence-escalation-boundaries nil nil {:silent? true})]
     (is (every? #(= (:pass? %) (runner/scenario-pass? % {})) (:results summary)))))
 
 (deftest legacy-display-failure-lines-delegate-to-checks
@@ -36,7 +36,7 @@
     (is (pos? (count (report/format-check-failures entry))))))
 
 (deftest fixture-entry-checks-include-outcome-when-declared
-  (let [summary (fixtures/run-suite :suites/equivalence-escalation-boundaries nil nil {:silent? true})
+  (let [summary (fixtures/run-suite-from-key :suites/equivalence-escalation-boundaries nil nil {:silent? true})
         with-expected (some #(when (:expected-outcome %) %) (:results summary))]
     (when with-expected
       (is (contains? (:checks with-expected) :fixture-outcome))

@@ -21,6 +21,7 @@
    :collusion-resistance                :validation.class/deviation-resistance
    :stake-flow-conservation             :validation.class/algebraic-integrity
    :subgame-perfect-equilibrium         :validation.class/equilibrium
+   :trace-conditioned-epsilon-spe       :validation.class/equilibrium
    :bounded-public-state-epsilon-spe    :validation.class/equilibrium
    :bounded-backward-induction-spe      :validation.class/equilibrium
    :resolver-reputation-spe             :validation.class/equilibrium
@@ -769,7 +770,8 @@
   "Map of Sew-specific equilibrium-concept keyword → validator-fn.
    Returned by SewProtocol/equilibrium-concept-validators and merged with the
    framework's built-in generic validators."
-  {:subgame-perfect-equilibrium             check-subgame-perfect-equilibrium
+  {   :subgame-perfect-equilibrium             check-subgame-perfect-equilibrium
+   :trace-conditioned-epsilon-spe           check-subgame-perfect-equilibrium
    :bounded-public-state-epsilon-spe        check-bounded-public-state-epsilon-spe
    :bounded-backward-induction-spe          check-bounded-backward-induction-spe
    :resolver-reputation-spe                 check-resolver-reputation-spe

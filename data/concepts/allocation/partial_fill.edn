@@ -14,13 +14,14 @@
 
  :concept/protocols #{:protocol/sew-v1 :protocol/prf}
 
- :concept/related
- [:allocation/shortfall
-  :allocation/pro-rata-fairness
-  :allocation/deferred-claim
-  :consensus/finality
-  :consensus/liveness
-  :verifiable-assurance/forensic-confidence]
+  :concept/related
+  [:allocation/shortfall
+   :allocation/pro-rata-fairness
+   :allocation/redistribution-fairness
+   :allocation/deferred-claim
+   :consensus/finality
+   :consensus/liveness
+   :verifiable-assurance/forensic-confidence]
 
  :concept/roles
  {:claimant

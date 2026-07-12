@@ -265,6 +265,30 @@
     {:holds? (empty? violations)
      :violations violations}))
 
+(defn- check-exercised-invariants
+  "Run invariant-backed checks only after the scenario emitted the evidence
+   required by the bounded claim. An absent mechanism is :not-exercised, never
+   a pass for that claim."
+  [ctx exercised? missing-type invariant-ids]
+  (if-not exercised?
+    {:outcome :not-exercised
+     :violations [{:type missing-type
+                   :message "scenario did not exercise the claimed mechanism"}]}
+    (check-invariants ctx invariant-ids)))
+
+(defn- force-authorisation-exercised?
+  [ctx]
+  (seq (get-in ctx [:scenario/world :force-authorisations])))
+
+(defn- held-custody-exercised?
+  [ctx]
+  (seq (get-in ctx [:scenario/world :held-adjustments])))
+
+(defn- forensic-linkage-exercised?
+  [ctx]
+  (and (force-authorisation-exercised? ctx)
+       (seq (get-in ctx [:scenario/world :force-authorisations/consumed]))))
+
 (def evaluator-registry
   {:evidence-root-present
    {:scope :scenario
@@ -368,6 +392,38 @@
    ;; Each maps a Sew semantic claim to one or more post-hoc invariants
    ;; that serve as proxies for the claimed property.
 
+   ;; Bounded force-authorisation / custody claims. These require the mechanism
+   ;; to have been exercised; a normal escrow scenario cannot pass them vacuously.
+   :force-authorisation-exact-scope-single-use
+   {:scope :scenario
+    :check (fn [ctx]
+             (check-exercised-invariants
+              ctx (force-authorisation-exercised? ctx)
+              :force-authorisation-not-exercised
+              [:force-authorisations-lifecycle-consistent
+               :held-adjustments-reconstruct-total-held
+               :held-custody-closed-form]))}
+
+   :held-custody-position-isolation
+   {:scope :scenario
+    :check (fn [ctx]
+             (check-exercised-invariants
+              ctx (held-custody-exercised? ctx)
+              :held-custody-not-exercised
+              [:held-partitions-non-negative
+               :held-adjustments-reconstruct-total-held
+               :terminal-workflow-custody-closed]))}
+
+   :forensic-authorisation-custody-linkage
+   {:scope :scenario
+    :check (fn [ctx]
+             (check-exercised-invariants
+              ctx (forensic-linkage-exercised? ctx)
+              :forensic-authorisation-linkage-not-exercised
+              [:force-authorisations-lifecycle-consistent
+               :held-artifacts-derived-from-adjustments
+               :held-custody-closed-form]))}
+
    ;; escrow-dispute-v1 pack
    :claim/no-unauthorized-release
    {:scope :scenario
@@ -422,6 +478,7 @@
                 :partial-fill/settlement-mode-valid
                 :partial-fill/mode-valid
                 :partial-fill/deferred-haircut-overlap
+                :partial-fill/deferred-haircut-sum-bound
                 :partial-fill/evidence-self-consistency
                 :partial-fill/unrealized-bucket-valid
                 :partial-fill/decision-artifact-format

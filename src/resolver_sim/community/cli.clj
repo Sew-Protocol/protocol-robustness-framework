@@ -10,10 +10,11 @@
             [resolver-sim.community.report :as report]
             [resolver-sim.community.result :as result]
             [resolver-sim.evidence.chain :as chain]
-            [resolver-sim.evidence.node :as ev-node]
-            [resolver-sim.benchmark.runner :as runner]
-            [resolver-sim.hash.canonical :as hc]
-            [resolver-sim.vcs :as vcs]))
+             [resolver-sim.evidence.node :as ev-node]
+             [resolver-sim.benchmark.runner :as runner]
+             [resolver-sim.graph.export :as gex]
+             [resolver-sim.vcs :as vcs]
+             [resolver-sim.hash.canonical :as hc]))
 
 (declare compute-code-hash compute-env-hash compute-registry-hash)
 
@@ -36,6 +37,7 @@
    [nil "--description DESC" "Task description (optional)"]
    ["-s" "--suite-id ID" "Suite ID (e.g. :suite/prf-replay-v1)"]
    [nil "--claim-ids CLAIMS" "Comma-separated claim IDs (e.g. :claim/no-nondeterminism,:claim/replay-identical-results)"]
+   [nil "--out DIR" "Output directory for graph export files (SVG, JSON, GraphML)"]
    [nil "--allow-dirty" "Allow dirty git working copy during execution"]
    [nil "--benchmark-filter ID" "Filter tasks by benchmark ID (e.g. :benchmark/prf-deterministic-replay-v1)"]
    [nil "--suite-filter ID" "Filter tasks by suite ID (e.g. :suite/prf-replay-v1)"]])
@@ -364,8 +366,9 @@
             (let [passed? (= (get-in evidence [:metrics :passed])
                              (get-in evidence [:metrics :total]))
                   claimed-stable-hash (get-in original-att [:assertion :result-projection-hash])
-                  repro-proj (result/project-stable-result evidence)
-                  repro-hash (:stable/hash repro-proj)
+                   bundle-root (:evidence/hash evidence)
+                   repro-proj (result/project-stable-result evidence)
+                   repro-hash (:stable/hash repro-proj)
                   matched? (and claimed-stable-hash (= repro-hash claimed-stable-hash))
                   comp-status (if matched? :matched :mismatched)]
               (println (str "Original stable hash: " claimed-stable-hash))
@@ -642,13 +645,16 @@
           {:exit-code 0})))))
 
 (defn export-graph
-  "Export a task's evidence graph as GraphML for yEd."
+  "Export a task's evidence graph as GraphML, SVG, and D3 JSON.
+   Without --out, prints GraphML to stdout (backward-compatible yEd export).
+   With --out <dir>, writes all formats to the given directory."
   [opts]
   (let [task-ref (:task opts)
+        out-dir (:out opts)
         dir (or (:dir opts) default-artifact-dir)
         mailbox-dir (or (:mailbox-dir opts) default-mailbox-dir)]
     (if-not task-ref
-      (do (println "Usage: --task <task-ref>") {:exit-code 1})
+      (do (println "Usage: --task <task-ref> [--out <dir>]") {:exit-code 1})
       (binding [mailbox/*mailbox-dir* mailbox-dir]
         (let [msgs (mailbox/messages-for-task task-ref)
               announcement (first (filter #(= :TASK_ANNOUNCEMENT (:message/type %)) msgs))
@@ -660,10 +666,19 @@
                  :title (or (:title task-body) "Community Task")
                  :benchmark/id (:benchmark/id task-body)
                  :suite/id (:suite/id task-body)}
-              g (graph/build-task-graph-projection {:task t :messages msgs :attestations attestations})
-              graphml (graph/export-graphml g)]
-          (println graphml)
-          {:exit-code 0})))))
+              g (graph/build-task-graph-projection {:task t :messages msgs :attestations attestations})]
+          (if out-dir
+            (let [result (gex/write-graph-artifacts! g {:task/ref task-ref
+                                                        :title (:title t)} out-dir)
+                  graphml-path (gex/write-graphml g out-dir)]
+              (println "Wrote graph artifacts to:" out-dir)
+              (println "  SVG:       " (:svg-path result))
+              (println "  D3 JSON:  " (:d3-path result))
+              (println "  Artifact: " (:artifact-path result))
+              (println "  GraphML:  " graphml-path)
+              {:exit-code 0})
+            (do (println (graph/export-graphml g))
+                {:exit-code 0})))))))
 
 (defn clear-mailbox
   [opts]
@@ -689,7 +704,7 @@
   (println "  reproduce --task <ref> -o <ref> -r <id> -k <key>  Reproduce a result")
   (println "  verify --task <ref>                    Verify evidence chain")
   (println "  report --task <ref>                    Generate evidence report")
-  (println "  graph:export --task <ref>              Export evidence graph as GraphML for yEd")
+  (println "  graph:export --task <ref> [--out <dir>] Export evidence graph as GraphML (stdout) or SVG+JSON+GraphML (dir)")
   (println "  mailbox:clear                           Clear all mailbox messages")
   (println)
   (println "Options:")

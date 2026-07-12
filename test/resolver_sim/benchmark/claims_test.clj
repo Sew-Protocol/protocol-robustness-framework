@@ -125,6 +125,39 @@
               :total-requested 100
               :fill-mode :waterfall}})
 
+(def force-authorisation-manifest
+  {:benchmark/claims [{:claim/id :force-authorisation-exact-scope-single-use}
+                      {:claim/id :held-custody-position-isolation}
+                      {:claim/id :forensic-authorisation-custody-linkage}]})
+
+(deftest bounded-custody-claims-are-not-exercised-without-mechanism-state
+  (let [outcomes (into {}
+                       (map (juxt :claim/id :claim/outcome))
+                       (claims/evaluate-manifest-claims force-authorisation-manifest [{}]))]
+    (is (= {:force-authorisation-exact-scope-single-use :not-exercised
+            :held-custody-position-isolation :not-exercised
+            :forensic-authorisation-custody-linkage :not-exercised}
+           outcomes))))
+
+(deftest bounded-custody-claims-pass-with-required-invariants
+  (let [invariant-ids [:force-authorisations-lifecycle-consistent
+                       :held-adjustments-reconstruct-total-held
+                       :held-custody-closed-form
+                       :held-partitions-non-negative
+                       :terminal-workflow-custody-closed
+                       :held-artifacts-derived-from-adjustments]
+        result {:world {:force-authorisations {"fa-0" {:authorization/id "fa-0"}}
+                        :force-authorisations/consumed {"fa-0" {:consumed? true}}
+                        :held-adjustments [{:held-adjustment/id "held-adjustment-0"}]}
+                :invariant-results (mapv (fn [id] {:id id :result :pass}) invariant-ids)}
+        outcomes (into {}
+                       (map (juxt :claim/id :claim/outcome))
+                       (claims/evaluate-manifest-claims force-authorisation-manifest [result]))]
+    (is (= {:force-authorisation-exact-scope-single-use :pass
+            :held-custody-position-isolation :pass
+            :forensic-authorisation-custody-linkage :pass}
+           outcomes))))
+
 (deftest partial-fill-claims-run-closed-form-checks
   (let [results [{:partial-fill-decisions [valid-partial-fill-decision]}]
         outcomes (into {}

@@ -151,7 +151,7 @@ git clone https://github.com/Sew-Protocol/protocol-robustness-framework
 cd protocol-robustness-framework
 nohup clojure -M:run -- -S --port 7070 > grpc-server.log 2>&1 &
 sleep 10
-cd integration/python
+cd test/integration/python
 python invariant_suite.py --scenario F3 --json results/f3-reproduction.json
 ```
 

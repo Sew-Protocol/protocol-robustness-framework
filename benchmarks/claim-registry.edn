@@ -222,10 +222,34 @@
    :claim/invariants [:slash-distribution-consistent :resolver/balances-conserved]
    :claim/evaluator :claim/challenge-bounty-correctness}
 
-  {:claim/id :claim/governance-force-reversal-authorized
-   :claim/title "Governance force reversal slash authorization"
-   :claim/description "Governance can issue force-reversal-slash bypassing the appeal window. Duplicate force slash is rejected (idempotent). Only authorized governance may issue."
-   :claim/property-types #{:safety :liveness}
-   :claim/concepts #{:consensus/authority :allocation/slash-obligation}
-   :claim/invariants [:slash-distribution-consistent :resolver/balances-conserved]
-   :claim/evaluator :claim/governance-force-reversal-authorized}]}
+   {:claim/id :claim/governance-force-reversal-authorized
+    :claim/title "Governance force reversal slash authorization"
+    :claim/description "Governance can issue force-reversal-slash bypassing the appeal window. Duplicate force slash is rejected (idempotent). Only authorized governance may issue."
+    :claim/property-types #{:safety :liveness}
+    :claim/concepts #{:consensus/authority :allocation/slash-obligation}
+    :claim/invariants [:slash-distribution-consistent :resolver/balances-conserved]
+    :claim/evaluator :claim/governance-force-reversal-authorized}
+
+   {:claim/id :claim/level-cascade-integrity
+    :claim/title "Level cascade integrity"
+    :claim/description "Surplus cascades correctly between priority levels; no surplus is left unallocated at a satisfied level when lower-priority claims remain. For example, when senior coverage is consumed by a slash, the junior level should receive remaining surplus rather than leaving it unallocated."
+    :claim/property-types #{:fairness :safety}
+    :claim/concepts #{:allocation/redistribution-fairness}
+    :claim/invariants []
+    :claim/evaluator :claim/level-cascade-integrity}
+
+   {:claim/id :claim/epoch-bridge-fairness
+    :claim/title "Epoch bridge fairness"
+    :claim/description "Inter-temporal deferred claim treatment follows declared policy; deferred claimants are not silently subordinated to fresh claims. For example, a deferred claim from epoch N should not be silently subordinated to a fresh claim in epoch N+1 without a declared ordering policy."
+    :claim/property-types #{:fairness :safety}
+    :claim/concepts #{:allocation/redistribution-fairness}
+    :claim/invariants []
+    :claim/evaluator :claim/epoch-bridge-fairness}
+
+   {:claim/id :claim/pool-boundary-respected
+    :claim/title "Pool boundary respected"
+    :claim/description "No unauthorized cross-pool value transfer occurs; pool segregation is maintained according to declared pool-boundary rules. For example, a shortfall in escrow pool A should not draw from escrow pool B's reserves unless a declared cross-pool transfer rule authorises it."
+    :claim/property-types #{:fairness :safety}
+    :claim/concepts #{:allocation/redistribution-fairness}
+    :claim/invariants []
+    :claim/evaluator :claim/pool-boundary-respected}]}

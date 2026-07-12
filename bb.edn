@@ -794,6 +794,9 @@ cli-args (cond-> ["-M:run:with-sew" "--invariants" "--scenario" scenario]
   benchmark:share-summary {:doc "Generate share summary for an evidence bundle. Usage: bb benchmark:share-summary <evidence-path>"
                            :task (apply clojure "-M:with-sew" "-m" "resolver-sim.benchmark.cli" "--share-summary" *command-line-args*)}
 
+  benchmark:review {:doc "Generate reviewer Markdown from a benchmark evidence bundle. Usage: bb benchmark:review <evidence-bundle.edn> [output-dir]"
+                    :task (apply clojure "-M:with-sew" "-m" "resolver-sim.benchmark.review-formatter" *command-line-args*)}
+
   benchmark:export {:doc "Export portable bundle (tar.gz) from evidence bundle. Usage: bb benchmark:export <evidence-path>"
                     :task (apply clojure "-M:with-sew" "-m" "resolver-sim.benchmark.cli" "--export" *command-line-args*)}
 

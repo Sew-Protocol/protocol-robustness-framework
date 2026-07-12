@@ -6,7 +6,7 @@
   "contract_version": "evidence-contract.v1",
   "strict_mode": true,
   "rounding_policy": "floor-to-asset-decimals.v1",
-  "exempt_schemas": ["evidence-contract.v1", "scenario.v1", "projection.v1"],
+  "exempt_schemas": ["evidence-contract.v1", "scenario.v1", "projection.v1", "test-run.v1", "test-summary.v2"],
   "framework": {
     "name": "protocol-robustness-framework-test-runner",
     "version": "0.1.0"

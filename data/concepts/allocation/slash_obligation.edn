@@ -16,12 +16,13 @@
 
  :concept/protocols #{:protocol/sew-v1}
 
- :concept/related
- [:allocation/pro-rata-fairness
-  :allocation/shortfall
-  :allocation/partial-fill
-  :consensus/finality
-  :consensus/legitimacy]
+  :concept/related
+  [:allocation/pro-rata-fairness
+   :allocation/shortfall
+   :allocation/partial-fill
+   :allocation/redistribution-fairness
+   :consensus/finality
+   :consensus/legitimacy]
 
  :concept/roles
  {:resolution-module

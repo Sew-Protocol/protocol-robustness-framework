@@ -59,6 +59,27 @@
   [v]
   (.getBytes (json-encode-safe v) "UTF-8"))
 
+(defn- protocol-state-wire-value
+  "Convert a protocol-state witness into a JSON-native shape without losing
+   keyword namespaces. This is the cross-language verification surface."
+  [v]
+  (cond
+    (map? v) (into (sorted-map)
+                   (map (fn [[k value]] [(str k) (protocol-state-wire-value value)]) v))
+    (vector? v) (mapv protocol-state-wire-value v)
+    (set? v) (mapv protocol-state-wire-value (sort v))
+    (keyword? v) (str v)
+    :else v))
+
+(defn protocol-state-witness-hash
+  "SHA-256 of canonical JSON for the JSON-native protocol-state witness.
+   This intentionally has no Clojure-only domain/projection semantics so an
+   independent verifier can recompute it with standard canonical JSON rules."
+  [witness]
+  (let [digest (MessageDigest/getInstance "SHA-256")
+        bytes (json-canonical-bytes witness)]
+    (apply str (map #(format "%02x" (bit-and % 0xff)) (.digest digest bytes)))))
+
 ;; ── Protocol state hashing ────────────────────────────────────────────────────
 
 (defn- hash-sorted-map
@@ -172,7 +193,8 @@
    request M-bM-^@M-^T the :scenario-run/request map
    result  M-bM-^@M-^T the :scenario-run/result map
    Optional :protocol/force-authorisations and :protocol/force-authorisations-consumed
-   keys in result will be hashed into :protocol/state-hashes.
+   keys in result are emitted as a forensic protocol-state witness and hashed
+   into :protocol/state-hashes.
    Returns a bundle-root.v1 map with:
    - run request (for reproducibility)
    - registry snapshot hashes
@@ -195,9 +217,22 @@
                                   (:protocol/force-authorisations result))
         proto-fa-consumed (hash-sorted-map :force-authorisations-consumed
                                            (:protocol/force-authorisations-consumed result))
+        proto-held-adjustments (hash-sorted-map :held-adjustments
+                                                (:protocol/held-adjustments result))
         proto-hashes (cond-> {}
                        proto-fa (assoc :force-authorisations/hash proto-fa)
-                       proto-fa-consumed (assoc :force-authorisations/consumed-hash proto-fa-consumed))
+                       proto-fa-consumed (assoc :force-authorisations/consumed-hash proto-fa-consumed)
+                       proto-held-adjustments (assoc :held-adjustments/hash proto-held-adjustments))
+        proto-state (cond-> {}
+                      (seq (:protocol/force-authorisations result))
+                      (assoc :force-authorisations (:protocol/force-authorisations result))
+                      (seq (:protocol/force-authorisations-consumed result))
+                      (assoc :force-authorisations/consumed (:protocol/force-authorisations-consumed result))
+                      (seq (:protocol/held-adjustments result))
+                      (assoc :held-adjustments (:protocol/held-adjustments result)))
+        proto-witness (protocol-state-wire-value proto-state)
+        proto-witness-hash (when (seq proto-witness)
+                             (protocol-state-witness-hash proto-witness))
         base {:bundle/schema-version schema-version
               :run/request (assoc req
                                   :registry-key (or (:registry-key request) :default)
@@ -209,9 +244,10 @@
               :execution/summary (select-keys result [:totals :status])
               :overview/hash overview-h
               :overview overview}
-        base (if (seq proto-hashes)
-               (assoc base :protocol/state-hashes proto-hashes)
-               base)
+        base (cond-> base
+               (seq proto-hashes) (assoc :protocol/state-hashes proto-hashes)
+               (seq proto-witness) (assoc :protocol/state proto-witness
+                                          :protocol/state-witness-hash proto-witness-hash))
         bundle-hash (hc/hash-with-intent {:hash/intent :bundle-root} base)]
     (assoc base
            :bundle/id bundle-hash

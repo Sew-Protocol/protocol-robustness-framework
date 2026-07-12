@@ -39,6 +39,10 @@
    :description "[EXPERIMENTAL] Shortfall allocation research profile"
    :manifest "benchmarks/packs/prf-core/shortfall-allocation-v0.edn"}
 
+  {:id "prf/redistribution-fairness-v0"
+   :description "[EXPERIMENTAL] Redistribution fairness research profile"
+   :manifest "benchmarks/packs/prf-core/redistribution-fairness-v0.edn"}
+
   {:id "community/dispute-liveness-v1"
    :description "[DEPRECATED] Basic dispute escalation robustness — migrated to sew/dispute-liveness-v1"
    :manifest "benchmarks/packs/sew/dispute-liveness-v1.edn"}

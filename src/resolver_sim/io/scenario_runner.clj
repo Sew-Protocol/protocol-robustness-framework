@@ -27,7 +27,6 @@
             [resolver-sim.scenario.report :as report]
             [resolver-sim.scenario.runner :as runner]
             [resolver-sim.scenario.suites :as suites]
-            [resolver-sim.sim.fixtures :as fixtures]
             [resolver-sim.validation.scenario-id :as sid]
             [resolver-sim.yield.invariant-catalog :as yield-inv-cat]))
 
@@ -426,14 +425,29 @@
       (name k))
     (str k)))
 
+(defn- json-safe-value
+  "Convert a value to a JSON-serializable form.
+   json/write-str calls value-fn for every leaf value in the tree."
+  [_k v]
+  (cond
+    (instance? clojure.lang.IRecord v) (into {} v)
+    (instance? clojure.lang.Keyword v) (name v)
+    (instance? clojure.lang.IDeref v) @v
+    (fn? v) (str v)
+    (instance? java.util.Date v) (str v)
+    :else v))
+
 (defn write-result-json
   "Write result map as JSON, preserving keyword namespaces in keys.
-   Uses json/write-str directly (bundle roots and replay results are plain maps,
-   not records — no protocol dispatch needed)."
+   Uses json/write-str with a safe value-fn that handles Clojure records,
+   keywords, refs, fns, and other non-JSON types."
   [output-path result]
   (when (and output-path (not= output-path "-"))
     (io/make-parents output-path)
-    (spit output-path (json/write-str result :key-fn preserve-ns-key :indent true))))
+    (spit output-path (json/write-str result
+                                      :key-fn preserve-ns-key
+                                      :value-fn json-safe-value
+                                      :indent true))))
 
 (defn run-registry-suite-and-report
   "Run protocol registry suite, print report, return exit code.
@@ -565,7 +579,7 @@
   "Run a composed EDN fixture suite (e.g. :suites/all-invariants).
    Returns the unified summary map; does not print unless opts request it."
   [suite-key mode opts]
-  (fixtures/run-suite suite-key mode nil (assoc opts :silent? true)))
+  (io-fix/run-suite-from-key suite-key mode nil (assoc opts :silent? true)))
 
 (defn run-fixture-suite-and-report
   "Run fixture suite with the invariant-style table report. Returns exit code.
@@ -576,8 +590,8 @@
   [suite-key mode opts]
   (let [report-format (or (:report-format opts) :table)
         silent?       (= :table report-format)
-        summary       (fixtures/run-suite suite-key mode nil
-                                          (assoc opts :silent? silent?))]
+        summary       (io-fix/run-suite-from-key suite-key mode nil
+                                                  (assoc opts :silent? silent?))]
     (if (= :table report-format)
       (report/print-report summary
                            (default-report-opts
@@ -730,14 +744,34 @@
    the final world of each scenario result. Returns a map suitable for
    merging into the run-result for build-bundle-root, or nil when empty."
   [summary]
-  (let [results (:results summary)
-        worlds (keep (comp :world :replay-result) results)]
-    (when (seq worlds)
-      (let [fa (into {} (map :force-authorisations) worlds)
-            fa-consumed (into {} (map :force-authorisations/consumed) worlds)]
+  (let [scenarios
+        (into {}
+              (keep (fn [result]
+                      (when-let [world (get-in result [:replay-result :world])]
+                        (let [scenario-id (or (:scenario-id result) (:scenario-path result))
+                              state (cond-> {}
+                                      (seq (:force-authorisations world))
+                                      (assoc :force-authorisations (:force-authorisations world))
+                                      (seq (:force-authorisations/consumed world))
+                                      (assoc :force-authorisations/consumed (:force-authorisations/consumed world))
+                                      (seq (:held-adjustments world))
+                                      (assoc :held-adjustments (:held-adjustments world)))]
+                          (when (seq state) [scenario-id state]))))
+                    (:results summary)))]
+    (when (seq scenarios)
+      (let [fa (into {} (keep (fn [[scenario-id state]]
+                                (when-let [records (:force-authorisations state)]
+                                  [scenario-id records]))) scenarios)
+            fa-consumed (into {} (keep (fn [[scenario-id state]]
+                                         (when-let [records (:force-authorisations/consumed state)]
+                                           [scenario-id records]))) scenarios)
+            held-adjustments (into {} (keep (fn [[scenario-id state]]
+                                              (when-let [adjustments (:held-adjustments state)]
+                                                [scenario-id adjustments]))) scenarios)]
         (cond-> {}
           (seq fa) (assoc :protocol/force-authorisations fa)
-          (seq fa-consumed) (assoc :protocol/force-authorisations-consumed fa-consumed))))))
+          (seq fa-consumed) (assoc :protocol/force-authorisations-consumed fa-consumed)
+          (seq held-adjustments) (assoc :protocol/held-adjustments held-adjustments))))))
 
 (defn- execute-dispatch!
   "Run the appropriate scenario/suite/fixture and return {:exit-code :dispatch-key
@@ -948,7 +982,8 @@
               (chain/with-fresh-registry
                 (chain/with-fresh-chain-cursor
                   (binding [ts/*tsa-url* (or tsa-url ts/*tsa-url*)
-                            evcfg/*artifact-dir* (str "./prf-runs/" run-id)]
+                            evcfg/*artifact-dir* (or (:output-dir dispatch)
+                                                     (str "./prf-runs/" run-id))]
                     (let [exec-spec (-> (build-execution-node-spec
                                          dispatch opts runner-selection
                                          canonical? non-canonical-reason protocol-id
@@ -991,7 +1026,24 @@
                               (throw (ex-info "run-and-report: nil bundle-root from execute-dispatch!"
                                               {:dispatch dispatch})))
                           enriched-root (build-enriched-bundle-root
-                                         bundle-root execution-node source-provenance)]
+                                         bundle-root execution-node source-provenance)
+                          ;; Inject raw scenario results (world, trace, metrics)
+                          ;; into enriched root for artifact extraction.
+                          raw-results (when-let [results (get-in thunk-result [:run-result :results])]
+                                        (mapv (fn [r]
+                                                (let [rr (:replay-result r)]
+                                                  (merge
+                                                   {:scenario-id (:scenario-id r)
+                                                    :outcome (:outcome r)
+                                                    :pass? (:pass? r)}
+                                                   (when rr
+                                                     {:trace (vec (:trace rr))
+                                                      :metrics (:metrics rr)
+                                                      :world (:world rr)}))))
+                                              results))
+                          enriched-root (if (seq raw-results)
+                                          (assoc enriched-root :run/scenario-results raw-results)
+                                          enriched-root)]
                       (populate-forensic-claims!)
                       (write-run-links! run-id dispatch protocol-id tsa-url canonical?)
 
@@ -1040,17 +1092,25 @@
                         (catch Exception e
                           (log-event :warn :dag-write-failed :error (.getMessage e))))
 
-                      (when-let [output-path (:output-file dispatch)]
-                        (write-result-json output-path enriched-root))
+                      (let [output-path (or (:output-file dispatch)
+                                           (when (:output-dir dispatch)
+                                             (str (:output-dir dispatch) "/replay-output.json")))]
+                        (when output-path
+                          (io/make-parents output-path)
+                          (write-result-json output-path enriched-root)))
                       {:exit-code (:exit-code thunk-result)
                        :bundle-root enriched-root
                        :execution-node execution-node})))))
           ;; Top-level catch: produce minimal output on complete failure
             (catch Throwable t
               (log-event :error :run-failed :error (.getMessage t) :exception (str (class t)))
-              (let [minimal-root (build-minimal-error-root dispatch protocol-id source-provenance t)]
-                (when-let [output-path (:output-file dispatch)]
-                  (write-result-json output-path minimal-root))
+               (let [minimal-root (build-minimal-error-root dispatch protocol-id source-provenance t)
+                     err-path (or (:output-file dispatch)
+                                  (when (:output-dir dispatch)
+                                    (str (:output-dir dispatch) "/replay-output.json")))]
+                 (when err-path
+                   (io/make-parents err-path)
+                   (write-result-json err-path minimal-root))
                 {:exit-code 1
                  :bundle-root minimal-root
                  :execution-node nil}))))))))

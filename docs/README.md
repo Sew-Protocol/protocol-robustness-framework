@@ -14,7 +14,12 @@ Primary project framing and status live in the root `../README.md`.
 | Scenario index and protocol properties | `scenarios.md` |
 | Protocol design findings index | `findings/` |
 | Evidence for external reviewers | `evidence/RESEARCHER_EVIDENCE_PACK.md` |
-| CLI/API usage reference | `reference/usage.md` |
+| CLI and Babashka task reference | `reference/usage.md` |
+| Machine-readable schema catalog | `../schemas/README.md` |
+| Capability and coverage status | `overview/CAPABILITY_STATUS.md` |
+| Local services and persistence | `operations/LOCAL_SERVICES.md` |
+| Generated-document workflow | `reference/GENERATED_DOCUMENTS.md` |
+| Runnable and visual examples | `../examples/README.md` |
 
 ## Specifications
 
@@ -95,6 +100,9 @@ Primary project framing and status live in the root `../README.md`.
 | Document | Description |
 |---|---|
 | `architecture/ARCHITECTURE.md` | Layering rules, namespace map, generalisation matrix |
+| `architecture/SYSTEM_CONTEXT_AND_RUNTIME_TOPOLOGY.md` | Execution surfaces, runtime boundaries, artifacts, CI, and external integrations |
+| `architecture/BENCHMARK_EXECUTION_ARCHITECTURE.md` | Benchmark manifests, replay, claims, bundles, signing, reporting, and portability |
+| `architecture/ARTIFACT_LIFECYCLE_ARCHITECTURE.md` | Source baselines, generated output, evidence finalization, and CI artifact retention |
 | `architecture/ADAPTER_AUTHORING_GUIDE.md` | How to implement a protocol adapter |
 | `architecture/DECISION_FRAMEWORK.md` | Confidence-level calibration for reviewers |
 | `architecture/framework-boundaries.md` | Framework / adapter / Sew / research track boundaries |
@@ -150,6 +158,7 @@ Primary project framing and status live in the root `../README.md`.
 | Document | Description |
 |---|---|
 | `security-model.md` | Simulation threat model and security assumptions |
+| `research/FORCE_AUTHORISATION_AND_CUSTODY_THREAT_MODEL.md` | Bounded force-authorisation, custody, and forensic-evidence threat model |
 | `requirements/sybil-mitigation-roadmap.md` | Sybil ring mitigation requirements |
 
 ## Protocol-specific reference
@@ -164,6 +173,7 @@ Primary project framing and status live in the root `../README.md`.
 | `overview/REUSABLE_COMPONENTS.md` | Adapter/harness/fixture reuse guide |
 | `overview/OUTCOME_MODEL.md` | Cross-protocol outcome model and migration plan |
 | `overview/USE_OF_FUNDS.md` | Use-of-funds accounting contract |
+| `overview/CAPABILITY_STATUS.md` | Current capability, coverage, parity, and limitation matrix |
 | `overview/SEMANTIC_VOCAB.md` | Semantic vocabulary registry |
 | `overview/SEMANTIC_REGISTRY.edn` | Semantic registry EDN data |
 | `yield/YIELD_INVARIANTS.md` | Yield-general invariant catalog |
@@ -194,12 +204,15 @@ Primary project framing and status live in the root `../README.md`.
 | Document | Description |
 |---|---|
 | `quickstart/QUICKSTART.md` | Setup and first run |
-| `reference/usage.md` | CLI/API usage reference |
+| `reference/usage.md` | CLI, Babashka task, and test-runner reference |
 | `reference/build.md` | Build guide |
 | `reference/REPL_GUIDE.md` | REPL usage guide |
 | `reference/logging.md` | Logging conventions |
 | `reference/CODEBASE_INDEX.md` | Codebase file index |
 | `reference/scenario-run-report.md` | Scenario run report format |
+| `reference/GENERATED_DOCUMENTS.md` | Generated-document sources, regeneration, and checks |
+| `../schemas/README.md` | Machine-readable schema catalog |
+| `operations/LOCAL_SERVICES.md` | Local XTDB and forensic-runner operational guidance |
 
 ## Notebooks
 
@@ -259,6 +272,8 @@ Primary project framing and status live in the root `../README.md`.
 
 - **Canonical**: primary source of truth for a topic.
 - **Companion**: practical or narrowed companion to a canonical doc.
+- **Generated**: derived from identified source files; regenerate rather than edit directly. See `reference/GENERATED_DOCUMENTS.md`.
+- **Experimental**: describes a research, proposal, or unstable interface; not production or comprehensive-assurance evidence.
 - **Archived**: historical context only; do not use for current implementation decisions.
 
 ## Historical and superseded

@@ -1,7 +1,7 @@
 (ns resolver-sim.sim.result-display-test
   (:require [clojure.test :refer [deftest is testing]]
             [resolver-sim.sim.result-display :as display]
-            [resolver-sim.sim.fixtures :as fixtures]))
+            [resolver-sim.io.fixtures :as fixtures]))
 
 (def ^:private pass-entry
   {:trace-id "s-pass"
@@ -135,7 +135,7 @@
       "missing :pass? is treated as fail for display gating only"))
 
 (deftest run-suite-return-map-excludes-display-only-keys
-  (let [result (fixtures/run-suite :suites/equivalence-escalation-boundaries
+  (let [result (fixtures/run-suite-from-key :suites/equivalence-escalation-boundaries
                                    nil nil {:silent? true})]
     (is (map? result))
     (is (contains? result :ok?))

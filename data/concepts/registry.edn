@@ -23,16 +23,48 @@
   {:concept/id    :spending-account/controlled-balance
    :concept/type  :use-case
    :concept/layer :stakeholder
-   :concept/file  "data/concepts/use-case/spending_accounts.edn"
-   :concept/name  "Spending account — controlled balance"
+   :concept/file  "data/concepts/use-case/controlled_escrow_balance.edn"
+   :concept/name  "Controlled escrow balance"
    :concept/status :draft
    :concept/protocols #{:protocol/sew-v1}}
 
-  {:concept/id    :marketplace/fixed-price
+  {:concept/id    :dispute/appeal-escalation
    :concept/type  :use-case
    :concept/layer :stakeholder
-   :concept/file  "data/concepts/use-case/fixed_price.edn"
-   :concept/name  "Fixed-price listing"
+   :concept/file  "data/concepts/use-case/dispute_appeal_escalation.edn"
+   :concept/name  "Dispute appeal and escalation"
+   :concept/status :draft
+   :concept/protocols #{:protocol/sew-v1}}
+
+  {:concept/id    :resolver/participation-bonding
+   :concept/type  :use-case
+   :concept/layer :stakeholder
+   :concept/file  "data/concepts/use-case/resolver_participation_bonding.edn"
+   :concept/name  "Resolver participation and bonding"
+   :concept/status :draft
+   :concept/protocols #{:protocol/sew-v1}}
+
+  {:concept/id    :yield/escrow
+   :concept/type  :use-case
+   :concept/layer :stakeholder
+   :concept/file  "data/concepts/use-case/yield_bearing_escrow.edn"
+   :concept/name  "Yield-bearing escrow"
+   :concept/status :draft
+   :concept/protocols #{:protocol/sew-v1}}
+
+  {:concept/id    :governance/rule-transition
+   :concept/type  :use-case
+   :concept/layer :stakeholder
+   :concept/file  "data/concepts/use-case/governance_rule_transition.edn"
+   :concept/name  "Governance rule transition during active escrow"
+   :concept/status :draft
+   :concept/protocols #{:protocol/sew-v1}}
+
+  {:concept/id    :funding/goal-contingent-pool
+   :concept/type  :use-case
+   :concept/layer :stakeholder
+   :concept/file  "data/concepts/use-case/goal_contingent_pooled_escrow.edn"
+   :concept/name  "Goal-contingent pooled escrow"
    :concept/status :draft
    :concept/protocols #{:protocol/sew-v1}}
 
@@ -113,6 +145,14 @@
    :concept/layer :stakeholder
    :concept/file  "data/concepts/allocation/pro_rata_fairness.edn"
    :concept/name  "Pro-rata fairness in allocation"
+   :concept/status :draft
+   :concept/protocols #{:protocol/sew-v1 :protocol/prf}}
+
+  {:concept/id    :allocation/redistribution-fairness
+   :concept/type  :allocation
+   :concept/layer :stakeholder
+   :concept/file  "data/concepts/allocation/redistribution_fairness.edn"
+   :concept/name  "Redistribution fairness"
    :concept/status :draft
    :concept/protocols #{:protocol/sew-v1 :protocol/prf}}
 

@@ -8,8 +8,6 @@
             [clojure.java.io :as io]
             [clojure.data.json :as json]
             [resolver-sim.evidence.config :as evcfg]
-            [resolver-sim.io.resource-path :as rp]
-            [resolver-sim.io.fixtures :as io-fix]
             [resolver-sim.validation.suite-result :as suite]
             [resolver-sim.contract-model.replay :as replay]
             [resolver-sim.protocols.registry :as preg]
@@ -56,14 +54,8 @@
 ;; Fixture Loading
 ;; ---------------------------------------------------------------------------
 
-(defn- fixture-key->path
-  [k]
-  (io-fix/fixture-key->path k))
-
-(defn load-fixture
-  "Load a fixture by keyword. Delegates to resolver-sim.io.fixtures."
-  [k]
-  (io-fix/load-fixture k))
+(def ^:private allowed-fixture-namespaces
+  #{"protocol" "states" "actors" "authority" "tokens" "thresholds" "suites" "traces"})
 
 (defn normalize-scenario
   "Delegate to `resolver-sim.scenario.normalize/normalize-scenario`."
@@ -72,35 +64,37 @@
 
 (defn- fixture-ref? [x]
   (and (keyword? x) (namespace x)
-       (contains? io-fix/allowed-fixture-namespaces (namespace x))))
+       (contains? allowed-fixture-namespaces (namespace x))))
 
 (defn compose-suite
-  ([x] (compose-suite x #{}))
-  ([x seen]
+  "Recursively compose a fixture suite by resolving fixture references.
+   load-fixture-fn is called with a keyword to load referenced fixtures."
+  ([x load-fixture-fn] (compose-suite x load-fixture-fn #{}))
+  ([x load-fixture-fn seen]
    (cond
      (fixture-ref? x)
      (if (contains? seen x)
        (throw (ex-info "Circular fixture reference" {:key x :seen seen}))
        ;; Normalize JSON-loaded fixtures to fix type mismatches
-       (let [loaded (load-fixture x)
+       (let [loaded (load-fixture-fn x)
              normalized (normalize-scenario loaded)]
-         (compose-suite normalized (conj seen x))))
+         (compose-suite normalized load-fixture-fn (conj seen x))))
 
      (map? x)
      (reduce-kv (fn [m k v]
                   (let [ns-str (when (keyword? k) (namespace k))]
                     (when (and ns-str
                                (not (contains? #{nil "suite" "protocol" "state" "authority"
-                                                 "threshold" "actor" "token" "minimize"} ns-str)))
+                                                  "threshold" "actor" "token" "minimize"} ns-str)))
                       (throw (ex-info "Unrecognized fixture namespace keyword"
                                       {:key k :namespace ns-str})))
                     (assoc m k (if (contains? #{:suite/id :protocol/id :state/id :authority/id :threshold/id :actor/id :token/id :protocol-params-ref} k)
                                  v
-                                 (compose-suite v seen)))))
+                                 (compose-suite v load-fixture-fn seen)))))
                 {} x)
 
      (vector? x)
-     (mapv #(compose-suite % seen) x)
+     (mapv #(compose-suite % load-fixture-fn seen) x)
 
      :else x)))
 
@@ -211,18 +205,20 @@
       mode*)))
 
 (defn run-suite
-  "Data-first fixture suite runner: compose traces, replay, judge, return summary.
+  "Data-first fixture suite runner: replay pre-composed traces, judge, return summary.
+
+   suite is the top-level composed fixture map (already resolved).
+   traces is the list of fully-resolved trace entries (protocol-params-ref resolved).
 
    Returns `scenario.summary/build-summary` shape:
      :passed :total :elapsed-ms :ok? :results :suite-id
 
-   Each result entry includes canonical `:pass?` and `:checks` plus legacy
-   fixture keys (:trace-id, :golden-report, …).
+   The IO layer provides `run-suite-from-key` for callers that need key-based loading.
 
    opts:
      :silent? — suppress automatic legacy fixture printing (default false).
-                Prefer `:report? false` in a future option shape; `:silent?` is
-                the current name.
+                 Prefer `:report? false` in a future option shape; `:silent?` is
+                 the current name.
      :golden-verify-mode — :replay-only | :replay-and-theory (in :verify mode)
      :result-display-level — legacy fixture display when not silent
 
@@ -231,32 +227,14 @@
      - Table report: `scenario.report/print-report`
      - Legacy detail: `sim.reporter` / `sim.result-display` (this fn when not silent)
      - CLI shell: `io.scenario-runner`"
-  ([suite-key] (run-suite suite-key nil nil {}))
-  ([suite-key mode] (run-suite suite-key mode nil {}))
-  ([suite-key mode protocol] (run-suite suite-key mode protocol {}))
-  ([suite-key mode protocol opts]
+  ([suite traces] (run-suite suite traces nil nil {}))
+  ([suite traces mode] (run-suite suite traces mode nil {}))
+  ([suite traces mode protocol] (run-suite suite traces mode protocol {}))
+  ([suite traces mode protocol opts]
    (let [t0               (System/currentTimeMillis)
          effective-protocol (or protocol
                                 (preg/get-protocol preg/default-protocol-id))
-         suite (compose-suite (load-fixture suite-key))
          golden-verify-mode (resolve-golden-verify-mode suite mode opts)
-         trace-entries (:traces suite [])
-         traces (mapv (fn [entry]
-                        (if (and (map? entry) (contains? entry :trace))
-                          (let [trace-ref (:trace entry)
-                                trace (-> (if (fixture-ref? trace-ref)
-                                            (compose-suite trace-ref)
-                                            trace-ref)
-                                          io-fix/resolve-protocol-params-ref)]
-                            {:trace trace
-                             :expected-outcome (:expected-outcome entry)
-                             :expected-halt-reason (:expected-halt-reason entry)})
-                          (let [trace (-> (if (fixture-ref? entry)
-                                            (compose-suite entry)
-                                            entry)
-                                          io-fix/resolve-protocol-params-ref)]
-                            {:trace trace})))
-                      trace-entries)
          thresholds (:thresholds suite {})
          proto (:protocol suite)
          state (:state suite)
@@ -285,33 +263,33 @@
                                             :source        :fixture}
                                            runner-opts)
                                theory-res-for-golden (get-in base-entry [:checks :theory :result])
-                               report (generate-golden-report suite-key trace-id res
-                                                              {:theory-res theory-res-for-golden
-                                                               :theory-decl (:theory trace)})
-                               comparison (when (= mode :verify)
-                                            (compare-golden-report suite-key
-                                                                   {:trace-id trace-id :golden-report report}
-                                                                   {:golden-verify-mode golden-verify-mode}))]
-                           (when (= mode :save)
-                             (save-golden-report suite-key {:trace-id trace-id :golden-report report}))
-                           (scenario-runner/finalize-fixture-entry
-                            base-entry
-                            {:expected-outcome     expected-outcome
-                             :expected-halt-reason expected-halt-reason
-                             :threshold-validation threshold-validation
-                             :golden-comparison    comparison
-                             :golden-report        report
-                             :metrics              (:metrics res)
-                             :trace-id             trace-id
-                             :scenario-author      (:scenario-author trace)
-                             :purpose              (:purpose trace)
-                             :theory-source        (:theory trace)}
-                            runner-opts)))
-                       traces)
-         elapsed-ms (- (System/currentTimeMillis) t0)
-         suite-result (scenario-summary/build-summary results
-                                                      {:suite-id           suite-key
-                                                       :golden-verify-mode golden-verify-mode})
+                                report (generate-golden-report (:suite/id suite) trace-id res
+                                                               {:theory-res theory-res-for-golden
+                                                                :theory-decl (:theory trace)})
+                                comparison (when (= mode :verify)
+                                             (compare-golden-report (:suite/id suite)
+                                                                    {:trace-id trace-id :golden-report report}
+                                                                    {:golden-verify-mode golden-verify-mode}))]
+                            (when (= mode :save)
+                              (save-golden-report (:suite/id suite) {:trace-id trace-id :golden-report report}))
+                            (scenario-runner/finalize-fixture-entry
+                             base-entry
+                             {:expected-outcome     expected-outcome
+                              :expected-halt-reason expected-halt-reason
+                              :threshold-validation threshold-validation
+                              :golden-comparison    comparison
+                              :golden-report        report
+                              :metrics              (:metrics res)
+                              :trace-id             trace-id
+                              :scenario-author      (:scenario-author trace)
+                              :purpose              (:purpose trace)
+                              :theory-source        (:theory trace)}
+                             runner-opts)))
+                        traces)
+          elapsed-ms (- (System/currentTimeMillis) t0)
+          suite-result (scenario-summary/build-summary results
+                                                       {:suite-id           (:suite/id suite)
+                                                        :golden-verify-mode golden-verify-mode})
          expectations-by-trace-id (into {}
                                         (keep (fn [{:keys [trace]}]
                                                 (when-let [id (:scenario-id trace)]
@@ -331,16 +309,16 @@
 ;; ---------------------------------------------------------------------------
 
 (defn minimise-suite
-  "Minimize all failing traces in a suite to their smallest subset that still
-   triggers target-invariant.  Only traces that fail with :invariant-violation
-   are minimized; passing traces and structural failures are skipped.
+  "Minimize all failing traces in a pre-composed suite to their smallest subset
+   that still triggers target-invariant.  Only traces that fail with
+   :invariant-violation are minimized; passing traces and structural failures
+   are skipped.
 
    Returns {:suite-id kw :target-invariant kw :minimized-count int :results [...]}"
-  ([suite-key target-invariant] (minimise-suite suite-key target-invariant nil))
-  ([suite-key target-invariant protocol]
+  ([suite target-invariant] (minimise-suite suite target-invariant nil))
+  ([suite target-invariant protocol]
    (let [effective-protocol (or protocol
                                 (preg/get-protocol preg/default-protocol-id))
-         suite (compose-suite (load-fixture suite-key))
          traces (:traces suite [])
          proto (:protocol suite)
          state (:state suite)
@@ -368,32 +346,10 @@
                      :reduction            (- (count (:events effective-trace))
                                               (count (:events minimized)))
                      :minimized-trace      minimized})))))
-     {:suite-id         suite-key
-      :target-invariant target-invariant
-      :minimized-count  (count @results)
-      :results          @results})))
-
-;; ---------------------------------------------------------------------------
-;; Suite Discovery
-;; ---------------------------------------------------------------------------
-
-(defn list-suites
-  "Read the suite registry and return a map of suite-key → metadata.
-   Tries classpath resource first, then filesystem."
-  []
-  (let [manifest (or (try (rp/edn-read "resource:data/fixtures/suites/manifest.edn")
-                          (catch Exception _ nil))
-                     (edn/read-string (slurp "data/fixtures/suites/manifest.edn")))]
-    (reduce-kv (fn [m k v]
-                 (let [suite-file (:file v)
-                       suite-data (or (try (rp/edn-read (str "resource:data/fixtures/suites/" suite-file))
-                                           (catch Exception _ nil))
-                                      (edn/read-string (slurp (str "data/fixtures/suites/" suite-file))))]
-                   (assoc m k (select-keys suite-data [:suite/id :suite/title :suite/purpose
-                                                       :suite/class :suite/criticality
-                                                       :suite/prevents]))))
-               {}
-               manifest)))
+      {:suite-id         (:suite/id suite)
+       :target-invariant target-invariant
+       :minimized-count  (count @results)
+       :results          @results})))
 
 ;; ──────────────────────────────────────────────────────────────────────────────
 ;; MC batch runner: drives scenario protocol-params → stochastic batch analysis

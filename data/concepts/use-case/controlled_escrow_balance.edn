@@ -1,12 +1,12 @@
 {:concept/id :spending-account/controlled-balance
  :concept/type :use-case
  :concept/layer :stakeholder
- :concept/name "Spending account — controlled balance"
+ :concept/name "Controlled escrow balance"
  :concept/summary
- "A user maintains a balance that can be spent up to a limit, with
-  deposits, withdrawals, holds, and releases managed through protocol
-  escrow mechanics. The balance is controlled by rules about who can
-  move funds, when, and under what conditions."
+ "A user maintains a balance composed of escrowed funds that can be
+  drawn down up to a limit. Deposits, withdrawals, holds, and releases
+  are managed through escrow mechanics. The balance is controlled by
+  rules about who can move funds, when, and under what conditions."
 
  :concept/stakeholder-question
  "Can a user safely maintain a spendable balance where withdrawals are
@@ -14,6 +14,17 @@
   are available promptly?"
 
  :concept/protocols #{:protocol/sew-v1}
+
+ :concept/maturity :illustrative
+ :concept/support-status :not-asserted
+
+ :concept/related
+ [:consensus/authority
+  :consensus/evidence
+  :consensus/finality
+  :allocation/pro-rata-fairness
+  :allocation/shortfall
+  :decision-quality/solvency-status]
 
  :concept/roles
  {:account-holder
@@ -25,9 +36,14 @@
   {:description "Party or module that authorises individual spends."
    :maps-to [:protocol.actor/resolver]}
   :depositor
-  {:description "Party adding funds to the account."
-   :maps-to [:protocol.actor/sender]}
-  :governance
+   {:description "Party adding funds to the account."
+    :maps-to [:protocol.actor/sender]}
+   :payee
+   {:description "Party that receives funds when a hold is converted to a spend."
+    :maps-to [:protocol.actor/recipient]
+    :mapping/confidence :approximate
+    :mapping/note "The payee is the recipient of the underlying escrow when the hold is released; the hold itself does not natively identify a counterparty."}
+   :governance
   {:description "Protocol governance that can adjust account rules or freeze."
    :maps-to [:protocol.actor/governance]}}
 
@@ -52,11 +68,15 @@
 
  :concept/actions
  {:deposit-funds
-  {:description "Add funds to the account."
-   :maps-to [:protocol.action/create-escrow]}
-  :place-hold
-  {:description "Reserve funds for a pending spend."
-   :maps-to [:protocol.action/dispute :protocol.action/submit-evidence]}
+   {:description "Add funds to the account."
+    :maps-to [:protocol.action/create-escrow]
+    :mapping/confidence :approximate
+    :mapping/note "Each deposit creates a new escrow rather than adding to an existing aggregate; the account balance is a derived view."}
+   :place-hold
+   {:description "Reserve funds for a pending spend."
+    :maps-to [:protocol.action/dispute :protocol.action/submit-evidence]
+    :mapping/confidence :approximate
+    :mapping/note "Hold maps to dispute and evidence submission as there is no native hold action; the hold state is approximated through dispute semantics."}
   :release-hold
   {:description "Remove a hold, making funds available again."
    :maps-to [:protocol.action/resolve :protocol.action/settle]}
@@ -77,9 +97,11 @@
   :double-spend-prevented
   {:description "Attempted over-draw correctly rejected."
    :maps-to [:protocol.outcome/rejected]}
-  :unauthorized-release
-  {:description "Funds released without proper authorisation."
-   :maps-to [:protocol.outcome/adversarial-resolution]}
+   :unauthorized-release
+    {:description "Funds released without proper authorisation."
+     :maps-to []
+     :mapping/confidence :approximate
+     :mapping/note "No protocol outcome directly models access-control bypass. adversarial-resolution covers authorised-resolver unfair decisions, which is materially different. This is a recognised vocabulary gap."}
   :balance-lost
    {:description "Account holder loses access to some or all balance."
     :maps-to [:protocol.outcome/stuck :protocol.outcome/slashed]
@@ -108,7 +130,7 @@
    :protocol-mechanisms [:governance-checks :resolver-scope :appeal]
    :stakeholder-impact "Account holder cannot access funds."}]
 
-:concept/metrics
+ :concept/metrics
   {:hold-count
    {:description "Number of holds placed during the interaction."
     :source :derived-from-trace}
@@ -128,4 +150,17 @@
  ["Real-world banking or payment rails."
   "Credit risk or overdraft lending."
   "Multi-currency or forex conversion."
-  "Recurring or subscription billing."]}
+   "Recurring or subscription billing."]
+
+ :concept/known-gaps
+  ["Place-hold action maps to dispute/submit-evidence — no native hold primitive exists (annotation added above)."
+   "Unauthorized-release outcome has no protocol mapping — access-control bypass is not a protocol outcome (annotation added above)."
+   "Payee role is added but holds do not natively identify a counterparty (annotation added above)."
+   "No timeout or garbage-collection mechanism for orphaned holds is modelled."
+   "Deposit-funds maps to create-escrow; each deposit creates a new escrow rather than adding to an aggregate (annotation added above)."
+   "Concept ID (:spending-account/controlled-balance) uses legacy terminology; display name updated to 'Controlled escrow balance'."]
+
+ :concept/evidence
+ {:scenarios #{}
+  :benchmarks #{}
+  :claims #{}}}

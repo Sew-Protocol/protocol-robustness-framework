@@ -115,9 +115,15 @@
                   yield-delta (- yield-after yield-before)]
               (-> world'
                   (cond-> (pos? yield-delta)
-                    (acct/add-held tok yield-delta {:action "accrue-resolver-yield" :owner/id owner-id})
+                    (acct/add-held tok yield-delta {:action "accrue-resolver-yield"
+                                                    :reason :resolver-yield-accrued
+                                                    :extra {:held/resolver resolver-addr
+                                                            :held/owner-id owner-id}})
                     (neg? yield-delta)
-                    (acct/sub-held tok (- yield-delta) {:action "accrue-resolver-yield" :owner/id owner-id}))
+                    (acct/sub-held tok (- yield-delta) {:action "accrue-resolver-yield"
+                                                        :reason :resolver-yield-accrued
+                                                        :extra {:held/resolver resolver-addr
+                                                                :held/owner-id owner-id}}))
                   (assoc-in [:resolver-yield-accrual-times resolver-addr] now)))
             world))
         world))))
@@ -125,6 +131,35 @@
 ;; ---------------------------------------------------------------------------
 ;; Internal: finalize helpers (no accounting — see lifecycle for that)
 ;; ---------------------------------------------------------------------------
+
+(defn- reserve-deferred-yield-custody
+  "Reclassify terminal shortfall residue from escrow principal to yield custody.
+   This is a zero-net ledger transfer: the deferred liability remains held but
+   becomes recoverable through the :deferred-yield-claimed position."
+  [world token workflow-id deferred]
+  (let [yield-position [:held/position token :yield-custody workflow-id]
+        principal-position [:held/position token :escrow-principal workflow-id]
+        already-reserved (get-in world [:held/positions yield-position] 0)
+        required (max 0 (- (long deferred) (long already-reserved)))
+        principal-held (get-in world [:held/positions principal-position] 0)]
+    (when (> required principal-held)
+      (throw (ex-info "deferred yield exceeds terminal principal residue"
+                      {:type :invalid-deferred-yield-custody
+                       :workflow-id workflow-id
+                       :deferred deferred
+                       :already-reserved already-reserved
+                       :principal-held principal-held})))
+    (if (zero? required)
+      world
+      (-> world
+          (acct/sub-held token required
+                         {:action "reserve-deferred-yield"
+                          :reason :deferred-yield-reclassified-out
+                          :extra {:held/workflow-id workflow-id}})
+          (acct/add-held token required
+                         {:action "reserve-deferred-yield"
+                          :reason :deferred-yield-reserved
+                          :extra {:held/workflow-id workflow-id}})))))
 
 (defn- finalize
   "Internal: transition escrow to terminal state, release accounting.
@@ -210,6 +245,9 @@
                                               shortfall-started
                                               (assoc :shortfall/started-at shortfall-started))})
                    (record-fn token settled-amt)
+                   (cond-> (pos? (long (or (:deferred-amount pos-shortfall) 0)))
+                     (reserve-deferred-yield-custody token workflow-id
+                                                     (:deferred-amount pos-shortfall)))
                    ;; Track outbound FoT fee
                    (update-in [:total-fot-fees token] (fnil + 0) (- amt net-amt))
                    ;; Principal claimable
@@ -227,13 +265,13 @@
                             :evidence/reason evidence-reason}
       (cap/capture-event-evidence!
        evidence-reason
-       {:finalize/before
-        {:workflow-state (t/escrow-state world workflow-id)
-         :total-held (get-in world [:total-held token])
-         :resolver (:dispute-resolver et)}}
-       {:finalize/after
-        {:workflow-state (t/escrow-state result workflow-id)
-         :total-held (get-in result [:total-held token])}}
+        {:finalize/before
+         {:workflow-state (t/escrow-state world workflow-id)
+          :total-held (get-in world [:total-held token] 0)
+          :resolver (:dispute-resolver et)}}
+        {:finalize/after
+         {:workflow-state (t/escrow-state result workflow-id)
+          :total-held (get-in result [:total-held token] 0)}}
        {:finalize/workflow-id workflow-id
         :finalize/direction direction
         :finalize/recipient recipient
@@ -414,12 +452,12 @@
                   (cap/capture-event-evidence!
                    :escrow-created
                    {:escrow/before
-                    {:next-workflow-id (:next-workflow-id world)
-                     :total-held (get-in world [:total-held token])
-                     :resolver-stake (when resolver (reg/get-stake world resolver))}}
-                   {:escrow/after
-                    {:next-workflow-id (:next-workflow-id world'')
-                     :total-held (get-in world'' [:total-held token])
+                     {:next-workflow-id (:next-workflow-id world)
+                      :total-held (get-in world [:total-held token] 0)
+                      :resolver-stake (when resolver (reg/get-stake world resolver))}}
+                    {:escrow/after
+                     {:next-workflow-id (:next-workflow-id world'')
+                      :total-held (get-in world'' [:total-held token] 0)
                      :resolver-stake (when resolver (reg/get-stake world'' resolver))
                      :created-workflow (select-keys created-wf
                                                     [:token :to :from :amount-after-fee
@@ -912,9 +950,15 @@
                     ;; total-yield-generated internally — do NOT double-count here.
                     world'' (cond-> world'
                               (pos? yield-delta)
-                              (acct/add-held tok yield-delta {:action "yield-accrual" :workflow-id workflow-id})
+                              (acct/add-held tok yield-delta
+                                             {:action "yield-accrual"
+                                              :reason :yield-accrued
+                                              :extra {:held/workflow-id workflow-id}})
                               (neg? yield-delta)
-                              (acct/sub-held tok (- yield-delta) {:action "yield-accrual" :workflow-id workflow-id}))
+                              (acct/sub-held tok (- yield-delta)
+                                             {:action "yield-accrual"
+                                              :reason :yield-accrued
+                                              :extra {:held/workflow-id workflow-id}}))
                     world''' (-> world''
                                 (assoc-in [:escrow-transfers workflow-id :last-accrual-time] now)
                                 (assoc-in [:escrow-transfers workflow-id :accumulated-yield] (+ unrealized-after realized-after)))]

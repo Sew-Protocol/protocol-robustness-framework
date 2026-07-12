@@ -101,9 +101,11 @@ and trace generation.
 | `check-invariants-single` | Single-world invariant checks |
 | `check-invariants-transition` | Cross-transition invariant checks |
 | `world-snapshot` | Lean serializable world snapshot for trace output |
+| `available-actions` | Valid action maps available to an actor in the current world |
 | `resolve-id-alias` | Resolve string ID aliases in event params to entity IDs |
 | `created-id` | Return the entity ID created by a `create-*` action, or nil |
 | `open-entities` | Seq of entity IDs still unresolved at end of scenario |
+| `project-state` | Execute a protocol-specific read-only state projection query |
 
 ### 2. `EconomicModel` — optional
 
@@ -161,12 +163,14 @@ The Sew domain logic lives in `protocols/sew/*` (pure functions, no I/O).
 instances. The replay engine looks up adapters by id at runtime.
 
 ```clojure
-{"sew-v1" resolver-sim.protocols.sew/protocol
- "dummy"  resolver-sim.protocols.dummy/protocol}
+{"sew-v1"   resolver-sim.protocols.sew/protocol
+ "yield-v1" resolver-sim.protocols.yield/protocol
+ "dummy"    resolver-sim.protocols.dummy/protocol}
 ```
 
-`default-protocol-id` is `"sew-v1"`. Additional protocols are registered
-here as they are added.
+`default-protocol-id` is `"sew-v1"`. `sew-v1` uses the in-process invariant
+scenario registry; `yield-v1` currently uses file-backed yield scenarios.
+Additional protocols are registered here as they are added.
 
 ---
 
@@ -182,8 +186,9 @@ src/resolver_sim/
 
   protocols/              ← Adapter interfaces + implementations (all pure)
     protocol.clj            Defines SimulationAdapter, EconomicModel, AnalysisModule
-    registry.clj            Maps protocol-id → adapter instance
+    registry.clj            Maps protocol-id → lazily resolved adapter instance
     sew.clj                 SewProtocol adapter (wires sew/* into the interfaces)
+    yield.clj               YieldProviderProtocol adapter for file-backed yield scenarios
     dummy.clj               DummyProtocol test double (always-pass, no domain logic)
 
     common/

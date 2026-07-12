@@ -919,6 +919,8 @@
 
 ### Changed (2026-07-11)
 
+- **Deferred+haircut sum bound check:** Added `:partial-fill/deferred-haircut-sum-bound` — a dedicated combined-bound check verifying that `deferred + haircut <= requested` per claim. Previously this was only implied by the conservation check (`filled + deferred + haircut = requested`) combined with non-negativity of `filled`; now a direct defense-in-depth check catches the case independently. Registered in check-class, docstring, claims evaluator required-checks, and futures pipeline. (`src/resolver_sim/yield/partial_fill.clj`, `src/resolver_sim/benchmark/claims.clj`)
+
 - **Strategic claim catalog re-targeted:** 4 claims (waterfall-fill-integrity, partial-fill-rounding-integrity, mode-validity, pro-rata-fairness-end-to-end) now point to `yield-partial-fill-v0.edn` pack instead of `shortfall-allocation-v0.edn`. All now produce `:pass` verdicts with 2 matched scenarios each, up from `:uncovered`. (`src/resolver_sim/benchmark/strategic_claim_validation.clj`)
 
 ### Tests (2026-07-11)

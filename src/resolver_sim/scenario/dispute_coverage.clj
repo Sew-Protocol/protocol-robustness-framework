@@ -17,20 +17,22 @@
                                     "S-DR-003-duplicate-dispute-rejected"
                                     "S-DR-004-timeout-default-resolution"
                                     "S-DR-055-sender-cancel-refund"]}
-   :evidence           {:label "Evidence robustness"
-                        :scenarios ["S-DR-010-missing-evidence"
-                                    "S-DR-011-contradictory-evidence"
-                                    "S-DR-012-late-evidence-rejected"
-                                    "S-DR-013-evidence-at-deadline"
-                                    "S-DR-056-evidence-non-disputed-rejected"
-                                    "S-DR-083-evidence-after-resolution"
-                                    "S-DR-084-evidence-after-settlement-rejected"
-                                    "S-DR-086-evidence-after-resolver-rotation"
-                                    "S-DR-087-evidence-after-governance-fee-update"
-                                    "S-DR-088-evidence-before-deadline"
-                                    "S-DR-091-unavailable-resolver-mid-dispute"
-                                    "S-DR-093-evidence-during-freeze"
-                                    "S-DR-094-evidence-at-capacity"]}
+    :evidence           {:label "Evidence robustness"
+                         :scenarios ["S-DR-010-missing-evidence"
+                                     "S-DR-011-contradictory-evidence"
+                                     "S-DR-012-late-evidence-rejected"
+                                     "S-DR-013-evidence-at-deadline"
+                                     "S-DR-056-evidence-non-disputed-rejected"
+                                     "S-DR-083-evidence-after-resolution"
+                                     "S-DR-084-evidence-after-settlement-rejected"
+                                     "S-DR-086-evidence-after-resolver-rotation"
+                                     "S-DR-087-evidence-after-governance-fee-update"
+                                     "S-DR-088-evidence-before-deadline"
+                                     "S-DR-091-unavailable-resolver-mid-dispute"
+                                     "S-DR-093-evidence-during-freeze"
+                                     "S-DR-094-evidence-at-capacity"
+                                     "S-DR-095-evidence-after-settlement-attempt-rejected"
+                                     "S-DR-096-evidence-forking-strategist-combined"]}
    :strategic          {:label "Strategic disputants"
                         :scenarios ["S-DR-020-false-claimant-slashed"
                                     "S-DR-021-griefing-claim-cost"
@@ -86,7 +88,15 @@
     :reason "no game-theoretic EV model for appeal decisions; can only test structural behaviour"}
    {:coverage :resolver-integrity
     :gap :resolver-response-deadline
-    :reason "no resolver-response-window param; lazy resolver detected only via max-dispute-duration timeout"}])
+    :reason "no resolver-response-window param; lazy resolver detected only via max-dispute-duration timeout"}
+   {:coverage :evidence
+    :gap :evidence-after-settlement-attempt-rejected
+    :status :resolved
+    :resolution "S-DR-095 covers evidence submitted after a premature settlement attempt is rejected (escrow still :disputed, evidence accepted). S-DR-096 extends this to the forking-strategist escalation context."}
+   {:coverage :finality
+    :gap :s97-post-settlement-action-missing
+    :status :resolved
+    :resolution "S97 now includes seq 4 (submit_evidence after settlement) with expected error :transfer-not-in-dispute, verifying that terminal-state actions are rejected."}])
 
 (defn- scenario-exists?
   "Check if a scenario file exists on disk."

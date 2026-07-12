@@ -15,6 +15,7 @@
             [clojure.java.io :as io]
             [clojure.data.json :as json]
             [resolver-sim.io.resource-path :as rp]
+            [resolver-sim.sim.fixtures :as sim-fix]
             [resolver-sim.util.deep-merge :as dm])
   (:import [java.security MessageDigest]))
 
@@ -183,3 +184,62 @@
       (when (and content-hash (not= 64 (count content-hash)))
         (throw (ex-info "Fixture ref content-hash unexpected length"
                         {:ref-entry ref-entry :content-hash content-hash}))))))
+
+;; ---------------------------------------------------------------------------
+;; Suite Discovery & Key-based entry points
+;; ---------------------------------------------------------------------------
+
+(defn list-suites
+  "Read the suite registry and return a map of suite-key → metadata.
+   Tries classpath resource first, then filesystem."
+  []
+  (let [manifest (or (try (rp/edn-read "resource:data/fixtures/suites/manifest.edn")
+                          (catch Exception _ nil))
+                     (edn/read-string (slurp "data/fixtures/suites/manifest.edn")))]
+    (reduce-kv (fn [m k v]
+                 (let [suite-file (:file v)
+                       suite-data (or (try (rp/edn-read (str "resource:data/fixtures/suites/" suite-file))
+                                           (catch Exception _ nil))
+                                      (edn/read-string (slurp (str "data/fixtures/suites/" suite-file))))]
+                   (assoc m k (select-keys suite-data [:suite/id :suite/title :suite/purpose
+                                                       :suite/class :suite/criticality
+                                                       :suite/prevents]))))
+               {}
+               manifest)))
+
+(defn- fixture-ref? [x]
+  (and (keyword? x) (namespace x)
+       (contains? allowed-fixture-namespaces (namespace x))))
+
+(defn run-suite-from-key
+  "Load a fixture suite by keyword, compose it, resolve protocol-params,
+   and delegate to the simulation-layer run-suite.
+   Matches the legacy sim.fixtures/run-suite API for callers in the IO/shell layer."
+  [suite-key mode protocol opts]
+  (let [compose-loader (fn [k] (sim-fix/compose-suite k load-fixture))
+        raw-fixture (load-fixture suite-key)
+        suite (compose-loader raw-fixture)
+        traces (mapv (fn [entry]
+                       (if (and (map? entry) (contains? entry :trace))
+                         (let [trace-ref (:trace entry)
+                               trace (-> (if (fixture-ref? trace-ref)
+                                           (compose-loader trace-ref)
+                                           trace-ref)
+                                         resolve-protocol-params-ref)]
+                           {:trace trace
+                            :expected-outcome (:expected-outcome entry)
+                            :expected-halt-reason (:expected-halt-reason entry)})
+                         (let [trace (-> (if (fixture-ref? entry)
+                                           (compose-loader entry)
+                                           entry)
+                                         resolve-protocol-params-ref)]
+                           {:trace trace})))
+                     (:traces suite []))]
+    (sim-fix/run-suite suite traces mode protocol opts)))
+
+(defn minimise-suite-from-key
+  "Load a fixture suite by keyword and delegate to the simulation-layer minimiser."
+  [suite-key target-invariant protocol]
+  (let [compose-loader (fn [k] (sim-fix/compose-suite k load-fixture))
+        suite (compose-loader (load-fixture suite-key))]
+    (sim-fix/minimise-suite suite target-invariant protocol)))

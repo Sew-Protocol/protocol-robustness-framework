@@ -1469,27 +1469,30 @@
 
 ;; S97: Appeal after settlement boundary
 
-(def s97
-  {:scenario-id     "s97-appeal-after-settlement-attempt"
-   :schema-version  "1.0"
+ (def s97
+   {:scenario-id     "s97-appeal-after-settlement-attempt"
+    :schema-version  "1.0"
    :scenario-author "@grifma"
-   :initial-block-time 1000
-   :agents          [{:id "buyer"    :address "0xbuyer"   :strategy "honest"}
+    :initial-block-time 1000
+    :agents          [{:id "buyer"    :address "0xbuyer"   :strategy "honest"}
                      {:id "seller"   :address "0xseller"  :strategy "honest"}
                      {:id "resolver" :address "0xresolver" :role "resolver"}
                      {:id "keeper"   :address "0xkeeper"  :role "keeper"}]
-   :protocol-params appeal
-   :notes "Settlement executed, escrow terminal. Subsequent actions rejected. Tests settlement finality."
-   :events
-   [{:seq 0 :time 1000 :agent "buyer" :action "create_escrow"
+    :protocol-params appeal
+    :notes "Settlement executed, escrow terminal. Subsequent actions rejected. Tests settlement finality."
+    :expected-errors [{:seq 4 :action "submit_evidence" :error :transfer-not-in-dispute}]
+    :events
+    [{:seq 0 :time 1000 :agent "buyer" :action "create_escrow"
      :params {:token "USDC" :to "0xseller" :amount 5000
               :custom-resolver "0xresolver"}}
-    {:seq 1 :time 1060 :agent "buyer" :action "raise_dispute"
+     {:seq 1 :time 1060 :agent "buyer" :action "raise_dispute"
      :params {:workflow-id 0}}
-    {:seq 2 :time 1120 :agent "resolver" :action "execute_resolution"
+     {:seq 2 :time 1120 :agent "resolver" :action "execute_resolution"
      :params {:workflow-id 0 :is-release true :resolution-hash "0xhash"}}
-    {:seq 3 :time 1250 :agent "keeper" :action "execute_pending_settlement"
-     :params {:workflow-id 0}}]})
+     {:seq 3 :time 1250 :agent "keeper" :action "execute_pending_settlement"
+     :params {:workflow-id 0}}
+     {:seq 4 :time 1320 :agent "seller" :action "submit_evidence"
+     :params {:workflow-id 0 :evidence-hash "0xpost-settlement"}}]})
 
 ;; S98: Receiver initiates cancel after auto-cancel deadline
 

@@ -1,179 +1,137 @@
-# Usage Guide
+# Usage Reference
 
-## Requirements
+This is the supported command reference for the current repository. Earlier documentation describing `python/`, `test/integration/python`, or a gRPC server on port 7070 is obsolete; those paths are not part of this checkout.
 
-- **Java 11+** (for Clojure)
-- **Clojure CLI** — [install guide](https://clojure.org/guides/install_clojure)
-- **Python 3.10+**
+## Command surfaces
 
----
+| Surface | Use it for | Entry point |
+|---|---|---|
+| Babashka tasks | Contributor-friendly workflows and wrappers | `bb <task>` |
+| Canonical test runner | Full and targeted validation | `./scripts/test.sh <target>` |
+| PRF CLI | Registered JVM commands, including jar-distributed commands | `clojure -M:cli -- <command>` or `java -jar <runner>.jar <command>` |
+| Make | Generated-document checks and selected integration helpers | `make <target>` |
 
-## Layer 1: Adversarial Invariant Suite
+The PRF command registry is `resources/prf/commands/registry.edn`; its dispatch implementation is `src/resolver_sim/cli/dispatch.clj`.
 
-### Start the gRPC server
-
-The adversarial suite requires the Clojure gRPC server running on port 7070.
-
-```bash
-# From repo root — starts server in background
-nohup clojure -M:run -- -S --port 7070 > grpc-server.log 2>&1 &
-sleep 8   # wait for JVM startup
-
-# Verify it's running
-grep "gRPC server started" grpc-server.log
-```
-
-### Install Python dependencies
+## Core workflows
 
 ```bash
-pip install -e python/
+# Canonical repository validation
+bb test
+
+# Fast validation path
+./scripts/test.sh fast
+
+# Framework-only unit tests
+bb test:framework
+
+# Framework plus Sew unit tests
+bb test:unit
+
+# Run one registered scenario
+bb run:scenario <scenario-id>
+
+# Run a parameterized simulation
+bb sim:run -p data/params/baseline.edn
 ```
 
-### Run all 33 scenarios
+`bb run:scenario` accepts `--result-display-level summary|failures|standard|verbose|audit` and `--save-output <dir>`.
+
+## Canonical test-runner targets
 
 ```bash
-cd integration/python
-python invariant_suite.py
+./scripts/test.sh <target>
 ```
 
-Expected: `33/33 scenarios passed` in ~0.6–2 seconds.
+| Target | Purpose |
+|---|---|
+| `all` | Canonical broad gate: unit, generators, contracts, invariants, suites, reference validation, coverage, triage, and Monte Carlo unless fast mode is selected. |
+| `fast` | Edit-loop gate: unit, generators, contracts, invariants, suites, and reference validation. |
+| `unit` | Framework and Sew unit tests. |
+| `framework` | Framework-only unit tests. |
+| `generators` | Deterministic generator and equilibrium regression checks. |
+| `contracts` | Cross-layer contract checks. |
+| `invariants` | Deterministic invariant scenarios. |
+| `suites` | Registered fixture suites. |
+| `reference-validation` | Public reference-evidence harness. |
+| `coverage` | Coverage gates. |
+| `triage` | Failure triage grouped by purpose and threat tag. |
+| `equivalence-new` | Model-side trace-equivalence comparison. |
+| `monte-carlo` | Representative Monte Carlo sweep. |
+| `long-horizon` | Extended multi-epoch scenarios. |
 
-### Run a single scenario
+The runner records a machine-readable summary at `results/test-artifacts/test-summary.json`. Individual tasks may emit additional files under `results/`.
+
+## Registered PRF CLI commands
+
+Invoke with the development classpath:
 
 ```bash
-# By scenario ID (F-prefix or S-prefix)
-python invariant_suite.py --scenario F3
-python invariant_suite.py --scenario S08
-
-# Scenario IDs are case-insensitive
-python invariant_suite.py --scenario f10
+clojure -M:cli -- help
+clojure -M:cli -- <command> [options]
 ```
 
-### Write a JSON report
+The same native commands are intended to be available from a built runner jar:
 
 ```bash
-# Default path: results/invariant-suite-<timestamp>.json
-python invariant_suite.py --json
-
-# Custom path
-python invariant_suite.py --json /tmp/report.json
+java -jar target/prf-runner-core-<version>.jar <command> [options]
 ```
 
-The JSON report includes: git SHA, branch, Python version, UTC timestamp, per-scenario results (steps, reverts, attack metrics), and suite-level summary statistics.
+| Command | Key options | Purpose |
+|---|---|---|
+| `backstop` | `--fast`, `--full`, `--json` | Run review gates. |
+| `commands validate` | `--json` | Validate command registry, dispatch table, and Babashka wrapper parity. |
+| `validate` | `--strict`, `--json` | Run structural validation. |
+| `concepts validate` | `--json` | Validate concept data and registry. |
+| `benchmark validate` | `--json` | Validate benchmark definitions and resources. |
+| `run-scenario` | `--scenario`, `--suite`, `--out`, `--json` | Execute replay scenarios. |
+| `run-invariants` | `--protocol`, `--json` | Run the Sew invariant suite. |
+| `run-benchmark` | `--output`, `--key`, `--json` | Run a benchmark and produce evidence. |
+| `evidence verify-chain` | `--artifact-dir`, `--json` | Verify evidence hashes and links. |
+| `evidence validate` | `--artifact-dir`, `--json` | Validate evidence artifacts. |
+| `evidence coverage` | `--artifact-dir`, `--json` | Check evidence completeness. |
+| `evidence backstop` | `--fast`, `--full`, `--artifact-dir`, `--json` | Run the evidence review gate. |
+| `fmt check` | `--json` | Check formatting without rewriting files. |
+| `lint` | `--json` | Run clj-kondo linting. |
 
-### Understanding the output
+Use `help` to print the registry's currently loaded command list. CLI failures use a non-zero process exit code; argument or unknown-command errors return `2`.
 
-```
-  ✓ PASS  S26  f3-governance-sandwich    steps=6  attacks=4  successes=2
-               rotations=1  malicious_resolutions_attempted=3  malicious_resolutions_succeeded=1
-```
+## Babashka task groups
 
-- `steps` — total gRPC `process-step` calls in the scenario
-- `reverts` — steps that were rejected by the state machine
-- `attacks` — adversarial actions attempted by attack agents
-- `successes` — attack actions that landed (for scenarios where this is measured)
-- Scenario-specific metrics follow on the next line
+Babashka tasks are the recommended local interface. Run `bb tasks` for the complete live list; notable task groups are summarized below.
 
-A `PASS` means the scenario's specific assertion held — which for most F-scenarios means the failure mode was **reproduced** (the attack was possible) AND **no invariant was violated**.
+| Group | Examples | Notes |
+|---|---|---|
+| Simulation and scenarios | `bb sim:run`, `bb run:scenario`, `bb run:scenario:suite`, `bb run:scenario:search` | Search is explicitly ad hoc and not canonical CI evidence. |
+| Tests | `bb test`, `bb test:framework`, `bb test:unit`, `bb test:evidence`, `bb test:sew`, `bb test:yield` | Prefer focused tasks during development. |
+| Evidence | `bb evidence:build`, `bb evidence:sign <key>`, `bb evidence:bundle [out-dir]` | Signing requires a user-provided private key; never store it in the repository. |
+| Fixtures and docs | `bb fixtures:sync`, `bb fixtures:generate-traces`, `bb regenerate-goldens`, `bb docs:scenarios` | These may update generated files. Review diffs before committing. |
+| Registry and parity | `bb scenario-registry:validate`, `bb shadow:check`, `bb shadow:report` | Verify scenario registration and simulation-to-Solidity mapping. |
+| Benchmark review | `bb benchmark:review <bundle.edn> [out-dir]` | Generate `BENCHMARK_SUMMARY.md`, `scenario-results.md`, and `claim-results.md` from an evidence bundle; presentation-only. |
 
----
+The task descriptions in `bb.edn` are authoritative for arguments and side effects. Some tasks are research, reporting, or artifact-maintenance utilities rather than release gates.
 
-## Layer 2: Clojure Contract Model
+### Benchmark reviewer package
 
-### Run the gRPC server (foreground)
+After running a benchmark, create a human-readable companion package without modifying the authoritative EDN bundle:
 
 ```bash
-clojure -M:run -- -S --port 7070
+bb benchmark:review results/evidence/latest.edn send-to-ef/03-active-benchmark
 ```
 
-### Run a single trial
+The formatter writes `BENCHMARK_SUMMARY.md`, `scenario-results.md`, and
+`claim-results.md`. It shows benchmark executions rather than assuming each row
+is a unique scenario, and it labels source-directory grouping as non-semantic.
+
+## Optional local services
+
+XTDB is only needed for workflows that explicitly require persistence:
 
 ```bash
-clojure -M:run -- -p data/params/baseline.edn
+make xtdb
+make db-setup
+make xtdb-stop
+make xtdb-down
 ```
 
-### Run with XTDB persistence
-
-Requires XTDB on localhost:5432.
-
-```bash
-clojure -M:run -- -p data/params/baseline.edn --db
-```
-
----
-
-## Layer 3: Monte Carlo Statistical Simulation
-
-The Monte Carlo layer runs standalone — no gRPC server required.
-
-### Run all phases (G–AD)
-
-```bash
-scripts/monte-carlo/test-all.sh
-```
-
-Expected: 30+ phases passing, ~5–10 minutes total.
-
-### Run specific model configurations
-
-```bash
-# DR3 full system (bonds + escalation)
-scripts/monte-carlo/run-dr3.sh
-
-# DR1 fee-only (no bonds, no slashing)
-scripts/monte-carlo/run-dr1.sh
-
-# DR2 reputation + bonds
-scripts/monte-carlo/run-dr2.sh
-
-# Adversarial parameter search (find worst-case params for attackers)
-scripts/monte-carlo/run-adversarial.sh
-```
-
-### Run a specific phase
-
-```bash
-clojure -M:run -- -p data/params/phase-g-slashing-delays.edn
-clojure -M:run -- -p data/params/phase-j-baseline-stable.edn -m   # multi-epoch
-clojure -M:run -- -p data/params/phase-o-baseline.edn -O           # market exit
-```
-
-### Parameter files
-
-All EDN parameter files are in `data/params/`. Use `data/params/phase-o-baseline.edn` as the canonical template for the required schema.
-
-### Results
-
-Results are written to `results/` (gitignored). Use `git add -f results/` to force-track a specific result file.
-
----
-
-## CI Integration
-
-The invariant suite is designed for CI. Add to your pipeline:
-
-```yaml
-# Example GitHub Actions step
-- name: Run adversarial invariant suite
-  run: |
-    nohup clojure -M:run -- -S --port 7070 > grpc-server.log 2>&1 &
-    sleep 15
-    cd integration/python && python invariant_suite.py --json results/ci-run.json
-```
-
-Exit code is 0 on full pass, 1 if any scenario fails.
-
----
-
-## Reproducibility
-
-Every run prints a reproducibility header:
-
-```
-  git:     7e98fc1  (ethereum)
-  python:  3.12.10
-  run at:  2026-04-15T17:13:50Z
-  mode:    deterministic (no randomness; seed: n/a)
-```
-
-The simulator is fully deterministic — no randomness, no timestamps in scenario logic. The same git SHA + Python version will produce identical output on any machine.
+The local Compose configuration exposes XTDB on port `5432`; see `config/docker-compose.yaml`. Solidity equivalence additionally requires a separately available Foundry checkout; see `docs/testing/RUNNING_TESTS.md`.

@@ -17,13 +17,14 @@
 
  :concept/protocols #{:protocol/sew-v1}
 
- :concept/related
- [:allocation/shortfall
-  :allocation/partial-fill
-  :allocation/pro-rata-fairness
-  :consensus/finality
-  :decision-quality/solvency-status
-  :verifiable-assurance/forensic-confidence]
+  :concept/related
+  [:allocation/shortfall
+   :allocation/partial-fill
+   :allocation/pro-rata-fairness
+   :allocation/redistribution-fairness
+   :consensus/finality
+   :decision-quality/solvency-status
+   :verifiable-assurance/forensic-confidence]
 
  :concept/roles
  {:yield-provider

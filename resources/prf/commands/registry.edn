@@ -15,8 +15,8 @@
    :command/outputs []
    :command/description "Run the default review gate (backstop)."}
 
-  {:command/id :backstop-fast
-   :command/path ["backstop"]
+   {:command/id :backstop-fast
+    :command/path ["backstop" "fast"]
    :command/title "Fast backstop"
    :command/category :validation
    :command/surface :prf
@@ -191,14 +191,275 @@
    :command/outputs []
    :command/description "Check code formatting without rewriting files."}
 
-  {:command/id :lint
-   :command/path ["lint"]
-   :command/title "Lint source"
-   :command/category :validation
+   {:command/id :lint
+    :command/path ["lint"]
+    :command/title "Lint source"
+    :command/category :validation
+    :command/surface :prf
+    :command/backstop-tier :fast
+    :command/jar-availability :native
+    :command/runtime :jvm
+    :command/options [{:name "--json" :type :flag :doc "Output as JSON"}]
+    :command/outputs []
+    :command/description "Lint source and test code with clj-kondo."}
+
+  {:command/id :run-simulation
+   :command/path ["run-simulation"]
+   :command/title "Run simulation"
+   :command/category :simulation
    :command/surface :prf
-   :command/backstop-tier :fast
+   :command/backstop-tier :manual
    :command/jar-availability :native
    :command/runtime :jvm
-   :command/options [{:name "--json" :type :flag :doc "Output as JSON"}]
+   :command/options [{:name "--params" :type :string :doc "Path to params.edn file"}
+                     {:name "--output" :type :string :doc "Output directory"}
+                     {:name "--serve" :type :flag :doc "Start gRPC simulation server"}
+                     {:name "--invariants" :type :flag :doc "Run deterministic invariant scenarios"}
+                     {:name "--diff-traces" :type :flag :doc "Structural world diff between two replay JSON files"}]
    :command/outputs []
-   :command/description "Lint source and test code with clj-kondo."}]}
+   :command/description "Run a simulation, server, invariants, or diff-traces. Replaces the original flag-based CLI."}
+
+  {:command/id :community-task-list
+   :command/path ["community" "task" "list"]
+   :command/title "List community tasks"
+   :command/category :community
+   :command/surface :prf
+   :command/backstop-tier :manual
+   :command/jar-availability :native
+   :command/runtime :jvm
+   :command/options [{:name "--benchmark-filter" :type :string :doc "Filter by benchmark ID"}
+                     {:name "--suite-filter" :type :string :doc "Filter by suite ID"}]
+   :command/outputs []
+   :command/description "List available community tasks."}
+
+  {:command/id :community-task-show
+   :command/path ["community" "task" "show"]
+   :command/title "Show community task"
+   :command/category :community
+   :command/surface :prf
+   :command/backstop-tier :manual
+   :command/jar-availability :native
+   :command/runtime :jvm
+   :command/options [{:name "--task" :type :string :doc "Task reference" :required true}]
+   :command/outputs []
+   :command/description "Show community task details."}
+
+  {:command/id :community-task-register
+   :command/path ["community" "task" "register"]
+   :command/title "Register community task"
+   :command/category :community
+   :command/surface :prf
+   :command/backstop-tier :manual
+   :command/jar-availability :native
+   :command/runtime :jvm
+   :command/options [{:name "--title" :type :string :doc "Task title" :required true}
+                     {:name "--benchmark-id" :type :string :doc "Benchmark ID"}
+                     {:name "--suite-id" :type :string :doc "Suite ID"}
+                     {:name "--claim-ids" :type :string :doc "Comma-separated claim IDs"}]
+   :command/outputs []
+   :command/description "Register a new community task."}
+
+  {:command/id :community-task-run
+   :command/path ["community" "task" "run"]
+   :command/title "Run community task"
+   :command/category :community
+   :command/surface :prf
+   :command/backstop-tier :manual
+   :command/jar-availability :native
+   :command/runtime :jvm
+   :command/options [{:name "--task" :type :string :doc "Task reference" :required true}
+                     {:name "--runner" :type :string :doc "Runner identity" :required true}
+                     {:name "--key" :type :string :doc "Path to private key" :required true}
+                     {:name "--dir" :type :string :doc "Artifact directory"}
+                     {:name "--mailbox-dir" :type :string :doc "Mailbox directory"}]
+   :command/outputs []
+   :command/description "Execute a community task and publish result."}
+
+  {:command/id :community-task-reproduce
+   :command/path ["community" "task" "reproduce"]
+   :command/title "Reproduce community task"
+   :command/category :community
+   :command/surface :prf
+   :command/backstop-tier :manual
+   :command/jar-availability :native
+   :command/runtime :jvm
+   :command/options [{:name "--task" :type :string :doc "Task reference" :required true}
+                     {:name "--original-attestation" :type :string :doc "Original attestation reference" :required true}
+                     {:name "--runner" :type :string :doc "Runner identity" :required true}
+                     {:name "--key" :type :string :doc "Path to private key" :required true}
+                     {:name "--dir" :type :string :doc "Artifact directory"}
+                     {:name "--mailbox-dir" :type :string :doc "Mailbox directory"}]
+   :command/outputs []
+   :command/description "Reproduce a community task result."}
+
+  {:command/id :community-task-verify
+   :command/path ["community" "task" "verify"]
+   :command/title "Verify community task"
+   :command/category :community
+   :command/surface :prf
+   :command/backstop-tier :manual
+   :command/jar-availability :native
+   :command/runtime :jvm
+   :command/options [{:name "--task" :type :string :doc "Task reference" :required true}
+                     {:name "--dir" :type :string :doc "Artifact directory"}
+                     {:name "--mailbox-dir" :type :string :doc "Mailbox directory"}]
+   :command/outputs []
+   :command/description "Verify a community task evidence chain."}
+
+  {:command/id :community-task-report
+   :command/path ["community" "task" "report"]
+   :command/title "Report on community task"
+   :command/category :community
+   :command/surface :prf
+   :command/backstop-tier :manual
+   :command/jar-availability :native
+   :command/runtime :jvm
+   :command/options [{:name "--task" :type :string :doc "Task reference" :required true}
+                     {:name "--dir" :type :string :doc "Artifact directory"}
+                     {:name "--mailbox-dir" :type :string :doc "Mailbox directory"}]
+   :command/outputs []
+   :command/description "Generate a community task evidence report."}
+
+  {:command/id :community-graph-export
+   :command/path ["community" "graph" "export"]
+   :command/title "Export community graph"
+   :command/category :community
+   :command/surface :prf
+   :command/backstop-tier :manual
+   :command/jar-availability :native
+   :command/runtime :jvm
+   :command/options [{:name "--task" :type :string :doc "Task reference" :required true}
+                     {:name "--out" :type :string :doc "Output directory"}
+                     {:name "--dir" :type :string :doc "Artifact directory"}
+                     {:name "--mailbox-dir" :type :string :doc "Mailbox directory"}]
+   :command/outputs []
+   :command/description "Export a community task evidence graph."}
+
+  {:command/id :community-mailbox-clear
+    :command/path ["community" "mailbox" "clear"]
+    :command/title "Clear community mailbox"
+    :command/category :community
+    :command/surface :prf
+    :command/backstop-tier :manual
+    :command/jar-availability :native
+    :command/runtime :jvm
+    :command/options [{:name "--mailbox-dir" :type :string :doc "Mailbox directory"}]
+    :command/outputs []
+    :command/description "Clear all community mailbox messages."}
+
+  {:command/id :build-core
+   :command/path ["build" "core"]
+   :command/title "Build core uberjar"
+   :command/category :build
+   :command/surface :bb
+   :command/runtime :bb
+   :command/bb-task "build:core"
+   :command/description "Build prf-runner-core uberjar (6 MB, no Sew, no DB)."}
+
+  {:command/id :build-sew
+   :command/path ["build" "sew"]
+   :command/title "Build sew uberjar"
+   :command/category :build
+   :command/surface :bb
+   :command/runtime :bb
+   :command/bb-task "build:sew"
+   :command/description "Build prf-runner-sew uberjar (18 MB, full Sew replay)."}
+
+  {:command/id :build-cli
+   :command/path ["build" "cli"]
+   :command/title "Build CLI uberjar"
+   :command/category :build
+   :command/surface :bb
+   :command/runtime :bb
+   :command/bb-task "build:cli"
+   :command/description "Build prf.jar — unified CLI uberjar."}
+
+  {:command/id :build-all
+   :command/path ["build" "all"]
+   :command/title "Build all uberjars"
+   :command/category :build
+   :command/surface :bb
+   :command/runtime :bb
+   :command/bb-task "build"
+   :command/description "Build core, sew, and CLI uberjars."}
+
+  {:command/id :evidence-pack
+   :command/path ["evidence" "pack"]
+   :command/title "Package evidence pack"
+   :command/category :evidence
+   :command/surface :bb
+   :command/runtime :bb
+   :command/bb-task "evidence:pack"
+   :command/description "Package a run directory into a portable evidence pack."}
+
+  {:command/id :evidence-verify-pack
+   :command/path ["evidence" "verify-pack"]
+   :command/title "Verify evidence pack"
+   :command/category :evidence
+   :command/surface :bb
+   :command/runtime :bb
+   :command/bb-task "evidence:verify"
+   :command/description "Verify an evidence pack's file integrity."}
+
+  {:command/id :fixtures-sync
+   :command/path ["fixtures" "sync"]
+   :command/title "Sync trace fixtures"
+   :command/category :fixtures
+   :command/surface :bb
+   :command/runtime :bb
+   :command/bb-task "fixtures:sync"
+   :command/description "Sync trace files from Clojure invariant scenario source."}
+
+  {:command/id :shadow-check
+   :command/path ["shadow" "check"]
+   :command/title "Check shadow registry"
+   :command/category :validation
+   :command/surface :bb
+   :command/runtime :bb
+   :command/bb-task "shadow:check"
+   :command/description "Check simulation namespaces for Solidity shadow registry coverage."}
+
+  {:command/id :shadow-report
+   :command/path ["shadow" "report"]
+   :command/title "Shadow registry report"
+   :command/category :validation
+   :command/surface :bb
+   :command/runtime :bb
+   :command/bb-task "shadow:report"
+   :command/description "Print a human-readable summary of the Solidity shadow registry."}
+
+  {:command/id :monitor
+   :command/path ["monitor"]
+   :command/title "Start JMX monitor"
+   :command/category :maintenance
+   :command/surface :bb
+   :command/runtime :bb
+   :command/bb-task "monitor"
+   :command/description "Start JMX monitoring system."}
+
+  {:command/id :report-attack-map
+   :command/path ["report" "attack-map"]
+   :command/title "Generate attack map"
+   :command/category :reporting
+   :command/surface :bb
+   :command/runtime :bb
+   :command/bb-task "report:attack-map"
+   :command/description "Generate visual attack-to-outcome artifacts."}
+
+  {:command/id :notebook-index
+   :command/path ["notebook" "index"]
+   :command/title "Open notebook hub"
+   :command/category :notebook
+   :command/surface :bb
+   :command/runtime :bb
+   :command/bb-task "notebook:index"
+   :command/description "Open the notebook navigation hub in the browser."}
+
+  {:command/id :workspace-doctor
+   :command/path ["workspace" "doctor"]
+   :command/title "Validate workspace"
+   :command/category :maintenance
+   :command/surface :bb
+   :command/runtime :bb
+   :command/bb-task "workspace:doctor"
+   :command/description "Validate workspace structure, README, deps.edn, and path resolution."}]}

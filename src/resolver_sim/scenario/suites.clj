@@ -109,8 +109,10 @@
    "S-DR-090-circuit-breaker-recovery"
    "S-DR-091-unavailable-resolver-mid-dispute"
    "S-DR-092-automate-timed-actions"
-   "S-DR-093-evidence-during-freeze"
-   "S-DR-094-evidence-at-capacity"])
+    "S-DR-093-evidence-during-freeze"
+    "S-DR-094-evidence-at-capacity"
+    "S-DR-095-evidence-after-settlement-attempt-rejected"
+    "S-DR-096-evidence-forking-strategist-combined"])
 
 (def ^:private sew-reference-scenario-paths
   "Curated reference scenarios for external verifier reproducibility.
@@ -152,6 +154,10 @@
    "S82_shortfall-recovery-cycle"
    "S103_negative-yield-shortfall-cascade"
    "S104_resolver-stake-shortfall"])
+
+(def ^:private force-authorisation-scenario-ids
+  ["dr-fa-001-force-authorisation-basic"
+   "dr-fa-002-force-authorisation-expired"])
 
 (def ^:private reversal-slashing-scenario-ids
   ["DR-N-001-reversal-slash-appeal-lifecycle"
@@ -246,6 +252,13 @@
                                     suite would contain protocol-agnostic replay/evidence scenarios."
                                   :kind         :file-path-suite
                                   :ci-tier      :coverage}
+   :suite/sew-force-authorisation-custody-v1
+   {:scenario-ids force-authorisation-scenario-ids
+    :protocol-id "sew-v1"
+    :title "Sew force-authorisation and custody benchmark suite"
+    :description "Force-authorisation grant, execution, expiry, and custody-ledger scenarios."
+    :kind :file-path-suite
+    :ci-tier :coverage}
    :suite/reference-validation-v1 {:scenario-ids reference-validation-scenario-ids
                                    :protocol-id  "sew-v1"
                                    :title        "Reference validation v1 — protocol robustness scenarios"

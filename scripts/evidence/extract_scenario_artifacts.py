@@ -59,6 +59,49 @@ import json
 import os
 import pathlib
 import sys
+import copy
+
+
+# ── Bundle root normalization ─────────────────────────────────────────────────
+
+
+def is_bundle_root(data: dict) -> bool:
+    """Detect whether the data is a bundle-root.v1 (vs raw replay format)."""
+    return data.get("bundle/schema-version") == "bundle-root.v1"
+
+
+def normalize_replay(data: dict) -> dict:
+    """Normalize the replay data into a raw-replay-like shape for extraction.
+
+    If the data is a bundle-root.v1, extract scenario-level fields from
+    the overview and raw result payload.  Otherwise return the data as-is.
+    """
+    if not is_bundle_root(data):
+        return data
+
+    results = data.get("overview", {}).get("results", [])
+    raw_results = data.get("run/scenario-results", [])
+
+    if not results:
+        return data
+
+    # Build a normalized top-level view from the first scenario result
+    first_result = results[0] if results else {}
+    first_raw = raw_results[0] if raw_results else {}
+
+    normalized = copy.deepcopy(data)
+    normalized["scenario-id"] = first_result.get("scenario-id")
+    normalized["outcome"] = first_result.get("outcome", "unknown")
+    normalized["pass?"] = first_result.get("pass?", False)
+    normalized["events-processed"] = len(first_raw.get("trace", [])) if first_raw else 0
+    normalized["source"] = {"scenario-id": first_result.get("scenario-id")}
+
+    # Inject world, trace, metrics from raw scenario results (if available)
+    normalized["world"] = first_raw.get("world", {})
+    normalized["trace"] = first_raw.get("trace", [])
+    normalized["metrics"] = first_raw.get("metrics", {})
+
+    return normalized
 
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
@@ -106,7 +149,7 @@ def extract_trace_summary(replay: dict, replay_path: pathlib.Path) -> dict:
         steps.append({
             "seq": seq,
             "time": ev.get("time", ev.get("block-time", None)),
-            "actor": ev.get("caller", ev.get("actor", None)),
+            "actor": ev.get("caller", ev.get("actor", ev.get("agent", None))),
             "action": ev.get("action", ev.get("event-type", "?")),
             "result": ev.get("result", ev.get("outcome", "?")),
             "evidence_refs": [f"evidence/events/{seq:03d}-{ev.get('action', 'event')}.json"],
@@ -123,6 +166,21 @@ def extract_trace_summary(replay: dict, replay_path: pathlib.Path) -> dict:
     }
 
 
+def _find_available_ratio(world: dict) -> float | None:
+    """Extract available-ratio from yield risk state if not in top-level metrics."""
+    risk = world.get("yield/risk", {})
+    for module_data in risk.values():
+        if isinstance(module_data, dict):
+            for token_data in module_data.values():
+                if isinstance(token_data, dict):
+                    shortfall = token_data.get("shortfall")
+                    if isinstance(shortfall, dict):
+                        ratio = shortfall.get("available-ratio")
+                        if ratio is not None:
+                            return ratio
+    return None
+
+
 def extract_metrics(replay: dict, replay_path: pathlib.Path) -> dict:
     metrics = replay.get("metrics", {})
     return {
@@ -137,31 +195,92 @@ def extract_metrics(replay: dict, replay_path: pathlib.Path) -> dict:
             "attack_attempts": metrics.get("attack-attempts", 0),
             "claimable": metrics.get("claimable", 0),
             "batch_conflicts": metrics.get("batch-conflicts", 0),
-            "available_ratio": metrics.get("available-ratio", None),
+            "available_ratio": metrics.get("available-ratio",
+                              _find_available_ratio(replay.get("world", {}))),
         },
         **derived_from(replay_path),
     }
 
 
+def _extract_claimable_from_world(world: dict) -> list:
+    """Discover claimable entries from any known world structure.
+
+    Currently handles:
+      - Generic: world['claimable'] dict
+      - Yield protocol: world['yield/partial-fill-decisions'] with deferred amounts
+    """
+    entries = []
+
+    # Generic claimable key
+    claimable = world.get("claimable", {})
+    if isinstance(claimable, dict):
+        entries.extend(
+            {"source": "claimable", "key": k, "type": "deferred-fill"}
+            for k, v in claimable.items()
+            if isinstance(v, dict)
+        )
+
+    # Yield protocol: partial-fill decisions with deferred amounts
+    pfd = world.get("yield/partial-fill-decisions", {})
+    if isinstance(pfd, dict):
+        for dec_id, dec in pfd.items():
+            deferred = dec.get("deferred", {})
+            if isinstance(deferred, dict) and any(v not in (None, 0) for v in deferred.values()):
+                entries.append({
+                    "source": "yield/partial-fill-decisions",
+                    "key": dec_id,
+                    "type": "deferred-fill",
+                    "position": dec.get("position/id"),
+                    "deferred": deferred,
+                    "filled": dec.get("filled"),
+                })
+
+    # Yield protocol: positions with deferred-yield
+    positions = world.get("yield/positions", {})
+    if isinstance(positions, dict):
+        for pos_id, pos in positions.items():
+            if pos.get("deferred-yield", 0) > 0 or pos.get("status") == "unwinding":
+                shortfall = pos.get("shortfall")
+                entries.append({
+                    "source": "yield/positions",
+                    "key": pos_id,
+                    "type": "shortfall",
+                    "deferred-amount": shortfall.get("deferred-amount") if isinstance(shortfall, dict) else None,
+                    "fulfilled-amount": shortfall.get("fulfilled-amount") if isinstance(shortfall, dict) else None,
+                    "deferred-yield": pos.get("deferred-yield", 0),
+                })
+
+    return entries
+
+
 def extract_claimable_classification(replay: dict, replay_path: pathlib.Path) -> dict:
     world = replay.get("world", {})
-    claimable = world.get("claimable", {})
-    escrows = world.get("escrows", {})
+    entries = _extract_claimable_from_world(world)
     result = {
         "schema_version": "claimable-classification.v2",
         "scenario_id": replay.get("source", {}).get("scenario-id"),
-        "claimable_entries": len(claimable) if isinstance(claimable, dict) else 0,
-        "escrow_count": len(escrows) if isinstance(escrows, dict) else 0,
+        "claimable_entries": len(entries),
+        "escrow_count": len([
+            k for k in world if k.startswith("escrow") and isinstance(world[k], dict)
+        ]) if isinstance(world, dict) else 0,
+        "entries": entries,
         **derived_from(replay_path),
     }
+    # Try run_id from test-run.json (v1 manifest) or from bundle root
     test_run_path = replay_path.parent / "test-run.json"
+    run_id = None
     if test_run_path.exists():
         try:
             with test_run_path.open("r") as f:
-                test_run = json.load(f)
-                result["run_id"] = test_run.get("run_id")
+                run_id = json.load(f).get("run_id")
         except (json.JSONDecodeError, IOError):
             pass
+    if not run_id:
+        run_id = replay.get("run/request", {}).get("run-id")
+    if not run_id:
+        run_id = replay.get("overview", {}).get("suite", {}).get("suite/key")
+    if run_id:
+        result["run_id"] = run_id
     return result
 
 
@@ -306,10 +425,13 @@ def main():
         sys.exit(1)
 
     with replay_path.open("r", encoding="utf-8") as f:
-        replay = json.load(f)
+        replay_raw = json.load(f)
 
-    # 1. raw/replay-output.json — copy of original output
-    write_json(run_dir / "raw" / "replay-output.json", replay)
+    # Normalize: handle both bundle-root.v1 and raw replay formats
+    replay = normalize_replay(replay_raw)
+
+    # 1. raw/replay-output.json — copy of original output (always the raw input)
+    write_json(run_dir / "raw" / "replay-output.json", replay_raw)
     print(f"  raw/replay-output.json ({os.path.getsize(run_dir / 'raw' / 'replay-output.json')} bytes)")
 
     # 2. summaries/trace-summary.json
@@ -348,10 +470,38 @@ def main():
         f.write(trace_plain)
     print(f"  summaries/trace-plain.md")
 
+    # 9. Ensure test-run.json and test-summary.json exist in the run dir
+    test_run_path = run_dir / "test-run.json"
+    test_summary_path = run_dir / "test-summary.json"
+    run_id = run_dir.name.split("-", 1)[-1] if "-" in run_dir.name else "unknown"
+    if not test_run_path.exists():
+        write_json(test_run_path, {
+            "schema_version": "test-run.v1",
+            "run_id": run_id,
+            "framework": {
+                "name": "protocol-robustness-framework-test-runner",
+                "version": "0.1.0",
+                "git_commit": None,
+                "git_message": None,
+            },
+        })
+    if not test_summary_path.exists():
+        status = "pass" if replay.get("pass?") else "fail"
+        write_json(test_summary_path, {
+            "schema_version": "test-summary.v2",
+            "run_id": run_id,
+            "overall_status": status,
+            "risk_digest": {},
+        })
+
     print(f"\nArtifacts written to {run_dir}")
 
-    # 9. Register new artifacts in test-artifacts.json
+    # 10. Register new artifacts in test-artifacts.json
     new_entries = [
+        _artifact_entry("test-run", "run-manifest", "CORE",
+                        "test-run.v1", test_run_path),
+        _artifact_entry("test-summary", "summary", "CORE",
+                        "test-summary.v2", test_summary_path),
         _artifact_entry("raw.replay-output", "raw.replay", "DIAGNOSTIC",
                         "raw-replay.v1", run_dir / "raw" / "replay-output.json"),
         _artifact_entry("summaries.trace", "summary.trace", "CORE",

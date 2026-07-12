@@ -14,12 +14,13 @@
 
  :concept/protocols #{:protocol/sew-v1 :protocol/prf}
 
- :concept/related
- [:allocation/partial-fill
-  :allocation/shortfall
-  :allocation/pro-rata-fairness
-  :consensus/finality
-  :verifiable-assurance/forensic-confidence]
+  :concept/related
+  [:allocation/partial-fill
+   :allocation/shortfall
+   :allocation/pro-rata-fairness
+   :allocation/redistribution-fairness
+   :consensus/finality
+   :verifiable-assurance/forensic-confidence]
 
  :concept/roles
  {:claimant

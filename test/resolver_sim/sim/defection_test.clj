@@ -13,6 +13,68 @@
       (is (empty? defection-events))
       (is (empty? diagnostics)))))
 
+(deftest repeated-grim-trigger-first-epoch-cooperates
+  (testing "grim-trigger stays honest in first epoch"
+    (let [rng (rng/make-rng 1)
+          resolver {:strategy :honest :epoch-history {:epoch-1 {:trials 1 :profit 1.0}}}
+          cfg {:allowed-targets #{:honest :malicious}
+               :strategy-space #{:honest :malicious}}
+          result (d/select-next-strategy :repeated/grim-trigger
+                   {:cfg cfg :epoch 1 :previous-epoch-strategies []}
+                   resolver)]
+      (is (:skip? result))
+      (is (= :honest (:to result))))))
+
+(deftest repeated-grim-trigger-defects-on-defection
+  (testing "grim-trigger switches to malicious after detecting defection"
+    (let [rng (rng/make-rng 1)
+          resolver {:strategy :honest :epoch-history {:epoch-1 {:trials 1 :profit 100.0}}}
+          cfg {:allowed-targets #{:honest :malicious :lazy}
+               :strategy-space #{:honest :malicious :lazy}
+               :slash-risk-inhibition 0.0}
+          result (d/select-next-strategy :repeated/grim-trigger
+                   {:cfg cfg :epoch 2
+                    :previous-epoch-strategies [:malicious :malicious :honest]}
+                   resolver)]
+      (is (= :malicious (:to result)))
+      (is (= :grim-trigger-activated (:reason result))))))
+
+(deftest repeated-tit-for-tat-cooperates-first-epoch
+  (testing "tit-for-tat stays honest in first epoch"
+    (let [rng (rng/make-rng 1)
+          resolver {:strategy :honest :epoch-history {:epoch-1 {:trials 1 :profit 1.0}}}
+          cfg {:allowed-targets #{:honest :malicious}}
+          result (d/select-next-strategy :repeated/tit-for-tat
+                   {:cfg cfg :epoch 1 :previous-epoch-strategies []}
+                   resolver)]
+      (is (:skip? result)))))
+
+(deftest repeated-tit-for-tat-retaliates
+  (testing "tit-for-tat switches to malicious when opponents defected"
+    (let [rng (rng/make-rng 1)
+          resolver {:strategy :honest :epoch-history {:epoch-1 {:trials 1 :profit 100.0}}}
+          cfg {:allowed-targets #{:honest :malicious :lazy}
+               :strategy-space #{:honest :malicious :lazy}}
+          result (d/select-next-strategy :repeated/tit-for-tat
+                   {:cfg cfg :epoch 2
+                    :previous-epoch-strategies [:malicious :malicious :lazy]}
+                   resolver)]
+      (is (= :malicious (:to result)))
+      (is (= :tit-for-tat-retaliation (:reason result))))))
+
+(deftest repeated-tit-for-tat-returns-to-cooperation
+  (testing "tit-for-tat returns to honest when opponents cooperate"
+    (let [rng (rng/make-rng 1)
+          resolver {:strategy :malicious :epoch-history {:epoch-1 {:trials 1 :profit 50.0}}}
+          cfg {:allowed-targets #{:honest :malicious :lazy}
+               :strategy-space #{:honest :malicious :lazy}}
+          result (d/select-next-strategy :repeated/tit-for-tat
+                   {:cfg cfg :epoch 2
+                    :previous-epoch-strategies [:honest :honest :honest]}
+                   resolver)]
+      (is (= :honest (:to result)))
+      (is (= :tit-for-tat-return (:reason result))))))
+
 (deftest legacy-binary-mode-keeps-compatibility
   (testing "legacy mode keeps binary honest/malicious behavior"
     (let [rng (rng/make-rng 42)

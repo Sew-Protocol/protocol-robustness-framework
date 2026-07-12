@@ -34,13 +34,14 @@
    yield claim, negative yield cascade with deferred recovery, and
    resolver stake shortfall. Each scenario exercises shortfall detection,
    pro-rata allocation, and deferred claim recording."
-  :benchmark/concepts        [:robustness/protocol-value-conservation
-                              :allocation/partial-fill
-                              :allocation/shortfall
-                              :allocation/stake-liquidity-blocking
-                              :consensus/evidence
-                              :consensus/finality
-                              :verifiable-assurance/forensic-confidence]
+   :benchmark/concepts        [:robustness/protocol-value-conservation
+                               :allocation/partial-fill
+                               :allocation/shortfall
+                               :allocation/stake-liquidity-blocking
+                               :allocation/redistribution-fairness
+                               :consensus/evidence
+                               :consensus/finality
+                               :verifiable-assurance/forensic-confidence]
   :benchmark/scenarios
   [{:scenario/id "S-DR-043-payout-shortfall-deferred"
     :dimension   :allocation/partial-fill

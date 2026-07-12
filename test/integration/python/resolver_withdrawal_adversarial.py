@@ -13,7 +13,7 @@ Notes:
   - Requires the Clojure gRPC server on localhost:50051.
 
 Run:
-  cd integration/python && python resolver_withdrawal_adversarial.py
+  cd test/integration/python && python resolver_withdrawal_adversarial.py
 """
 
 from __future__ import annotations

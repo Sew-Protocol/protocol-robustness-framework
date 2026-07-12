@@ -99,8 +99,10 @@
   "Maps equilibrium property keywords to their validation class."
   {:incentive-compatibility       :validation.class/payoff-property
    :sybil-resistance              :validation.class/payoff-property
-   :dominant-strategy-equilibrium :validation.class/payoff-property
+    :dominant-strategy-equilibrium :validation.class/payoff-property
+   :empirical-strategy-dominance :validation.class/payoff-property
    :nash-equilibrium              :validation.class/equilibrium
+   :bounded-nash-diagnostic       :validation.class/equilibrium
    :bayesian-nash-equilibrium     :validation.class/equilibrium
    :pro-rata-fairness             :validation.class/algebraic-integrity
    :redistribution-fairness       :validation.class/algebraic-integrity
@@ -397,7 +399,9 @@
 
 (def ^:private equilibrium-validators
   {:dominant-strategy-equilibrium check-dominant-strategy-equilibrium
+   :empirical-strategy-dominance check-dominant-strategy-equilibrium
    :nash-equilibrium              check-nash-equilibrium
+   :bounded-nash-diagnostic       check-nash-equilibrium
    :bayesian-nash-equilibrium     check-bayesian-nash-equilibrium})
 
 ;; ---------------------------------------------------------------------------

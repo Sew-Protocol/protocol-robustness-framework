@@ -24,12 +24,39 @@ they explicitly declare `:concept/shadows-global? true`.
 Concept enrichment is added **after** all protocol computation and
 hashing are complete. It is a cosmetic overlay on reports.
 
+### Non-Normative Status
+
+Use-case concepts are **non-normative stakeholder-facing examples**.
+Inclusion of a use-case indicates that a stakeholder problem can be mapped
+to protocol concepts for examination; it does **not** assert:
+
+- Implementation or production support in any Sew deployment
+- Fitness for any particular purpose or domain
+- Legal permissibility or regulatory classification
+- Economic safety or correctness under adversarial conditions
+- End-to-end testing or benchmark coverage
+
+Each use-case file carries `:concept/maturity :illustrative` and
+`:concept/support-status :not-asserted` to make this status
+machine-readable. Support must be established separately through
+referenced protocol capabilities, executable scenarios, benchmarks,
+and deployment configuration.
+
 ## Maturity And Coverage
 
-Concept maturity is derived from the benchmark catalogue, not asserted by
-concept prose. Benchmark evidence records each included concept's scenario
-mappings, claim IDs, evaluator-backed claim IDs, active benchmark IDs, known
-gaps, and strongest maturity:
+Two maturity tracks exist. **Evidential maturity** (below) is derived
+from the benchmark catalogue and reflects actual protocol evidence.
+**Conceptual maturity** is set per-concept via `:concept/maturity` and
+indicates the confidence level of the stakeholder mapping itself:
+
+| Conceptual Maturity | Meaning |
+|---|---|
+| `:illustrative` | Stakeholder framing and approximate mappings exist |
+| `:mapping-reviewed` | Every referenced protocol keyword exists and mapping confidence is explicit |
+| `:scenario-backed` | Material paths and failure modes reference executable scenarios |
+| `:benchmark-backed` | Named benchmark claims and metrics support the described property |
+
+Evidential maturity (derived from benchmark catalogue):
 
 | Maturity | Meaning |
 |---|---|
@@ -69,10 +96,14 @@ data/concepts/
 ├── README.md
 ├── registry.edn                          ← index of all concepts
 ├── use-case/
-│   ├── ecommerce.edn                     ← marketplace purchase
+│   ├── ecommerce.edn                     ← marketplace purchase (includes fixed-price variant)
 │   ├── event_deposits.edn                ← conditional deposits
-│   ├── fixed_price.edn                   ← fixed-price listing
-│   └── spending_accounts.edn             ← controlled balance
+│   ├── controlled_escrow_balance.edn     ← controlled escrow balance
+│   ├── dispute_appeal_escalation.edn     ← appeal and escalation lifecycle
+│   ├── resolver_participation_bonding.edn← resolver registration, bonding, capacity
+│   ├── yield_bearing_escrow.edn          ← yield accrual, shortfall, recovery
+│   ├── governance_rule_transition.edn    ← rule changes during active escrows
+│   └── goal_contingent_pooled_escrow.edn ← pooled contributions toward a goal
 ├── decision-quality/
 │   ├── authority.edn                     ← who decides
 │   ├── evidence.edn                      ← what facts available
@@ -102,8 +133,14 @@ Each concept file is a single EDN map with these keys:
 | `:concept/actions` | Map of action keywords to action maps |
 | `:concept/outcomes` | Map of outcome keywords to outcome maps |
 | `:concept/failure-modes` | Vector of failure mode maps |
+| `:concept/metrics` | Map of metric keyword to metric definition |
 | `:concept/assumptions` | Vector of assumption strings |
 | `:concept/out-of-scope` | Vector of out-of-scope statements |
+| `:concept/related` | Vector of related concept keyword IDs (may be extended to typed maps in future) |
+| `:concept/maturity` | Conceptual maturity (`:illustrative`, `:mapping-reviewed`, `:scenario-backed`, `:benchmark-backed`) |
+| `:concept/support-status` | `:not-asserted` — use-case files do not assert implementation support |
+| `:concept/known-gaps` | Vector of known mapping gaps or incomplete outcomes |
+| `:concept/evidence` | Map with `:scenarios`, `:benchmarks`, `:claims` keyed to sets |
 
 Each role, entity, action, and outcome map may contain:
 
@@ -146,3 +183,4 @@ Checks that:
 - Protocols are known (`:protocol/sew-v1`, `:protocol/prf`)
 - Files live in the subdirectory matching their `:concept/type`
 - `:maps-to` values use keyword (not string) form with recognized namespaces
+- `:concept/known-gaps` and `:concept/evidence` are not yet validated by this script

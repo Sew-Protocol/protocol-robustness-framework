@@ -39,8 +39,9 @@
 
    ## Layering
 
-   sim/* may import sim/* per project rules. This namespace imports nothing
-    outside sim/. All inputs are plain Clojure maps (no DB, no I/O).")
+    sim/* may import sim/* per project rules. This namespace imports nothing
+     outside sim/. All inputs are plain Clojure maps (no DB, no I/O)."
+  (:require [resolver-sim.tools.participation-stability :as ps]))
 
 ;; ---------------------------------------------------------------------------
 ;; Shared result helpers
@@ -181,78 +182,23 @@
 (defn evaluate-participation-stable
   "Claim: the productive resolver pool (honest + lazy) is stable.
 
-   Malicious and collusive exits are expected as the slashing mechanism drives
-   adversarial actors out, so they do not indicate instability.
+   Delegates to resolver-sim.tools.participation-stability/check-participation-stability
+   which implements the three-layer architecture:
 
-   Primary pass: productive-exit-rate (honest + lazy exits / initial honest + lazy)
-   < 20% — productive participants are retained.
+   Layer 1 — Passthrough: always emit aggregate and per-strategy diagnostics.
+   Layer 2 — Classified: honest ≤ 10% and productive ≤ 20% exit rates.
+   Layer 3 — Fallback: aggregate exit rate < 40% (strict).
 
-   Fallback: if productive-exit-rate is unavailable (zero init count), use
-   aggregate exit rate < 40%.
-
-   Evidence includes per-strategy breakdown and both rates."
+   Evidence retains backward-compatible flat keys (:total-exits,
+   :initial-count, :aggregate-exit-rate, :productive-exit-rate, etc.)
+   alongside richer structured data."
   [result]
-  (let [initial  (:initial-resolver-count result)]
-    (if (nil? initial)
-      (inconclusive :participation-stable "initial-resolver-count missing from result")
-      (let [stats    (:aggregated-stats result)
-            exits    (:total-resolver-exits stats 0)
-            h-exits  (:honest-exit-count stats 0)
-            l-exits  (:lazy-exit-count stats 0)
-            mx-exits (:malicious-exit-count stats 0)
-            c-exits  (:collusive-exit-count stats 0)
-            init-comp (:initial-composition result)
-            h-init  (:honest-count init-comp 0)
-            l-init  (:lazy-count init-comp 0)
-            mx-init (:malicious-count init-comp 0)
-            c-init  (:collusive-count init-comp 0)
-            agg-rate (double (/ exits (max 1 initial)))
-            productive-init (+ h-init l-init)
-            productive-exits (+ h-exits l-exits)
-            productive-rate (if (pos? productive-init)
-                              (/ (double productive-exits) productive-init)
-                              nil)]
-        (cond
-          ;; Primary: productive participants retained
-          (and productive-rate (< productive-rate 0.20))
-          (pass :participation-stable
-                {:total-exits exits :initial-count initial
-                 :aggregate-exit-rate agg-rate
-                 :productive-exit-rate productive-rate
-                 :productive-init productive-init
-                 :productive-exits productive-exits
-                 :honest-exits h-exits :lazy-exits l-exits
-                 :malicious-exits mx-exits :collusive-exits c-exits}
-                (format "productive-exit-rate=%.1f%% < 20%% (aggregate=%.1f%%)"
-                        (* 100 productive-rate) (* 100 agg-rate)))
-
-          ;; Productive data available but rate too high — fail
-          productive-rate
-          (fail :participation-stable
-                {:total-exits exits :initial-count initial
-                 :aggregate-exit-rate agg-rate
-                 :productive-exit-rate productive-rate
-                 :productive-init productive-init
-                 :productive-exits productive-exits
-                 :honest-exits h-exits :lazy-exits l-exits
-                 :malicious-exits mx-exits :collusive-exits c-exits}
-                (format "productive-exit-rate=%.1f%% ≥ 20%%, aggregate=%.1f%%: productive resolver attrition"
-                        (* 100 productive-rate) (* 100 agg-rate)))
-
-          ;; Productive data unavailable — fallback to aggregate
-          (< agg-rate 0.40)
-          (pass :participation-stable
-                {:total-exits exits :initial-count initial
-                 :aggregate-exit-rate agg-rate}
-                (format "aggregate-exit-rate=%.1f%% < 40%%: pool stable (no per-strategy data)"
-                        (* 100 agg-rate)))
-
-          :else
-          (fail :participation-stable
-                {:total-exits exits :initial-count initial
-                 :aggregate-exit-rate agg-rate}
-                (format "aggregate-exit-rate=%.1f%% ≥ 40%%: significant resolver attrition"
-                        (* 100 agg-rate))))))))
+  (let [check (ps/check-participation-stability result)]
+    {:claim-id  :participation-stable
+     :status    (:status check)
+     :basis     :single-simulation-evidence
+     :evidence  (:evidence check)
+     :detail    (:reason check)}))
 
 (defn evaluate-honest-survival-rate
   "Claim: honest resolvers survive at a higher rate than malicious resolvers.
@@ -380,11 +326,26 @@
    :evidence evidence
    :detail   detail})
 
-(defn- mech-inconclusive [property reason]
+(defn- mech-inconclusive [property reason & [evidence]]
   {:property property
    :status   :inconclusive
    :basis    :multi-epoch-population-proxy
-   :reason   reason})
+   :reason   reason
+   :evidence (or evidence {})})
+
+(defn- add-surplus-diagnostics
+  "Attach diagnostic-only surplus metrics (net-sum, honest-profit, profit-ratio)
+   to a budget-balance evidence map. These are informative but not used as the
+   authoritative pass/fail criterion."
+  [evidence h-prof m-prof]
+  (let [resolver-net (when (and h-prof m-prof) (+ h-prof m-prof))
+        ratio (when (and h-prof (not (zero? (double (or resolver-net 0)))))
+                (/ (double h-prof) (double resolver-net)))]
+    (assoc evidence
+           :honest-cumulative-profit  h-prof
+           :malice-cumulative-profit  m-prof
+           :resolver-profit-net-sum   resolver-net
+           :profit-ratio              ratio)))
 
 (defn- evaluate-mech-budget-balance
   "Proxy for :budget-balance — flow-conservation reconciliation.
@@ -400,10 +361,12 @@
    The residual should be approximately 0 (within 1 wei rounding tolerance).
    A negative residual means value was unaccountably created — a simulation bug.
 
-   Unlike the previous heuristic (net-sum vs 5% of honest-profit), this is a
-   proper accounting identity derived from the profit formulas:
-     profit_honest = fee + appeal_recovery
-     profit_malice = fee - bond_loss + fraud_upside"
+   Surplus metrics (honest-cumulative-profit, resolver-profit-net-sum,
+   profit-ratio) are always included as diagnostics but are not the
+   authoritative criterion — the flow-conservation residual is.
+
+   When complete reconciliation inputs are unavailable, returns :inconclusive
+   (never :fail or :pass) with whatever surplus metrics are available."
   [result]
   (let [stats     (:aggregated-stats result)
         h-prof    (:honest-cumulative-profit stats)
@@ -411,41 +374,37 @@
         fees-col  (:flow-total-fees-collected stats)
         bond-loss (:flow-total-bond-loss stats)
         fraud-up  (:flow-total-fraud-upside stats)
-        batch-mode (some-> result :epoch-results first :batch-mode)]
-    (if (some nil? [h-prof m-prof fees-col bond-loss fraud-up])
-      (if (and (= :shared-world batch-mode)
-               (some nil? [fees-col bond-loss fraud-up]))
-        (mech-fail :budget-balance
-                   {:batch-mode    batch-mode
-                    :missing-keys  (vec (for [[k v] {:flow-total-fees-collected fees-col
-                                                     :flow-total-bond-loss     bond-loss
-                                                     :flow-total-fraud-upside  fraud-up}
-                                              :when (nil? v)]
-                                          k))}
-                   "flow tracking data missing in shared-world mode: simulation bug or missing flow plumbing")
-        (mech-inconclusive :budget-balance
-                           "flow-conservation data missing; simulation may lack :use-budget-flow-tracking? or use older params"))
+        flow-keys {:flow-total-fees-collected fees-col
+                   :flow-total-bond-loss     bond-loss
+                   :flow-total-fraud-upside  fraud-up}]
+    (if (ps/complete-finite-numbers? stats [:honest-cumulative-profit
+                                            :malice-cumulative-profit
+                                            :flow-total-fees-collected
+                                            :flow-total-bond-loss
+                                            :flow-total-fraud-upside])
       (let [resolver-net (+ h-prof m-prof)
-            ;; Flow conservation: fees_in = resolver_net + bond_loss - fraud_upside
             residual (+ (- fees-col resolver-net bond-loss) fraud-up)
-            balanced? (<= (Math/abs (double residual)) 1.0)]
+            balanced? (<= (Math/abs (double residual)) 1.0)
+            base-evidence {:total-fees-collected  fees-col
+                           :resolver-profit-net-sum resolver-net
+                           :total-bond-loss      bond-loss
+                           :total-fraud-upside   fraud-up
+                           :residual             residual}]
         (if balanced?
           (mech-pass :budget-balance
-                     {:total-fees-collected  fees-col
-                      :resolver-profit-net-sum resolver-net
-                      :total-bond-loss      bond-loss
-                      :total-fraud-upside   fraud-up
-                      :residual             residual}
+                     (add-surplus-diagnostics base-evidence h-prof m-prof)
                      (format "flow conserved: fees=%.0f, resolver-net=%.0f, bond=%.0f, fraud=%.0f, residual=%.0f"
                              (double fees-col) (double resolver-net) (double bond-loss) (double fraud-up) (double residual)))
           (mech-fail :budget-balance
-                     {:total-fees-collected  fees-col
-                      :resolver-profit-net-sum resolver-net
-                      :total-bond-loss      bond-loss
-                      :total-fraud-upside   fraud-up
-                      :residual             residual}
+                     (add-surplus-diagnostics base-evidence h-prof m-prof)
                      (format "flow leak: fees=%.0f, resolver-net=%.0f, bond=%.0f, fraud=%.0f, residual=%.0f ≠ 0"
-                             (double fees-col) (double resolver-net) (double bond-loss) (double fraud-up) (double residual))))))))
+                             (double fees-col) (double resolver-net) (double bond-loss) (double fraud-up) (double residual)))))
+      ;; Incomplete reconciliation inputs → inconclusive with surplus diagnostics
+      (mech-inconclusive :budget-balance
+                         "flow-conservation reconciliation inputs incomplete; surplus metrics attached as diagnostics"
+                         (add-surplus-diagnostics
+                          {:missing-flow-keys (vec (for [[k v] flow-keys :when (nil? v)] k))}
+                          h-prof m-prof)))))
 
 (defn- evaluate-mech-incentive-compatibility
   "Proxy for :incentive-compatibility.

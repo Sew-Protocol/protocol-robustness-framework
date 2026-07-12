@@ -112,4 +112,5 @@ workspaces/private-discovery-template/export/
 .github/instructions/codacy.instructions.md
 
 # Temporarily ignored
+send-to-ef
 docs/game-theory/CLOSED_FORM_VALIDATION.md

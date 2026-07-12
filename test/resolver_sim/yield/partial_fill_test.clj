@@ -1060,3 +1060,34 @@
                           :decision/hash "sha256:0000000000000000000000000000000000000000000000000000000000000000")
           result (pf/validate-decision-artifact position artifact)]
       (is (= :fail (:status result))))))
+
+(deftest test-partial-fill-closed-form-checks-deferred-haircut-sum-bound-catches
+  (testing "deferred-haircut-sum-bound catches deferred+haircut > requested"
+    (let [decision {:settlement-mode :partial-fill
+                    :requested {:a 40 :b 60}
+                    :filled {:a 20 :b 30}
+                    :deferred {:a 25}
+                    :haircut {:a 20}
+                    :policy {:mode :pro-rata}
+                    :evidence {:available-liquidity 50}}
+          checks (pf/partial-fill-closed-form-checks decision)
+          sc (first (filter #(= :partial-fill/deferred-haircut-sum-bound
+                                (:check/id %))
+                            checks))]
+      (is (= :fail (:status sc)))
+      (is (some #(= :a (:claim %)) (get-in sc [:details :violations]))))))
+
+(deftest test-partial-fill-closed-form-checks-deferred-haircut-sum-bound-passes
+  (testing "deferred-haircut-sum-bound passes when deferred+haircut <= requested"
+    (let [decision {:settlement-mode :partial-fill
+                    :requested {:a 40 :b 60}
+                    :filled {:a 20 :b 30}
+                    :deferred {:a 15}
+                    :haircut {:a 10}
+                    :policy {:mode :pro-rata}
+                    :evidence {:available-liquidity 50}}
+          checks (pf/partial-fill-closed-form-checks decision)
+          sc (first (filter #(= :partial-fill/deferred-haircut-sum-bound
+                                (:check/id %))
+                            checks))]
+      (is (= :pass (:status sc))))))

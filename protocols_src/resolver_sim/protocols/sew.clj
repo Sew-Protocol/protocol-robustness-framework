@@ -556,79 +556,112 @@
             fa-policy        (:force-authorisation-policy context)
             now              (time-ctx/block-ts world)
             workflow-id      (:workflow-id pp)
+            escrow           (t/get-transfer world workflow-id)
             reason           (:reason pp)
             allowed          (:allowed-reasons fa-policy)
-            _ (when (and allowed reason
-                          (not (contains? allowed reason)))
-                (t/fail :force-authorisation-reason-not-allowed))
             starts-at        (or (:starts-at pp) now)
             duration         (:duration pp)
             expires-at-param (:expires-at pp)
-            _ (when (and expires-at-param duration)
-                (t/fail :force-authorisation-conflicting-timing))
             def-dur          (:default-duration fa-policy)
             expires-at       (or expires-at-param
-                                 (when duration (+ starts-at duration))
-                                 (when def-dur (+ starts-at def-dur))
+                                 (when (and (number? starts-at) (number? duration))
+                                   (+ starts-at duration))
+                                 (when (and (number? starts-at) (number? def-dur))
+                                   (+ starts-at def-dur))
                                  nil)
             max-dur          (:max-duration fa-policy)
-            _ (when (and expires-at max-dur
-                         (> (- expires-at starts-at) max-dur))
-                (t/fail :force-authorisation-duration-exceeds-max))
-            allowed-action  (:allowed-action pp "execute-resolution")
-            auth-id         (str "fa-" (get world :next-force-authorisation-id 0))
-            grant-prov      (merge (governance-authorization-provenance context event addr)
-                                   {:authorization/type :force-authorisation
-                                    :authorization/id auth-id
-                                    :authorization/source :governance
-                                    :authorization/check :with-governance-actor})
-            record
-            {:authorization/id auth-id
-             :authorization/type :force-authorisation
-             :authorization/source :governance
-             :authorization/status :active
-             :workflow-id workflow-id
-             :allowed-action allowed-action
-             :nonce auth-id
-             :starts-at starts-at
-             :expires-at expires-at
-             :created-at now
-             :created-by addr
-             :reason reason
-             :consumed? false
-             :authorization/provenance grant-prov
-             :authorization/last-provenance grant-prov
-             :authorization/last-action "grant-force-authorisation"
-             :authorization/history
-             [{:authorization/action "grant-force-authorisation"
-               :authorization/provenance grant-prov}]}
-            world' (-> world
-                       (assoc-in [:force-authorisations auth-id] record)
-                       (update :next-force-authorisation-id inc))]
-        (attr/with-attribution {:subject/type :force-authorisation
-                                :subject/id auth-id
-                                :action/type :force-authorisation/grant
-                                :evidence/reason :force-authorisation-granted}
-          (cap/capture-event-evidence!
-           :force-authorisation-granted
-           {:force-auth/before {:next-force-authorisation-id (:next-force-authorisation-id world)}}
-           {:force-auth/after {:next-force-authorisation-id (:next-force-authorisation-id world')
-                               :created-auth-id auth-id
-                               :status :active
-                               :starts-at starts-at
-                               :expires-at expires-at}}
-           {:force-auth/auth-id auth-id
-            :force-auth/workflow-id workflow-id
-            :force-auth/allowed-action allowed-action
-            :force-auth/reason reason
-            :force-auth/created-by addr
-            :force-auth/starts-at starts-at
-            :force-auth/expires-at expires-at
-            :force-auth/nonce auth-id}
-           nil
-           {:world-before world
-            :world-after world'}))
-        (assoc (t/ok world') :extra {:authorization/id auth-id})))))
+            allowed-action   (:allowed-action pp "execute-resolution")
+            is-release       (get pp :is-release true)]
+        (cond
+          (nil? escrow) (t/fail :force-authorisation-workflow-not-found)
+          (not= :disputed (:escrow-state escrow)) (t/fail :force-authorisation-workflow-not-disputed)
+          (not (keyword? reason)) (t/fail :force-authorisation-invalid-reason)
+          (and allowed (not (contains? allowed reason))) (t/fail :force-authorisation-reason-not-allowed)
+          (not= "execute-resolution" allowed-action) (t/fail :force-authorisation-action-not-allowed)
+          (not (boolean? is-release)) (t/fail :force-authorisation-invalid-settlement-direction)
+          (not (number? starts-at)) (t/fail :force-authorisation-invalid-start-time)
+          (and duration (or (not (number? duration)) (neg? duration)))
+          (t/fail :force-authorisation-invalid-duration)
+          (and expires-at-param (not (number? expires-at-param)))
+          (t/fail :force-authorisation-invalid-expiry)
+          (and expires-at (<= expires-at starts-at))
+          (t/fail :force-authorisation-invalid-time-window)
+          (and expires-at-param duration) (t/fail :force-authorisation-conflicting-timing)
+          (and expires-at max-dur (> (- expires-at starts-at) max-dur))
+          (t/fail :force-authorisation-duration-exceeds-max)
+          :else
+          (let [auth-id         (str "fa-" (get world :next-force-authorisation-id 0))
+                recipient       (if is-release (:to escrow) (:from escrow))
+                reason-for-scope (if is-release :force-authorised-release :force-authorised-refund)
+                scope           {:authorization/id auth-id
+                                 :authorization/type :force-authorisation
+                                 :held/direction :out
+                                 :token (:token escrow)
+                                 :amount (:amount-after-fee escrow)
+                                 :held/account :escrow-principal
+                                 :owner/address recipient
+                                 :held/reason reason-for-scope
+                                 :held/workflow-id workflow-id}
+                scope-hash      (hash/domain-hash acct/force-authorisation-scope-domain scope)
+                grant-prov      (merge (governance-authorization-provenance context event addr)
+                                       {:authorization/type :force-authorisation
+                                        :authorization/id auth-id
+                                        :authorization/source :governance
+                                        :authorization/check :with-governance-actor
+                                        :authorization/scope-hash scope-hash})
+                record          {:authorization/id auth-id
+                                 :authorization/version "force-authorisation.v2"
+                                 :authorization/type :force-authorisation
+                                 :authorization/source :governance
+                                 :authorization/status :active
+                                 :workflow-id workflow-id
+                                 :allowed-action allowed-action
+                                 :authorization/scope scope
+                                 :authorization/scope-hash scope-hash
+                                 :nonce auth-id
+                                 :starts-at starts-at
+                                 :expires-at expires-at
+                                 :created-at now
+                                 :created-by addr
+                                 :reason reason
+                                 :consumed? false
+                                 :authorization/provenance grant-prov
+                                 :authorization/last-provenance grant-prov
+                                 :authorization/last-action "grant-force-authorisation"
+                                 :authorization/history
+                                 [{:authorization/action "grant-force-authorisation"
+                                   :authorization/provenance grant-prov}]}
+                world' (-> world
+                           (assoc-in [:force-authorisations auth-id] record)
+                           (update :next-force-authorisation-id inc))]
+            (attr/with-attribution {:subject/type :force-authorisation
+                                    :subject/id auth-id
+                                    :action/type :force-authorisation/grant
+                                    :evidence/reason :force-authorisation-granted}
+              (cap/capture-event-evidence!
+               :force-authorisation-granted
+               {:force-auth/before {:next-force-authorisation-id (:next-force-authorisation-id world)}}
+               {:force-auth/after {:next-force-authorisation-id (:next-force-authorisation-id world')
+                                   :created-auth-id auth-id
+                                   :status :active
+                                   :starts-at starts-at
+                                   :expires-at expires-at
+                                   :scope-hash scope-hash}}
+               {:force-auth/auth-id auth-id
+                :force-auth/workflow-id workflow-id
+                :force-auth/allowed-action allowed-action
+                :force-auth/reason reason
+                :force-auth/created-by addr
+                :force-auth/starts-at starts-at
+                :force-auth/expires-at expires-at
+                :force-auth/scope scope
+                :force-auth/scope-hash scope-hash
+                :force-auth/nonce auth-id}
+               nil
+               {:world-before world
+                :world-after world'}))
+            (assoc (t/ok world') :extra {:authorization/id auth-id
+                                         :authorization/scope-hash scope-hash})))))))
 
 (defmethod apply-action "grant-force-authorization"
   [context world event]
@@ -733,9 +766,12 @@
                            :owner/address recipient
                            :held/reason fa-reason
                            :held/workflow-id workflow-id}
-                scope-hash (hash/domain-hash acct/force-authorisation-scope-domain scope-map)
-                execution-prov
-                {:authorization/schema-version "force-authorisation.v1"
+                scope-hash (hash/domain-hash acct/force-authorisation-scope-domain scope-map)]
+            (if (or (not= scope-map (:authorization/scope record))
+                    (not= scope-hash (:authorization/scope-hash record)))
+              (t/fail :force-authorisation-grant-scope-mismatch)
+              (let [execution-prov
+                {:authorization/schema-version "force-authorisation.v2"
                  :authorization/type :force-authorisation
                  :authorization/id auth-id
                  :authorization/scope-hash scope-hash
@@ -795,7 +831,7 @@
                     (assoc :extra
                            {:authorization/id auth-id
                             :authorization/provenance execution-prov})))
-               result)))))))
+               result)))))))))
 
 (defmethod apply-action "execute-force-authorized-action"
   [{:keys [agent-index]} world event]

@@ -1,124 +1,113 @@
 # Quick Start: Protocol Robustness Framework
 
+This guide uses the repository's current Clojure and Babashka entry points. It does not require the legacy Python/gRPC workflow.
+
 ## Requirements
 
-- **Java 11+** / **Clojure CLI** ([install guide](https://clojure.org/guides/install_clojure))
-- **Python 3.10+** (adversarial bridge only — not needed for in-process runs)
+### Required
 
----
+- **JDK 21** — the version used by the GitHub Actions workflows.
+- **Clojure CLI** — used for aliases, builds, and direct namespace execution.
+- **Babashka (`bb`)** — used by the supported task wrappers, including `bb test` and `bb run:scenario`.
 
-## Step 1: Run the canonical validation gate
-
-This is the authoritative single-command check. Run it first.
+Verify the installation from the repository root:
 
 ```bash
+java -version
+clojure -Sdescribe
+bb --version
+```
+
+### Optional tools
+
+| Tool | Needed for |
+|---|---|
+| Python 3 | Evidence helper scripts invoked by some scenario and test tasks. |
+| Docker Compose | Local XTDB services (`make xtdb`). |
+| Foundry (`forge`) | Solidity trace-equivalence checks only. |
+
+## Choose a project view
+
+The default classpath contains the protocol-agnostic framework. Add Sew when working with the included protocol model:
+
+```bash
+clojure -M:with-sew
+clojure -M:test:with-sew
+```
+
+`workspaces/with-sew/` provides the same full-stack view without requiring the alias. See `workspaces/MAP.md`.
+
+## First successful run
+
+Run one registered scenario through the Sew replay path:
+
+```bash
+bb run:scenario <scenario-id>
+```
+
+To discover scenario IDs, inspect `docs/scenarios.md` or search the `scenarios/` directory. Use a display level when investigating results:
+
+```bash
+bb run:scenario <scenario-id> --result-display-level standard
+```
+
+Scenario artifacts are written below `results/`; this directory is generated local output and is not source material.
+
+## Validate the repository
+
+Run the canonical validation gate:
+
+```bash
+bb test
+# Equivalent direct runner:
 ./scripts/test.sh all
 ```
 
-Runs five targets in sequence: unit tests, generator regression, contract checks,
-deterministic invariant suite (S01–S100), and fixture suites. See
-`docs/testing/RUNNING_TESTS.md` for the current known-baseline and any expected failures.
+`all` runs unit, generator, contract, invariant, fixture-suite, reference-validation, coverage, and triage targets. It also runs a representative Monte Carlo target unless invoked in fast mode. See `docs/testing/RUNNING_TESTS.md` for target-level commands and artifacts.
 
----
-
-## Step 2: Run the deterministic invariant suite alone (fast)
-
-No server required. Runs in ~1 second.
+For an edit-loop-friendly gate:
 
 ```bash
-clojure -M:run -- --invariants
+./scripts/test.sh fast
 ```
 
-Executes all S01–S100 in-process scenarios against the Sew state machine and checks
-invariants at every transition. Each scenario is pass/fail with explicit violation
-counts. Expect output like:
-
-```
-  Sew Invariant Suite — Deterministic Scenarios
-  ✓ PASS  S01  baseline-happy-path          steps=3   reverts=0
-  ✓ PASS  S02  dr3-dispute-release          steps=4   reverts=0
-  ...
-  82/99 passed  (0.8 s)
-```
-
----
-
-## Step 3: Run the adversarial gRPC suite
-
-Requires the Clojure gRPC server.
+For framework-only or Sew-inclusive unit coverage:
 
 ```bash
-# Start server in background
-nohup clojure -M:run -- -S --port 7070 > grpc-server.log 2>&1 &
-sleep 8
-
-# Run all adversarial scenarios (Python)
-pip install -e python/
-cd integration/python && python invariant_suite.py
+bb test:framework
+bb test:unit
 ```
 
-This runs 33 adversarial scenarios where Python agents interact with the live
-contract model. See `docs/usage.md` for scenario-by-scenario flags.
-
----
-
-## Step 4: Run a Monte Carlo statistical phase
-
-No server required. Results written to `results/`.
+## Common next steps
 
 ```bash
-clojure -M:run -- -p data/params/baseline.edn
+# Run the invariant suite through the registered CLI
+clojure -M:cli -- run-invariants --protocol sew-v1
+
+# Run a simulation from an EDN parameter file
+bb sim:run -p data/params/baseline.edn
+
+# Regenerate the scenario documentation table
+bb docs:scenarios
+
+# Check generated documentation is current
+make docs-as-code-check
 ```
 
-See `data/params/PHASES.md` for the full list of parameter files and what each
-phase hypothesis tests.
+## Where to go next
 
----
-
-## Architecture Overview
-
-```
-src/resolver_sim/
-  contract_model/   — Protocol-agnostic deterministic replay kernel
-  protocols/        — SimulationAdapter interfaces + Sew and Dummy adapters
-    sew/            — Sew state machine, lifecycle, accounting, invariants
-  stochastic/       — Statistical models (rng, economics, decision quality)
-  sim/              — Monte Carlo simulation phases and harness
-  io/               — Parameter loading and result serialization
-  core.clj          — CLI entry point
-```
-
-All logic in `protocols/`, `contract_model/`, and `stochastic/` is pure (no side
-effects). RNG is an explicit parameter. See `docs/architecture/ARCHITECTURE.md`
-for the full namespace map and layering rules.
-
----
-
-## Reproducibility
-
-**Same seed + params → identical output, byte-for-byte.**
-
-1. Deterministic replay: no randomness. Same scenario + same code = same trace.
-2. Monte Carlo: explicit SplittableRandom seed. Same seed + params = identical results.
-3. Every run captures git SHA, seed, JVM version, and timestamp in `metadata.edn`.
-
----
+- `docs/reference/usage.md` — supported CLI and Babashka command reference.
+- `docs/testing/RUNNING_TESTS.md` — test targets and validation artifacts.
+- `docs/architecture/ADAPTER_AUTHORING_GUIDE.md` — protocol adapter interfaces.
+- `schemas/README.md` — machine-readable schema catalog.
+- `docs/specs/COMMANDS.md` — review-gate command tiers.
 
 ## Troubleshooting
 
-**`./scripts/test.sh` fails with reader or namespace errors**
-Check `docs/testing/RUNNING_TESTS.md` for the current known-baseline. Some
-failures are tracked and documented; confirm whether yours is known before debugging.
+**`bb` is not found** — install Babashka, or use the corresponding `clojure` / `scripts/test.sh` commands where documented.
 
-**"No such file or directory"**
-Run scripts from the repository root. Paths start with `data/params/` or `data/fixtures/`.
+**A Sew namespace cannot be found** — add `:with-sew` to the Clojure command or use a `bb` task that already selects it.
 
-**gRPC server not starting**
-Check `grpc-server.log` for errors. Allow 10–15 seconds for JVM startup.
-Verify port 7070 is not already in use.
+**A test task cannot execute a Python helper** — install Python 3; evidence-oriented tasks call scripts under `scripts/evidence/`.
 
-**Permission denied on scripts**
-```bash
-chmod +x run.sh scripts/test.sh
-```
-
+**Generated files differ after a command** — consult the command's documentation before committing generated output. `results/` is local output; generated documentation has explicit `make *-check` targets.

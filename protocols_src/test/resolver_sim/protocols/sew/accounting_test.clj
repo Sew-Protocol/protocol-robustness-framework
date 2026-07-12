@@ -75,7 +75,7 @@
     (is (= "appeal-slash" (:held/action adjustment)))
     (is (= 42 (:held/workflow-id adjustment)))
     (is (= auth (:authorization/provenance adjustment)))
-    (is (= "held-custody-adjustment.artifact.v1" (:schema-version artifact)))
+    (is (= "held-custody-adjustment.artifact.v2" (:schema-version artifact)))
     (is (= :held-custody-adjustment (:artifact/kind artifact)))
     (is (= "held-custody-held-adjustment-0" (:artifact/id artifact)))
     (is (string? (:artifact/hash artifact)))
@@ -162,6 +162,7 @@
     (is (= [:held-custody/hash-integrity
             :held-custody/local-delta
             :held-custody/non-negative-after
+            :held-custody/predecessor-continuity
             :held-custody/sequence-replay]
            (mapv :check/id checks)))
     (is (every? #(= :pass (:status %)) checks))))
@@ -250,7 +251,16 @@
          auth-prov {:authorization/type :force-authorisation
                     :authorization/id auth-id
                     :authorization/scope-hash scope-hash}
-         world (ac/sub-held {:total-held {usdc held}}
+         world (ac/sub-held {:total-held {usdc held}
+                              :held/positions {[:held/position usdc :escrow-principal 42] held}
+                              :held-ledger/index {:by-token {usdc held}
+                                                  :by-position {[:held/position usdc :escrow-principal 42] held}}
+                              :force-authorisations {auth-id {:authorization/id auth-id
+                                                              :authorization/status :active
+                                                              :consumed? false
+                                                              :starts-at 0
+                                                              :authorization/scope scope-map
+                                                              :authorization/scope-hash scope-hash}}}
                             usdc sub-amt
                            {:action "finalize-released"
                             :reason :force-authorised-release
@@ -284,7 +294,16 @@
          auth-prov {:authorization/type :force-authorisation
                     :authorization/id auth-id
                     :authorization/scope-hash scope-hash}
-         world (ac/sub-held {:total-held {usdc 100}}
+         world (ac/sub-held {:total-held {usdc 100}
+                              :held/positions {[:held/position usdc :escrow-principal 42] 100}
+                              :held-ledger/index {:by-token {usdc 100}
+                                                  :by-position {[:held/position usdc :escrow-principal 42] 100}}
+                              :force-authorisations {auth-id {:authorization/id auth-id
+                                                              :authorization/status :active
+                                                              :consumed? false
+                                                              :starts-at 0
+                                                              :authorization/scope scope-map
+                                                              :authorization/scope-hash scope-hash}}}
                             usdc 40
                             {:action "finalize-released"
                              :reason :force-authorised-release
@@ -317,13 +336,395 @@
                     :authorization/id auth-id
                     :authorization/scope-hash scope-hash}]
     (is (thrown-with-msg? clojure.lang.ExceptionInfo
-                          #"scope mismatch"
-                          (ac/sub-held {:total-held {usdc 100}} usdc 40
+                          #"scope differs from grant"
+                          (ac/sub-held {:total-held {usdc 100}
+                                        :force-authorisations {auth-id {:authorization/id auth-id
+                                                                        :authorization/status :active
+                                                                        :consumed? false
+                                                                        :starts-at 0
+                                                                        :authorization/scope scope-map
+                                                                        :authorization/scope-hash scope-hash}}} usdc 40
                                        {:action "finalize-released"
                                         :reason :force-authorised-release
                                         :authorization-provenance auth-prov
                                         :extra {:held/workflow-id 42
                                                 :owner/address bob}})))))
+
+(deftest force-authorised-sub-held-rejects-forged-provenance
+  (let [auth-id "fa-forged-a1b2c3d4"
+        scope-map {:authorization/id auth-id
+                   :authorization/type :force-authorisation
+                   :held/direction :out
+                   :token usdc
+                   :amount 40
+                   :held/account :escrow-principal
+                   :owner/address bob
+                   :held/reason :force-authorised-release
+                   :held/workflow-id 42}
+        auth-prov {:authorization/type :force-authorisation
+                   :authorization/id auth-id
+                   :authorization/scope-hash (hash/domain-hash "force-authorisation-scope" scope-map)}]
+    (is (thrown-with-msg? clojure.lang.ExceptionInfo
+                          #"record not found"
+                          (ac/sub-held {:total-held {usdc 100}}
+                                       usdc 40
+                                       {:action "finalize-released"
+                                        :reason :force-authorised-release
+                                        :authorization-provenance auth-prov
+                                        :extra {:held/workflow-id 42
+                                                :owner/address bob}})))))
+
+;; ── Related-claims force-authorisation consumption ────────────────────────────
+
+(deftest force-authorised-sub-held-related-claims-member-consumed
+  (let [auth-id "fa-rel-test-a1b2c3d4"
+        wf-0 42 wf-1 43
+        sub-0 60 sub-1 40
+        scope-0 {:authorization/id auth-id
+                 :authorization/type :force-authorisation
+                 :held/direction :out
+                 :token usdc :amount sub-0
+                 :held/account :escrow-principal
+                 :owner/address bob
+                 :held/reason :force-authorised-release
+                 :held/workflow-id wf-0}
+        scope-1 {:authorization/id auth-id
+                 :authorization/type :force-authorisation
+                 :held/direction :out
+                 :token usdc :amount sub-1
+                 :held/account :escrow-principal
+                 :owner/address bob
+                 :held/reason :force-authorised-release
+                 :held/workflow-id wf-1}
+        hash-0 (hash/domain-hash "force-authorisation-scope" scope-0)
+        hash-1 (hash/domain-hash "force-authorisation-scope" scope-1)
+        rel-id 99
+        auth-prov {:authorization/type :force-authorisation
+                   :authorization/id auth-id
+                   :authorization/scope-kind :related-claims
+                   :authorization/scope-hash hash-0
+                   :relationship/id rel-id
+                   :relationship/hash "rel-hash"
+                   :member-scope-hashes [hash-0 hash-1]}
+        world (ac/sub-held {:total-held {usdc 200}
+                            :held/positions
+                            {[:held/position usdc :escrow-principal wf-0] 200
+                             [:held/position usdc :escrow-principal wf-1] 200}
+                            :held-ledger/index
+                            {:by-token {usdc 200}
+                             :by-position
+                             {[:held/position usdc :escrow-principal wf-0] 200
+                              [:held/position usdc :escrow-principal wf-1] 200}
+                             :by-account {:escrow-principal 200}
+                             :by-workflow {wf-0 200 wf-1 200}}
+                            :force-authorisations
+                            {auth-id {:authorization/id auth-id
+                                      :authorization/status :active
+                                      :consumed? false
+                                      :starts-at 0
+                                                                            :authorization/scope-kind :related-claims
+                                                                            :relationship/id rel-id
+                                                                            :relationship/hash "rel-hash"
+                                                                            :member-scope-hashes [hash-0 hash-1]
+                                                                            :authorization/scope scope-0
+                                                                            :authorization/scope-hash hash-0}}
+                            :related-claims
+                            {rel-id {:relationship/id rel-id
+                                     :relationship/status :active
+                                     :relationship/hash "rel-hash"
+                                     :relationship/members
+                                     [{:workflow/id wf-0}
+                                      {:workflow/id wf-1}]}}}
+                          usdc sub-0
+                          {:action "finalize-released"
+                           :reason :force-authorised-release
+                           :authorization-provenance auth-prov
+                           :extra {:held/workflow-id wf-0
+                                   :owner/address bob}})
+        consumed (get-in world [:force-authorisations/consumed auth-id])]
+    (is (= 140 (get-in world [:total-held usdc])))
+    (is (true? (:consumed? consumed)))
+    (is (= auth-id (:authorization/id consumed)))
+    (is (= :force-authorisation (:authorization/type consumed)))
+    (is (= :related-claims (:authorization/scope-kind consumed)))
+    (is (= rel-id (:relationship/id consumed)))
+    (is (contains? (:consumed-members consumed) hash-0))
+    (is (not (contains? (:consumed-members consumed) hash-1)))
+    (is (= 1 (:member-count consumed)))))
+
+(deftest force-authorised-sub-held-related-claims-all-members-consumed
+  (let [auth-id "fa-rel-all-a1b2c3d4"
+        wf-0 42 wf-1 43
+        sub-0 60 sub-1 40
+        scope-0 {:authorization/id auth-id
+                 :authorization/type :force-authorisation
+                 :held/direction :out :token usdc :amount sub-0
+                 :held/account :escrow-principal :owner/address bob
+                 :held/reason :force-authorised-release :held/workflow-id wf-0}
+        scope-1 {:authorization/id auth-id
+                 :authorization/type :force-authorisation
+                 :held/direction :out :token usdc :amount sub-1
+                 :held/account :escrow-principal :owner/address bob
+                 :held/reason :force-authorised-release :held/workflow-id wf-1}
+        hash-0 (hash/domain-hash "force-authorisation-scope" scope-0)
+        hash-1 (hash/domain-hash "force-authorisation-scope" scope-1)
+        rel-id 99
+        base {:total-held {usdc 200}
+              :held/positions
+              {[:held/position usdc :escrow-principal wf-0] 200
+               [:held/position usdc :escrow-principal wf-1] 200}
+              :held-ledger/index
+              {:by-token {usdc 200}
+               :by-position
+               {[:held/position usdc :escrow-principal wf-0] 200
+                [:held/position usdc :escrow-principal wf-1] 200}
+               :by-account {:escrow-principal 200}
+               :by-workflow {wf-0 200 wf-1 200}}
+              :force-authorisations
+              {auth-id {:authorization/id auth-id
+                        :authorization/status :active
+                        :consumed? false :starts-at 0
+                        :authorization/scope-kind :related-claims
+                        :relationship/id rel-id
+                        :relationship/hash "rel-hash"
+                        :member-scope-hashes [hash-0 hash-1]
+                        :authorization/scope scope-0
+                        :authorization/scope-hash hash-0}}
+              :related-claims
+              {rel-id {:relationship/id rel-id
+                       :relationship/status :active
+                       :relationship/hash "rel-hash"
+                       :relationship/members
+                       [{:workflow/id wf-0} {:workflow/id wf-1}]}}}
+        auth-prov {:authorization/type :force-authorisation
+                   :authorization/id auth-id
+                   :authorization/scope-kind :related-claims
+                   :authorization/scope-hash hash-0
+                   :relationship/id rel-id
+                   :relationship/hash "rel-hash"
+                   :member-scope-hashes [hash-0 hash-1]}
+        w1 (ac/sub-held base usdc sub-0
+                        {:action "finalize-released"
+                         :reason :force-authorised-release
+                         :authorization-provenance auth-prov
+                         :extra {:held/workflow-id wf-0 :owner/address bob}})
+        w2 (ac/sub-held w1 usdc sub-1
+                        {:action "finalize-released"
+                         :reason :force-authorised-release
+                         :authorization-provenance auth-prov
+                         :extra {:held/workflow-id wf-1 :owner/address bob}})
+        consumed (get-in w2 [:force-authorisations/consumed auth-id])]
+    (is (= 100 (get-in w2 [:total-held usdc])))
+    (is (contains? (:consumed-members consumed) hash-0))
+    (is (contains? (:consumed-members consumed) hash-1))
+    (is (= 2 (:member-count consumed)))))
+
+(deftest force-authorised-sub-held-related-claims-rejects-member-reuse
+  (let [auth-id "fa-rel-reuse-a1b2c3d4"
+        wf-0 42 held 100 sub-0 40
+        scope-0 {:authorization/id auth-id
+                 :authorization/type :force-authorisation
+                 :held/direction :out :token usdc :amount sub-0
+                 :held/account :escrow-principal :owner/address bob
+                 :held/reason :force-authorised-release
+                 :held/workflow-id wf-0}
+        hash-0 (hash/domain-hash "force-authorisation-scope" scope-0)
+        rel-id 99
+        base {:total-held {usdc held}
+              :held/positions
+              {[:held/position usdc :escrow-principal wf-0] held}
+              :held-ledger/index
+              {:by-token {usdc held}
+               :by-position
+               {[:held/position usdc :escrow-principal wf-0] held}
+               :by-account {:escrow-principal held}
+               :by-workflow {wf-0 held}}
+              :force-authorisations
+              {auth-id {:authorization/id auth-id
+                        :authorization/status :active
+                        :consumed? false :starts-at 0
+                        :authorization/scope-kind :related-claims
+                        :relationship/id rel-id
+                        :relationship/hash "rel-hash"
+                        :member-scope-hashes [hash-0]
+                        :authorization/scope scope-0
+                        :authorization/scope-hash hash-0}}
+              :related-claims
+              {rel-id {:relationship/id rel-id
+                       :relationship/status :active
+                       :relationship/hash "rel-hash"
+                       :relationship/members
+                       [{:workflow/id wf-0}
+                        {:workflow/id 43}]}}}
+        auth-prov {:authorization/type :force-authorisation
+                   :authorization/id auth-id
+                   :authorization/scope-kind :related-claims
+                   :authorization/scope-hash hash-0
+                   :relationship/id rel-id
+                   :relationship/hash "rel-hash"
+                   :member-scope-hashes [hash-0]}
+        w1 (ac/sub-held base usdc sub-0
+                        {:action "finalize-released"
+                         :reason :force-authorised-release
+                         :authorization-provenance auth-prov
+                         :extra {:held/workflow-id wf-0
+                                 :owner/address bob}})]
+    (is (thrown-with-msg? clojure.lang.ExceptionInfo
+                          #"already consumed"
+                          (ac/sub-held w1 usdc sub-0
+                                       {:action "finalize-released"
+                                        :reason :force-authorised-release
+                                        :authorization-provenance auth-prov
+                                        :extra {:held/workflow-id wf-0
+                                                :owner/address bob}})))))
+
+(deftest force-authorised-sub-held-related-claims-rejects-unauthorized-member
+  (let [auth-id "fa-rel-unauth-a1b2c3d4"
+        wf-0 42 wf-x 99 held 100 sub-0 40
+        scope-0 {:authorization/id auth-id
+                 :authorization/type :force-authorisation
+                 :held/direction :out :token usdc :amount sub-0
+                 :held/account :escrow-principal :owner/address bob
+                 :held/reason :force-authorised-release
+                 :held/workflow-id wf-0}
+        scope-x {:authorization/id auth-id
+                 :authorization/type :force-authorisation
+                 :held/direction :out :token usdc :amount sub-0
+                 :held/account :escrow-principal :owner/address bob
+                 :held/reason :force-authorised-release
+                 :held/workflow-id wf-x}
+        hash-0 (hash/domain-hash "force-authorisation-scope" scope-0)
+        hash-x (hash/domain-hash "force-authorisation-scope" scope-x)
+        rel-id 99
+        base {:total-held {usdc held}
+              :held/positions
+              {[:held/position usdc :escrow-principal wf-x] held}
+              :held-ledger/index
+              {:by-token {usdc held}
+               :by-position
+               {[:held/position usdc :escrow-principal wf-x] held}
+               :by-account {:escrow-principal held}
+               :by-workflow {wf-x held}}
+              :force-authorisations
+              {auth-id {:authorization/id auth-id
+                        :authorization/status :active
+                        :consumed? false :starts-at 0
+                        :authorization/scope-kind :related-claims
+                        :relationship/id rel-id
+                        :relationship/hash "rel-hash"
+                        :member-scope-hashes [hash-0]
+                        :authorization/scope scope-0
+                        :authorization/scope-hash hash-0}}
+              :related-claims
+              {rel-id {:relationship/id rel-id
+                       :relationship/status :active
+                       :relationship/hash "rel-hash"
+                       :relationship/members
+                       [{:workflow/id wf-0}]}}}
+        auth-prov {:authorization/type :force-authorisation
+                   :authorization/id auth-id
+                   :authorization/scope-kind :related-claims
+                   :authorization/scope-hash hash-0
+                   :relationship/id rel-id
+                   :relationship/hash "rel-hash"
+                   :member-scope-hashes [hash-0]}]
+    (is (thrown-with-msg? clojure.lang.ExceptionInfo
+                          #"member scope not in authorized set"
+                          (ac/sub-held base usdc sub-0
+                                       {:action "finalize-released"
+                                        :reason :force-authorised-release
+                                        :authorization-provenance auth-prov
+                                        :extra {:held/workflow-id wf-x
+                                                :owner/address bob}})))))
+
+(deftest force-authorised-sub-held-related-claims-rejects-inactive-relationship
+  (let [auth-id "fa-rel-inact-a1b2c3d4"
+        wf-0 42 held 100 sub-0 40
+        scope-0 {:authorization/id auth-id
+                 :authorization/type :force-authorisation
+                 :held/direction :out :token usdc :amount sub-0
+                 :held/account :escrow-principal :owner/address bob
+                 :held/reason :force-authorised-release
+                 :held/workflow-id wf-0}
+        hash-0 (hash/domain-hash "force-authorisation-scope" scope-0)
+        rel-id 99
+        base {:total-held {usdc held}
+              :held/positions
+              {[:held/position usdc :escrow-principal wf-0] held}
+              :held-ledger/index
+              {:by-token {usdc held}
+               :by-position
+               {[:held/position usdc :escrow-principal wf-0] held}
+               :by-account {:escrow-principal held}
+               :by-workflow {wf-0 held}}
+              :force-authorisations
+              {auth-id {:authorization/id auth-id
+                        :authorization/status :active
+                        :consumed? false :starts-at 0
+                        :authorization/scope-kind :related-claims
+                        :relationship/id rel-id
+                        :relationship/hash "rel-hash"
+                        :member-scope-hashes [hash-0]
+                        :authorization/scope scope-0
+                        :authorization/scope-hash hash-0}}
+              :related-claims
+              {rel-id {:relationship/id rel-id
+                       :relationship/status :resolved
+                       :relationship/hash "rel-hash"
+                       :relationship/members
+                       [{:workflow/id wf-0}]}}}
+        auth-prov {:authorization/type :force-authorisation
+                   :authorization/id auth-id
+                   :authorization/scope-kind :related-claims
+                   :authorization/scope-hash hash-0
+                   :relationship/id rel-id
+                   :relationship/hash "rel-hash"
+                   :member-scope-hashes [hash-0]}]
+    (is (thrown-with-msg? clojure.lang.ExceptionInfo
+                          #"related-claims relationship not active"
+                          (ac/sub-held base usdc sub-0
+                                       {:action "finalize-released"
+                                        :reason :force-authorised-release
+                                        :authorization-provenance auth-prov
+                                        :extra {:held/workflow-id wf-0
+                                                :owner/address bob}})))))
+
+(deftest sub-held-rejects-cross-position-drawdown
+  (let [position-a [:held/position usdc :escrow-principal 1]
+        position-b [:held/position usdc :escrow-principal 2]
+        world {:total-held {usdc 100}
+               :held/positions {position-a 100 position-b 0}
+               :held-ledger/index {:by-token {usdc 100}
+                                   :by-position {position-a 100 position-b 0}}}]
+    (is (thrown-with-msg? clojure.lang.ExceptionInfo
+                          #"position underflow"
+                          (ac/sub-held world usdc 40
+                                       {:action "release"
+                                        :reason :escrow-settlement-released
+                                        :extra {:held/workflow-id 2
+                                                :owner/address bob}})))))
+
+(deftest held-adjustments-reject-position-policy-override
+  (is (thrown-with-msg? clojure.lang.ExceptionInfo
+                        #"position conflicts with reason policy"
+                        (ac/sub-held {:total-held {usdc 100}
+                                      :held/positions {[:held/position usdc :escrow-principal 42] 100}}
+                                     usdc 40
+                                     {:action "release"
+                                      :reason :escrow-settlement-released
+                                      :extra {:held/workflow-id 42
+                                              :owner/address bob
+                                              :held/position-id [:held/position usdc :escrow-principal 7]}}))))
+
+(deftest address-scoped-held-adjustments-require-owner
+  (is (thrown-with-msg? clojure.lang.ExceptionInfo
+                        #"explicit owner address"
+                        (ac/sub-held {:total-held {usdc 100}
+                                      :held/positions {[:held/position usdc :escrow-principal 42] 100}}
+                                     usdc 40
+                                     {:action "release"
+                                      :reason :escrow-settlement-released
+                                      :extra {:held/workflow-id 42}}))))
 
 (deftest exceptional-held-reason-requires-auth
   (is (thrown-with-msg? clojure.lang.ExceptionInfo
@@ -335,7 +736,11 @@
                                               :owner/address bob}}))))
 
 (deftest normal-held-reason-no-auth-ok
-  (let [world (ac/sub-held {:total-held {usdc 100} :held-ledger/index {:by-token {usdc 100}}}
+  (let [position-id [:held/position usdc :escrow-principal 42]
+        world (ac/sub-held {:total-held {usdc 100}
+                             :held/positions {position-id 100}
+                             :held-ledger/index {:by-token {usdc 100}
+                                                 :by-position {position-id 100}}}
                            usdc 40
                            {:action "finalize-released"
                             :reason :escrow-settlement-released
@@ -344,11 +749,47 @@
     (is (= 60 (get-in world [:total-held usdc])))))
 
 ;; ---------------------------------------------------------------------------
+;; Terminal custody closure and force-authorisation lifecycle invariants
+;; ---------------------------------------------------------------------------
+
+(deftest terminal-workflow-custody-closure-detects-residual-principal
+  (let [position-id [:held/position usdc :escrow-principal 42]
+        world {:escrow-transfers {42 {:token usdc :escrow-state :released}}
+               :held/positions {position-id 1}}]
+    (is (false? (:holds? (inv/terminal-workflow-custody-closed? world))))))
+
+(deftest force-authorisation-lifecycle-detects-unlinked-consumption
+  (let [scope {:authorization/id "fa-corrupt"
+               :authorization/type :force-authorisation
+               :held/direction :out
+               :token usdc
+               :amount 40
+               :held/account :escrow-principal
+               :owner/address bob
+               :held/reason :force-authorised-release
+               :held/workflow-id 42}
+        world {:force-authorisations
+               {"fa-corrupt" {:authorization/id "fa-corrupt"
+                              :authorization/type :force-authorisation
+                              :authorization/status :consumed
+                              :consumed? true
+                              :authorization/scope scope
+                              :authorization/scope-hash (hash/domain-hash "force-authorisation-scope" scope)}}
+               :force-authorisations/consumed
+               {"fa-corrupt" {:held-adjustment/id "held-adjustment-missing"}}}]
+    (is (false? (:holds? (inv/force-authorisations-lifecycle-consistent? world))))))
+
+;; ---------------------------------------------------------------------------
 ;; Transition-level held-adjustment delta invariant
 ;; ---------------------------------------------------------------------------
 
 (deftest held-adjustments-cover-total-held-delta-passes
-  (let [world-before {:total-held {usdc 100} :held-adjustments []}
+  (let [position-id [:held/position usdc :escrow-principal 7]
+        world-before {:total-held {usdc 100}
+                      :held/positions {position-id 100}
+                      :held-ledger/index {:by-token {usdc 100}
+                                          :by-position {position-id 100}}
+                      :held-adjustments []}
         world-after  (ac/sub-held world-before usdc 40
                                   {:action "release"
                                    :reason :escrow-settlement-released
@@ -403,7 +844,16 @@
         auth-prov {:authorization/type :force-authorisation
                    :authorization/id auth-id
                    :authorization/scope-hash scope-hash}
-        world (ac/sub-held {:total-held {usdc 100}}
+        world (ac/sub-held {:total-held {usdc 100}
+                             :held/positions {[:held/position usdc :escrow-principal 42] 100}
+                             :held-ledger/index {:by-token {usdc 100}
+                                                 :by-position {[:held/position usdc :escrow-principal 42] 100}}
+                             :force-authorisations {auth-id {:authorization/id auth-id
+                                                             :authorization/status :active
+                                                             :consumed? false
+                                                             :starts-at 0
+                                                             :authorization/scope scope-map
+                                                             :authorization/scope-hash scope-hash}}}
                            usdc 40
                            {:action "impair"
                             :reason :partial-fill-principal-loss
@@ -474,7 +924,10 @@
                                                 :from alice
                                                 :amount-after-fee 0})
                (assoc-in [:bond-balances 0 alice] 980)
-               (assoc-in [:total-held usdc] 980))
+               (assoc-in [:total-held usdc] 980)
+               (assoc-in [:held/positions [:held/position usdc :appeal-bond "0-0xAlice" 0 alice]] 980)
+               (assoc-in [:held-ledger/index :by-token usdc] 980)
+               (assoc-in [:held-ledger/index :by-position [:held/position usdc :appeal-bond "0-0xAlice" 0 alice]] 980))
         r  (ac/slash-bond w 0 alice)]
     (is (true? (:ok r)))
     (is (= 980 (:slashed r)))
@@ -496,7 +949,10 @@
                                                :from alice
                                                :amount-after-fee 0})
               (assoc-in [:bond-balances 0 alice] 980)
-              (assoc-in [:total-held usdc] 980))
+              (assoc-in [:total-held usdc] 980)
+              (assoc-in [:held/positions [:held/position usdc :appeal-bond "0-0xAlice" 0 alice]] 980)
+              (assoc-in [:held-ledger/index :by-token usdc] 980)
+              (assoc-in [:held-ledger/index :by-position [:held/position usdc :appeal-bond "0-0xAlice" 0 alice]] 980))
         r (ac/return-bond w 0 alice)]
     (is (true? (:ok r)))
     (is (= 980 (:returned r)))

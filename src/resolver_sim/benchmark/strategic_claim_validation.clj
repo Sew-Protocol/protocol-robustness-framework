@@ -28,6 +28,7 @@
                        :allocation/shortfall]
     :closed-form-check-ids #{:partial-fill/conservation
                              :partial-fill/per-claim-conservation}
+    :deviation-set-ids #{:partial-fill/claimant-monotonicity}
     :required-threat-tags #{"shortfall"}
     :match-dimensions #{:allocation/partial-fill
                         :allocation/shortfall}}
@@ -55,6 +56,7 @@
     :benchmark/manifest-path "benchmarks/packs/prf-core/yield-partial-fill-v0.edn"
     :mechanism-levels [:allocation/partial-fill]
     :closed-form-check-ids #{:partial-fill/rounding-residual-bounded}
+    :deviation-set-ids #{:partial-fill/claimant-split-merge-sybil}
     :required-threat-tags #{"shortfall"}
     :match-dimensions #{:allocation/partial-fill}}
 
@@ -95,6 +97,7 @@
     :benchmark/manifest-path "benchmarks/packs/prf-core/yield-partial-fill-v0.edn"
     :mechanism-levels [:allocation/partial-fill]
     :closed-form-check-ids #{:partial-fill/pro-rata-cross-product}
+    :deviation-set-ids #{:partial-fill/claimant-split-merge-sybil}
     :required-threat-tags #{"shortfall"}
     :match-dimensions #{:allocation/partial-fill}}})
 
@@ -372,15 +375,32 @@
      :matched-scenarios matched-scenarios
      :level-verdicts level-verdicts
      :coverage-gaps coverage-gaps
-     :gates {:integrity (first integrity-verdicts)
-             :economic-model economic-model-gate
-             :strategic strategic-gate}
-     :summary {:matched-scenario-count (count matched-scenarios)
-               :passed-level-count passed-level-count
-               :failed-level-count failed-level-count
-               :uncovered-level-count uncovered-level-count
-               :valid? (and (zero? failed-level-count)
-                            (zero? uncovered-level-count))}}))
+      :gates {:integrity (first integrity-verdicts)
+              :economic-model economic-model-gate
+              :strategic strategic-gate}
+      :gates-summary (let [integrity-v (get (first integrity-verdicts) :verdict :pass)
+                           economic-v (:verdict economic-model-gate)
+                           strategic-v (:verdict strategic-gate)]
+                       (cond
+                         (= :blocked integrity-v) :integrity-blocked
+                         (= :blocked economic-v) :economic-model-blocked
+                         (= :blocked strategic-v) :strategic-blocked
+                         (= :violated strategic-v) :strategic-violated
+                         :else :all-pass))
+      :summary {:matched-scenario-count (count matched-scenarios)
+                :passed-level-count passed-level-count
+                :failed-level-count failed-level-count
+                :uncovered-level-count uncovered-level-count
+                :gates-blocked? (some #(= :blocked (:verdict %))
+                                     [(first integrity-verdicts)
+                                      economic-model-gate
+                                      strategic-gate])
+                :valid? (and (zero? failed-level-count)
+                             (zero? uncovered-level-count)
+                             (not (some #(= :blocked (:verdict %))
+                                        [(first integrity-verdicts)
+                                         economic-model-gate
+                                         strategic-gate])))}}))
 
 (defn- valid-coverage-gap?
   [gap]

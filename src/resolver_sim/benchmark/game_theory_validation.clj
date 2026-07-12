@@ -11,9 +11,9 @@
 
   (:require [clojure.java.io :as io]
             [clojure.data.json :as json]
+            [resolver-sim.io.fixtures :as fixtures]
             [resolver-sim.protocols.sew.accounting :as sew-accounting]
-            [resolver-sim.benchmark.strategic-claim-validation :as strategic]
-            [resolver-sim.sim.fixtures :as fixtures]))
+            [resolver-sim.benchmark.strategic-claim-validation :as strategic]))
 
 ;; ── Available suite definitions ─────────────────────────────────────────────
 
@@ -90,18 +90,30 @@
 
 (def equilibrium-concepts
   "Available equilibrium-concept validators across generic and Sew-specific."
-  [{:id :dominant-strategy-equilibrium
+  [   {:id :dominant-strategy-equilibrium
     :source :generic
     :title "Dominant strategy equilibrium"
-    :summary "Every player has a single strategy that is optimal regardless of opponents' choices."}
+    :summary "Every player has a single strategy that is optimal regardless of opponents' choices. (Single-trace metric proxy — use :empirical-strategy-dominance for bounded checks.)"}
+   {:id :empirical-strategy-dominance
+    :source :generic
+    :title "Empirical strategy dominance"
+    :summary "No encoded adversarial deviation improves utility on the evaluated traces (bounded empirical proxy)."}
    {:id :nash-equilibrium
     :source :generic
     :title "Nash equilibrium"
-    :summary "No player can improve their payoff by unilaterally deviating from their strategy."}
+    :summary "No player can improve their payoff by unilaterally deviating from their strategy. (Single-trace metric proxy — use :bounded-nash-diagnostic for bounded checks.)"}
+   {:id :bounded-nash-diagnostic
+    :source :generic
+    :title "Bounded Nash diagnostic"
+    :summary "No profitable unilateral deviation among encoded alternatives at the evaluated state or strategy profile."}
    {:id :subgame-perfect-equilibrium
     :source :sew
     :title "Subgame perfect equilibrium (SPE)"
-    :summary "Backward-induction SPE: no player has an ex-post profitable deviation at any subgame."}
+    :summary "Backward-induction SPE: no player has an ex-post profitable deviation at any subgame. (Trace-conditioned — use :trace-conditioned-epsilon-spe for bounded diagnostic.)"}
+   {:id :trace-conditioned-epsilon-spe
+    :source :sew
+    :title "Trace-conditioned epsilon-SPE diagnostic"
+    :summary "Bounded regret analysis from a single observed trace at strategic checkpoint nodes."}
    {:id :bounded-public-state-epsilon-spe
     :source :sew
     :title "Bounded public-state epsilon-SPE"
@@ -244,7 +256,7 @@
         _ (io/make-parents (io/file effective-out-dir "placeholder"))
         results (mapv (fn [sk]
                         (try
-                          (let [suite-result (fixtures/run-suite sk nil nil {:silent? true})]
+                          (let [suite-result (fixtures/run-suite-from-key sk nil nil {:silent? true})]
                             (assoc suite-result :suite-key sk))
                           (catch Exception e
                             {:suite-key sk :error (.getMessage e) :ok? false :results []})))

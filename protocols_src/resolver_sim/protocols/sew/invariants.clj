@@ -41,7 +41,8 @@
             [resolver-sim.time.context :as time-ctx]
             [resolver-sim.protocols.sew.economics :as sew-econ]
             [resolver-sim.protocols.sew.registry :as reg]
-            [resolver-sim.protocols.sew.related-claims :as rc]))
+            [resolver-sim.protocols.sew.related-claims :as rc]
+            [resolver-sim.hash.canonical :as hash]))
 
 (defn cancellation-mutex? [world] (escrow/cancellation-mutex? world))
 
@@ -55,6 +56,10 @@
     :cancellation-mutex
     :fees-non-negative
     :held-non-negative
+    :held-partitions-non-negative
+    :terminal-workflow-custody-closed
+    :force-authorisations-lifecycle-consistent
+    :held-custody-closed-form
     :all-status-combinations-valid
     :persisted-escrow-state-valid
     :escrow-state-in-graph
@@ -253,6 +258,141 @@
                      {:token token :amount amount})]
     {:holds?     (empty? violations)
      :violations (vec violations)}))
+
+(defn held-partitions-non-negative?
+  "Materialized custody partitions are derived views, but they remain economic
+   balances: a replayable negative position/account/owner/workflow allocation
+   is invalid even if the token aggregate is non-negative."
+  [world]
+  (let [index (:held-ledger/index world {})
+        dimensions [:by-position :by-account :by-workflow]
+        violations (vec
+                    (for [dimension dimensions
+                          [key amount] (get index dimension {})
+                          :when (neg? amount)]
+                      {:dimension dimension :key key :amount amount}))]
+    {:holds? (empty? violations) :violations violations}))
+
+(defn terminal-workflow-custody-closed?
+  "Terminal workflow custody is closed by account: escrow principal is zero and
+   residual yield custody equals the position's explicitly deferred amount.
+   This makes deferred yield a ledger-positioned liability rather than an
+   unallocated remainder in :total-held."
+  [world]
+  (let [violations
+        (vec
+         (mapcat
+          (fn [[workflow-id escrow]]
+            (when (t/terminal-state? world workflow-id)
+              (let [token (:token escrow)
+                    principal-position [:held/position token :escrow-principal workflow-id]
+                    yield-position [:held/position token :yield-custody workflow-id]
+                    principal-held (get-in world [:held/positions principal-position] 0)
+                    yield-held (get-in world [:held/positions yield-position] 0)
+                    deferred (long (or (get-in world [:yield/positions
+                                                      (t/escrow-yield-owner-id workflow-id)
+                                                      :shortfall :deferred-amount])
+                                       0))]
+                (cond-> []
+                  (not (zero? principal-held))
+                  (conj {:workflow-id workflow-id :token token
+                         :position-id principal-position :held principal-held :expected 0
+                         :type :terminal-principal-custody-not-closed})
+                  (not= yield-held deferred)
+                  (conj {:workflow-id workflow-id :token token
+                         :position-id yield-position :held yield-held :expected deferred
+                         :type :terminal-deferred-yield-custody-mismatch})))))
+          (:escrow-transfers world)))]
+    {:holds? (empty? violations) :violations violations}))
+
+(defn held-custody-closed-form?
+  "A world declaring a complete held ledger must also pass the artifact's
+   deterministic hash, local-delta, non-negative, and sequence-replay checks."
+  [world]
+  (if-not (get-in world [:params :held-adjustments/complete?])
+    {:holds? true :violations []}
+    (let [checks (acct/held-custody-closed-form-checks (vals (:held-artifacts world {})))
+          failed (vec (remove #(= :pass (:status %)) checks))]
+      {:holds? (empty? failed)
+       :violations failed})))
+
+(defn- related-member-scope-hash [auth-id adjustment]
+  (hash/domain-hash acct/force-authorisation-scope-domain
+                    {:authorization/id auth-id
+                     :authorization/type :force-authorisation
+                     :held/direction (:held/direction adjustment)
+                     :token (:token adjustment)
+                     :amount (:amount adjustment)
+                     :held/account (:held/account adjustment)
+                     :owner/address (:owner/address adjustment)
+                     :held/reason (:held/reason adjustment)
+                     :held/workflow-id (:held/workflow-id adjustment)}))
+
+(defn force-authorisations-lifecycle-consistent?
+  "Validate persisted grants, consumption, and held adjustments. Related-claims
+   grants may be partially consumed while active; they become consumed only when
+   every persisted member scope has exactly one linked adjustment."
+  [world]
+  (let [records (:force-authorisations world {})
+        consumed (:force-authorisations/consumed world {})
+        adjustments-by-auth (group-by #(get-in % [:authorization/provenance :authorization/id])
+                                      (:held-adjustments world []))
+        valid-statuses #{:active :consumed :revoked}
+        valid-related? (fn [auth-id record entry linked]
+                         (let [committed (set (:member-scope-hashes record []))
+                               linked-hashes (set (map #(related-member-scope-hash auth-id %) linked))
+                               consumed-hashes (set (:consumed-members entry #{}))
+                               complete? (= committed consumed-hashes linked-hashes)]
+                           (and (= :related-claims (:authorization/scope-kind record))
+                                (:relationship/id record) (:relationship/hash record)
+                                (seq committed)
+                                (= (count linked) (count linked-hashes))
+                                (= consumed-hashes linked-hashes)
+                                (case (:authorization/status record)
+                                  :active (and (not (:consumed? record)) (not complete?))
+                                  :consumed (and (:consumed? record) complete?)
+                                  :revoked (and (not (:consumed? record)) (nil? entry) (empty? linked))
+                                  false))))
+        record-violations
+        (for [[auth-id record] records
+              :let [status (:authorization/status record)
+                    entry (get consumed auth-id)
+                    linked (get adjustments-by-auth auth-id [])
+                    related? (= :related-claims (:authorization/scope-kind record))
+                    valid? (and (= auth-id (:authorization/id record))
+                                (contains? valid-statuses status)
+                                (if related?
+                                  (valid-related? auth-id record entry linked)
+                                  (let [scope (:authorization/scope record)
+                                        scope-hash (:authorization/scope-hash record)]
+                                    (and (or (not= :consumed status) (:consumed? record))
+                                         (or (not= :active status) (not (:consumed? record)))
+                                         (or (not= :active status) (nil? entry))
+                                         (or (not= :consumed status)
+                                             (and entry (= 1 (count linked))
+                                                  (= (:held-adjustment/id entry) (:held-adjustment/id (first linked)))
+                                                  (= scope-hash (get-in (first linked) [:authorization/provenance :authorization/scope-hash]))))
+                                         (or (not= :force-authorisation (:authorization/type record))
+                                             (and scope scope-hash))))))]
+              :when (not valid?)]
+          {:authorization/id auth-id :status status :type :invalid-authorisation-lifecycle
+           :linked-adjustment-count (count linked)})
+        orphan-consumption-violations
+        (for [[auth-id entry] consumed
+              :let [record (get records auth-id)
+                    linked (get adjustments-by-auth auth-id [])]
+              :when (or (nil? record)
+                        (if (= :related-claims (:authorization/scope-kind record))
+                          (not (valid-related? auth-id record entry linked))
+                          (or (not= :consumed (:authorization/status record))
+                              (not (:consumed? record))
+                              (not= 1 (count linked))
+                              (not= (:held-adjustment/id entry) (:held-adjustment/id (first linked))))))]
+          {:authorization/id auth-id :type :orphan-or-inconsistent-consumption
+           :record-status (:authorization/status record)
+           :linked-adjustment-count (count linked)})
+        violations (vec (concat record-violations orphan-consumption-violations))]
+    {:holds? (empty? violations) :violations violations}))
 
 ;; ---------------------------------------------------------------------------
 ;; Invariant 7: Valid status combinations
@@ -1844,6 +1984,10 @@
          checks {:solvency                      (solvency-holds? world token-balances)
                  :fees-non-negative             (fees-non-negative? world)
                  :held-non-negative             (held-non-negative? world)
+                 :held-partitions-non-negative  (held-partitions-non-negative? world)
+                 :terminal-workflow-custody-closed (terminal-workflow-custody-closed? world)
+                 :force-authorisations-lifecycle-consistent (force-authorisations-lifecycle-consistent? world)
+                 :held-custody-closed-form      (held-custody-closed-form? world)
                  :all-status-combinations-valid (all-status-combinations-valid? world)
                  :persisted-escrow-state-valid (persisted-escrow-state-valid? world)
                  :escrow-state-in-graph         (escrow-state-in-graph? world)

@@ -10,10 +10,12 @@ import pytest
 
 from scripts.forensic.validate import (
     FORCE_AUTH_REASONS,
+    canonical_protocol_state_hash,
     find_evidence_files,
     run_pre_checks,
     validate_bundle_root,
     validate_evidence_lifecycle,
+    validate_protocol_state,
 )
 
 
@@ -63,6 +65,52 @@ class TestValidateBundleRoot:
         checks = validate_bundle_root(bundle)
         consumed_check = [c for c in checks if "consumed" in c["check/key"]][0]
         assert consumed_check["check/status"] == "fail"
+
+
+class TestValidateProtocolState:
+    def test_requires_witness_when_requested(self):
+        checks = validate_protocol_state(_make_bundle(True), require_witness=True)
+        assert checks[0]["check/status"] == "fail"
+
+    def test_rejects_orphan_consumption(self):
+        bundle = _make_bundle(True)
+        bundle["protocol/state"] = {
+            "force-authorisations": {},
+            "force-authorisations/consumed": {"fa-0": {"held-adjustment/id": "missing"}},
+            "held-adjustments": [],
+        }
+        checks = validate_protocol_state(bundle, require_witness=True)
+        assert checks[0]["check/status"] == "fail"
+
+    def test_rejects_state_witness_hash_mismatch(self):
+        bundle = _make_bundle(True)
+        bundle["protocol/state"] = {
+            "force-authorisations": {},
+            "force-authorisations/consumed": {},
+            "held-adjustments": [],
+        }
+        bundle["protocol/state-witness-hash"] = "tampered"
+        checks = validate_protocol_state(bundle, require_witness=True)
+        assert checks[0]["check/status"] == "fail"
+        assert checks[0]["check/details"][0]["type"] == "state-witness-hash-mismatch"
+
+    def test_scenario_scoped_duplicate_auth_ids_are_unambiguous(self):
+        record = {
+            "authorization/id": "fa-0",
+            "authorization/status": "active",
+            "authorization/scope": {"workflow-id": 0},
+            "authorization/scope-hash": "scope-hash",
+        }
+        bundle = _make_bundle(True)
+        bundle["protocol/state"] = {
+            "force-authorisations": {"scenario-a": {"fa-0": record},
+                                       "scenario-b": {"fa-0": dict(record)}},
+            "force-authorisations/consumed": {},
+            "held-adjustments": {},
+        }
+        bundle["protocol/state-witness-hash"] = canonical_protocol_state_hash(bundle["protocol/state"])
+        checks = validate_protocol_state(bundle, require_witness=True)
+        assert checks[0]["check/status"] == "pass"
 
 
 class TestFindEvidenceFiles:
@@ -145,6 +193,19 @@ class TestRunPreChecks:
 
     def test_pass_with_evidence_and_proto(self, tmp_path):
         bundle = _make_bundle(True)
+        bundle["protocol/state"] = {
+            "force-authorisations": {
+                "fa-0": {
+                    "authorization/id": "fa-0",
+                    "authorization/status": "active",
+                    "authorization/scope": {"workflow-id": 0},
+                    "authorization/scope-hash": "scope-hash",
+                }
+            },
+            "force-authorisations/consumed": {},
+            "held-adjustments": [],
+        }
+        bundle["protocol/state-witness-hash"] = canonical_protocol_state_hash(bundle["protocol/state"])
         bundle_path = tmp_path / "bundle.json"
         bundle_path.write_text(json.dumps(bundle))
         ev_dir = tmp_path / "event-evidence"

@@ -29,15 +29,16 @@
    bounds. It evaluates emitted allocation-decision artifacts, rather than
    treating scenario completion as allocation assurance. This is an
    independent benchmark (does not share a suite with the other Sew benchmarks)."
-   :benchmark/concepts        [:robustness/protocol-value-conservation
-                              :ecommerce/purchase
-                              :event/deposit
-                              :yield/yield-bearing
-                              :consensus/authority
-                              :consensus/evidence
-                              :consensus/legitimacy
-                              :concept/confidence
-                              :concept/configuration]
+    :benchmark/concepts        [:robustness/protocol-value-conservation
+                               :allocation/redistribution-fairness
+                               :ecommerce/purchase
+                               :event/deposit
+                               :yield/yield-bearing
+                               :consensus/authority
+                               :consensus/evidence
+                               :consensus/legitimacy
+                               :concept/confidence
+                               :concept/configuration]
   :benchmark/purpose
   "Evaluate Sew yield shortfall behavior: yield preservation during
    shortfall, closed-form partial-fill correctness, cap bounds, and

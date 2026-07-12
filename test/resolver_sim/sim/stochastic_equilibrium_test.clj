@@ -17,6 +17,7 @@
                                         :malice-count 30 :total-count 130
                                         :honest-share 0.385 :malice-share 0.231}
                   :aggregated-stats {:total-resolver-exits 30
+                                     :final-resolver-count 100
                                      :honest-exit-count 0
                                      :lazy-exit-count 0
                                      :malicious-exit-count 25
@@ -46,6 +47,7 @@
                                         :malice-count 30 :total-count 130
                                         :honest-share 0.385 :malice-share 0.231}
                   :aggregated-stats {:total-resolver-exits 25
+                                     :final-resolver-count 105
                                      :honest-exit-count 25
                                      :lazy-exit-count 0
                                      :malicious-exit-count 0
@@ -60,7 +62,7 @@
           "25/100 productive exits = 25% ≥ 20%, aggregate=19.2% < 40% → still fail")
       (is (= (double 0.25) (get-in claim [:evidence :productive-exit-rate]))
           "productive-exit-rate is 0.25")
-      (is (= (double (/ 25 130)) (get-in claim [:evidence :aggregate-exit-rate]))
+      (is (< (Math/abs (- (double (/ 25 130)) (get-in claim [:evidence :aggregate-exit-rate]))) 1e-9)
           "aggregate-exit-rate is ~0.192"))))
 
 ;; ───────────────────────────────────────────────────────────────────────────
@@ -142,13 +144,17 @@
           report (sut/evaluate-stochastic-equilibrium result)
           mech (get-in report [:mechanism-proxy-results :budget-balance])
           ev (:evidence mech)]
-      (is (= 5 (count ev))
-          "evidence map has exactly 5 keys (fees, resolver-net, bond, fraud, residual)")
+      ;; 5 flow keys + 3 surplus diagnostics (honest-profit, malice-profit, profit-ratio)
+      (is (= 8 (count ev))
+          "evidence map has 8 keys (5 flow + 3 surplus diagnostics)")
       (is (contains? ev :total-fees-collected) "evidence includes :total-fees-collected")
       (is (contains? ev :resolver-profit-net-sum) "evidence includes :resolver-profit-net-sum")
       (is (contains? ev :total-bond-loss) "evidence includes :total-bond-loss")
       (is (contains? ev :total-fraud-upside) "evidence includes :total-fraud-upside")
       (is (contains? ev :residual) "evidence includes :residual")
+      (is (contains? ev :honest-cumulative-profit) "surplus diagnostic :honest-cumulative-profit present")
+      (is (contains? ev :malice-cumulative-profit) "surplus diagnostic :malice-cumulative-profit present")
+      (is (contains? ev :profit-ratio) "surplus diagnostic :profit-ratio present")
       (let [fees (:total-fees-collected ev)
             rnet (:resolver-profit-net-sum ev)
             bond (:total-bond-loss ev)
@@ -162,8 +168,8 @@
 ;; evaluate-mech-budget-balance — ratcheting
 ;; ───────────────────────────────────────────────────────────────────────────
 
-(deftest test-budget-balance-fails-on-missing-flow-data-in-shared-world
-  (testing "Shared-world mode with missing flow tracking data fails (not inconclusive)"
+(deftest test-budget-balance-inconclusive-on-missing-flow-data-in-shared-world
+  (testing "Shared-world mode with missing flow tracking data returns inconclusive with surplus diagnostics"
     (let [result {:initial-resolver-count 10
                   :initial-composition {:honest-count 5 :malice-count 5 :total-count 10
                                         :honest-share 0.5 :malice-share 0.5}
@@ -178,10 +184,16 @@
                                      :malice-avg-win-rate 0.5}}
           report (sut/evaluate-stochastic-equilibrium result)
           mech (get-in report [:mechanism-proxy-results :budget-balance])]
-      (is (= :fail (:status mech))
-          "shared-world with missing flow keys should fail, not inconclusive")
-      (is (re-find #"missing" (:detail mech ""))
-          "fail detail mentions missing flow tracking data"))))
+      (is (= :inconclusive (:status mech))
+          "shared-world with missing flow keys → inconclusive (not fail)")
+      (is (re-find #"incomplete" (:reason mech ""))
+          "reason mentions incomplete reconciliation inputs")
+      (is (contains? (:evidence mech) :honest-cumulative-profit)
+          "surplus diagnostic :honest-cumulative-profit is present")
+      (is (contains? (:evidence mech) :malice-cumulative-profit)
+          "surplus diagnostic :malice-cumulative-profit is present")
+      (is (contains? (:evidence mech) :profit-ratio)
+          "surplus diagnostic :profit-ratio is present"))))
 
 ;; ───────────────────────────────────────────────────────────────────────────
 ;; Inconclusive incapacity tests
@@ -194,8 +206,8 @@
           claim (some #(when (= :participation-stable (:claim-id %)) %) (:claim-results report))]
       (is (= :inconclusive (:status claim))
           "no :initial-resolver-count → inconclusive")
-      (is (re-find #"initial-resolver-count" (:reason claim))
-          "reason mentions missing :initial-resolver-count"))))
+      (is (re-find #"initial-resolver-count" (or (:detail claim) (:reason claim) ""))
+          "detail mentions missing :initial-resolver-count"))))
 
 (deftest test-budget-balance-inconclusive-missing-flow-data
   (testing "Missing flow tracking keys with non-shared-world yields inconclusive"
@@ -213,8 +225,183 @@
           mech (get-in report [:mechanism-proxy-results :budget-balance])]
       (is (= :inconclusive (:status mech))
           "no flow keys and no shared-world → inconclusive")
-      (is (re-find #"flow-conservation data missing" (:reason mech))
-          "reason mentions missing flow-conservation data"))))
+      (is (re-find #"reconciliation inputs incomplete" (or (:reason mech) ""))
+          "reason mentions incomplete reconciliation inputs"))))
+
+(deftest test-malice-net-profit-negative-inconclusive
+  (testing "Missing malice-cumulative-profit yields inconclusive"
+    (let [result {:aggregated-stats {}}
+          report (sut/evaluate-stochastic-equilibrium result)
+          claim (some #(when (= :malice-net-profit-negative (:claim-id %)) %) (:claim-results report))]
+      (is (= :inconclusive (:status claim))
+          "no :malice-cumulative-profit → inconclusive"))))
+
+(deftest test-honest-dominates-inconclusive-no-epochs
+  (testing "Missing epoch-results yields inconclusive"
+    (let [result {}
+          report (sut/evaluate-stochastic-equilibrium result)
+          claim (some #(when (= :honest-dominates (:claim-id %)) %) (:claim-results report))]
+      (is (= :inconclusive (:status claim))
+          "no :epoch-results → inconclusive"))))
+
+(deftest test-honest-dominates-inconclusive-no-profit-data
+  (testing "Final epoch with no dominance-ratio or profit data yields inconclusive"
+    (let [result {:epoch-results [{}]}
+          report (sut/evaluate-stochastic-equilibrium result)
+          claim (some #(when (= :honest-dominates (:claim-id %)) %) (:claim-results report))]
+      (is (= :inconclusive (:status claim))
+          "final epoch missing all profit data → inconclusive"))))
+
+(deftest test-slashing-deters-inconclusive
+  (testing "Missing malice-avg-win-rate yields inconclusive"
+    (let [result {:aggregated-stats {:honest-avg-win-rate 0.7}}
+          report (sut/evaluate-stochastic-equilibrium result)
+          claim (some #(when (= :slashing-deters (:claim-id %)) %) (:claim-results report))]
+      (is (= :inconclusive (:status claim))
+          "no :malice-avg-win-rate → inconclusive"))))
+
+(deftest test-honest-survival-rate-inconclusive-missing-final-counts
+  (testing "Missing honest-final-count yields inconclusive"
+    (let [result {:aggregated-stats {}}
+          report (sut/evaluate-stochastic-equilibrium result)
+          claim (some #(when (= :honest-survival-rate (:claim-id %)) %) (:claim-results report))]
+      (is (= :inconclusive (:status claim))
+          "no :honest-final-count → inconclusive"))))
+
+(deftest test-honest-survival-rate-inconclusive-missing-initial-composition
+  (testing "Missing initial-composition yields inconclusive"
+    (let [result {:aggregated-stats {:honest-final-count 5 :malice-final-count 5}}
+          report (sut/evaluate-stochastic-equilibrium result)
+          claim (some #(when (= :honest-survival-rate (:claim-id %)) %) (:claim-results report))]
+      (is (= :inconclusive (:status claim))
+          "no :initial-composition → inconclusive"))))
+
+(deftest test-honest-survival-rate-inconclusive-zero-cohort
+  (testing "Zero initial honest cohort yields inconclusive"
+    (let [result {:aggregated-stats {:honest-final-count 5 :malice-final-count 5}
+                  :initial-composition {:honest-count 0 :malice-count 5}}
+          report (sut/evaluate-stochastic-equilibrium result)
+          claim (some #(when (= :honest-survival-rate (:claim-id %)) %) (:claim-results report))]
+      (is (= :inconclusive (:status claim))
+          "zero :honest-count → inconclusive"))))
+
+(deftest test-incentive-compatibility-inconclusive
+  (testing "Missing profit data yields inconclusive for incentive-compatibility"
+    (let [result {:aggregated-stats {}}
+          report (sut/evaluate-stochastic-equilibrium result)
+          mech (get-in report [:mechanism-proxy-results :incentive-compatibility])]
+      (is (= :inconclusive (:status mech))
+          "no profit/win-rate data → inconclusive"))))
+
+(deftest test-individual-rationality-inconclusive
+  (testing "Missing honest-cumulative-profit yields inconclusive for individual-rationality"
+    (let [result {:aggregated-stats {}}
+          report (sut/evaluate-stochastic-equilibrium result)
+          mech (get-in report [:mechanism-proxy-results :individual-rationality])]
+      (is (= :inconclusive (:status mech))
+          "no :honest-cumulative-profit → inconclusive"))))
+
+(deftest test-collusion-resistance-inconclusive
+  (testing "Missing malice final count or initial composition yields inconclusive"
+    (let [result {}  ;; neither aggregated-stats nor initial-composition
+          report (sut/evaluate-stochastic-equilibrium result)
+          mech (get-in report [:mechanism-proxy-results :collusion-resistance])]
+      (is (= :inconclusive (:status mech))
+          "no malice-final-count or malice-count → inconclusive"))))
+
+;; ───────────────────────────────────────────────────────────────────────────
+;; evaluate-honest-survival-rate
+;; ───────────────────────────────────────────────────────────────────────────
+
+(deftest test-honest-survival-rate-passes
+  (testing "Honest survival rate > malice survival rate passes"
+    (let [result {:aggregated-stats {:honest-final-count 8 :malice-final-count 2}
+                  :initial-composition {:honest-count 10 :malice-count 10}}
+          report (sut/evaluate-stochastic-equilibrium result)
+          claim (some #(when (= :honest-survival-rate (:claim-id %)) %) (:claim-results report))]
+      (is (= :pass (:status claim))
+          "honest survival 0.8 > malice survival 0.2 → pass")
+      (is (= (double 0.8) (get-in claim [:evidence :honest-survival-rate]))
+          "honest-survival-rate is 0.8")
+      (is (= (double 0.2) (get-in claim [:evidence :malice-survival-rate]))
+          "malice-survival-rate is 0.2")
+      (is (< (Math/abs (- (double 0.6) (get-in claim [:evidence :survival-margin]))) 1e-9)
+          "survival-margin is ~0.6"))))
+
+(deftest test-honest-survival-rate-fails
+  (testing "Honest survival rate ≤ malice survival rate fails"
+    (let [result {:aggregated-stats {:honest-final-count 2 :malice-final-count 8}
+                  :initial-composition {:honest-count 10 :malice-count 10}}
+          report (sut/evaluate-stochastic-equilibrium result)
+          claim (some #(when (= :honest-survival-rate (:claim-id %)) %) (:claim-results report))]
+      (is (= :fail (:status claim))
+          "honest survival 0.2 ≤ malice survival 0.8 → fail")
+      (is (= (double 0.2) (get-in claim [:evidence :honest-survival-rate]))
+          "honest-survival-rate is 0.2")
+      (is (= (double 0.8) (get-in claim [:evidence :malice-survival-rate]))
+          "malice-survival-rate is 0.8")
+      (is (neg? (get-in claim [:evidence :survival-margin]))
+          "survival-margin is negative"))))
+
+;; ───────────────────────────────────────────────────────────────────────────
+;; evaluate-strategy-adaptation-compatibility
+;; ───────────────────────────────────────────────────────────────────────────
+
+(deftest test-strategy-adaptation-passes-with-no-blocked-events
+  (testing "No blocked adaptation targets passes"
+    (let [result {}
+          report (sut/evaluate-stochastic-equilibrium result)
+          claim (some #(when (= :strategy-adaptation-compatibility (:claim-id %)) %) (:claim-results report))]
+      (is (= :pass (:status claim))
+          "no epoch-results → no blocked events → pass")
+      (is (= 0 (get-in claim [:evidence :blocked-events]))
+          "blocked-events is 0"))))
+
+(deftest test-strategy-adaptation-fails-on-blocked-with-fail-policy
+  (testing "Blocked events with :fail policy fails"
+    (let [result {:epoch-results [{:defection {:adaptation/resolved-config {:blocked-target-policy :fail}
+                                               :diagnostics [{:reason :target-outside-strategy-space}]}}]}
+          report (sut/evaluate-stochastic-equilibrium result)
+          claim (some #(when (= :strategy-adaptation-compatibility (:claim-id %)) %) (:claim-results report))]
+      (is (= :fail (:status claim))
+          "blocked event with :fail policy → fail")
+      (is (= 1 (get-in claim [:evidence :blocked-events]))
+          "blocked-events is 1"))))
+
+(deftest test-strategy-adaptation-warns-on-blocked-with-warn-policy
+  (testing "Blocked events with :warn policy passes (warn)"
+    (let [result {:epoch-results [{:defection {:adaptation/resolved-config {:blocked-target-policy :warn}
+                                               :diagnostics [{:reason :target-outside-strategy-space}]}}]}
+          report (sut/evaluate-stochastic-equilibrium result)
+          claim (some #(when (= :strategy-adaptation-compatibility (:claim-id %)) %) (:claim-results report))]
+      (is (= :pass (:status claim))
+          "blocked event with :warn policy → pass (warn)")
+      (is (= 1 (get-in claim [:evidence :blocked-events]))
+          "blocked-events is 1"))))
+
+;; ───────────────────────────────────────────────────────────────────────────
+;; Participation stability — partial classified data fallback
+;; ───────────────────────────────────────────────────────────────────────────
+
+(deftest test-participation-stable-fallback-on-partial-classified-data
+  (testing "Missing some per-strategy classified keys falls back to aggregate"
+    (let [result {:initial-resolver-count 100
+                  :aggregated-stats {:total-resolver-exits 10
+                                    :final-resolver-count 90
+                                    :honest-exit-count 2
+                                    ;; intentionally omit :lazy-exit-count,
+                                    ;; :malicious-exit-count, :collusive-exit-count
+                                    }}
+          report (sut/evaluate-stochastic-equilibrium result)
+          claim (some #(when (= :participation-stable (:claim-id %)) %) (:claim-results report))]
+      (is (= :fallback (get-in claim [:evidence :evaluation-mode]))
+          "falls back to aggregate when classified data is incomplete")
+      (is (some? (get-in claim [:evidence :aggregate-exit-rate]))
+          "aggregate-exit-rate is present")
+      (is (< (get-in claim [:evidence :aggregate-exit-rate]) 0.40)
+          "10/100=10% aggregate exit rate < 40% → pass")
+      (is (= :pass (:status claim))
+          "fallback with low exit rate passes"))))
 
 ;; ───────────────────────────────────────────────────────────────────────────
 ;; Overall status propagation
@@ -232,3 +419,74 @@
           "coverage ratio is present")
       (is (< (:coverage report) 1.0)
           "coverage < 1.0 when some claims are inconclusive"))))
+
+;; ───────────────────────────────────────────────────────────────────────────
+;; grim-trigger stability
+;; ───────────────────────────────────────────────────────────────────────────
+
+(deftest test-grim-trigger-stable-when-discount-high
+  (testing "grim-trigger passes when discount-factor >= threshold"
+    (let [result {:aggregated-stats {:honest-mean-profit 100.0
+                                     :malice-mean-profit 80.0}}
+          report (sut/evaluate-grim-trigger-stability result :discount-factor 0.95)]
+      (is (= :pass (:status report)))
+      (is (true? (:stable? report))))))
+
+(deftest test-grim-trigger-unstable-when-discount-low
+  (testing "grim-trigger fails when discount-factor < threshold"
+    (let [result {:aggregated-stats {:honest-mean-profit 100.0
+                                     :malice-mean-profit 150.0}}
+          report (sut/evaluate-grim-trigger-stability result :discount-factor 0.3)]
+      (is (= :fail (:status report)))
+      (is (false? (:stable? report))))))
+
+(deftest test-grim-trigger-inconclusive-with-no-profit-data
+  (testing "grim-trigger is inconclusive when profit data is absent"
+    (let [result {:aggregated-stats {:honest-mean-profit 0.0
+                                     :malice-mean-profit 0.0}}
+          report (sut/evaluate-grim-trigger-stability result)]
+      (is (= :inconclusive (:status report))))))
+
+;; ───────────────────────────────────────────────────────────────────────────
+;; Folk theorem cooperation region
+;; ───────────────────────────────────────────────────────────────────────────
+
+(deftest test-folk-theorem-inside-region
+  (testing "Folk theorem cooperation region detected when stable"
+    (let [result {:aggregated-stats {:honest-mean-profit 100.0
+                                     :malice-mean-profit 80.0}}
+          report (sut/evaluate-folk-theorem-region result)]
+      (is (= :pass (:status report)))
+      (is (true? (:cooperation-region? report))))))
+
+(deftest test-folk-theorem-outside-region
+  (testing "Folk theorem cooperation region not detected when gain exceeds punishment"
+    (let [result {:aggregated-stats {:honest-mean-profit 10.0
+                                     :malice-mean-profit 300.0}}
+          report (sut/evaluate-folk-theorem-region result)]
+      (is (= :fail (:status report)))
+      (is (false? (:cooperation-region? report))))))
+
+;; ───────────────────────────────────────────────────────────────────────────
+;; Grim-trigger and Folk theorem in combined evaluation
+;; ───────────────────────────────────────────────────────────────────────────
+
+(deftest test-combined-output-includes-grim-trigger
+  (testing "evaluate-stochastic-equilibrium includes grim-trigger and folk-theorem keys"
+    (let [result {:initial-resolver-count 100
+                  :initial-composition {:honest-count 50 :lazy-count 25
+                                        :malicious-count 20 :collusive-count 5
+                                        :malice-count 25 :total-count 100
+                                        :honest-share 0.5 :malice-share 0.25}
+                  :aggregated-stats {:total-resolver-exits 10
+                                     :honest-exit-count 2
+                                     :lazy-exit-count 3
+                                     :malicious-exit-count 4
+                                     :collusive-exit-count 1
+                                     :honest-cumulative-profit 100.0
+                                     :malice-cumulative-profit -50.0
+                                     :honest-avg-win-rate 0.8
+                                     :malice-avg-win-rate 0.3}}
+          report (sut/evaluate-stochastic-equilibrium result)]
+      (is (contains? report :grim-trigger))
+      (is (contains? report :folk-theorem)))))

@@ -539,7 +539,7 @@ bb adv:server
 Run the Python failure-mode suite:
 
 ```bash
-python3 integration/python/invariant_suite.py
+python3 test/integration/python/invariant_suite.py
 ```
 
 ### 5. Run dispute-resolution robustness validation

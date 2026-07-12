@@ -4,16 +4,22 @@
 
 ### Canonical test entrypoint (recommended)
 ```bash
+bb test
+# Equivalent direct runner:
 ./scripts/test.sh all
 ```
-This is the authoritative repository-wide validation command.
+This is the authoritative repository-wide validation command. It runs `unit`,
+`generators`, `contracts`, `invariants`, `suites`, `reference-validation`,
+`coverage`, and `triage`; it also runs `monte-carlo` unless fast mode is selected.
 
-It runs five targets in sequence:
-- `unit` → Clojure unit tests
-- `generators` → deterministic generator/property regression checks
-- `contracts` → cross-layer contract checks (`proto/simulation.proto` ↔ gRPC server ↔ Python client)
-- `invariants` → deterministic scenario run (`--invariants`, S01–S100)
-- `suites` → fixture suites (`all-invariants`, `equilibrium-validation`, `spe-validation`)
+For a focused edit-loop gate, run:
+
+```bash
+./scripts/test.sh fast
+```
+
+`fast` runs `unit`, `generators`, `contracts`, `invariants`, `suites`, and
+`reference-validation`. Use individual targets below when narrowing a failure.
 
 ### Run comprehensive suite with full reporting
 ```bash

@@ -95,7 +95,7 @@ and SHOULD carry a `:benchmark/status-updated` date.
 
 | Status | Meaning | Promotion criteria | Deprecation criteria |
 |--------|---------|--------------------|----------------------|
-| `:active` | Ready for production use. All Level 1 mechanical claims have evaluators. Suite scenarios execute and produce reproducible evidence. | Promoted from `:experimental` when all claims have evaluators, evidence is reproducible, and the pack passes `bb benchmarks:validate` cleanly for one release cycle. | N/A |
+| `:active` | Ready for use. All Level 1 mechanical claims have evaluators. Suite scenarios execute and produce reproducible evidence. | Promoted from `:experimental` when all claims have evaluators, evidence is reproducible, and the pack passes `bb benchmarks:validate` cleanly for one release cycle. | N/A |
 | `:experimental` | Under development. Some claims may be deferred (Level 3 semantic). Scenarios or evaluators may change without notice. | Created at pack inception. Remains `:experimental` until all claims are evaluable and evidence is reproducible. | May be promoted to `:active` or retired to `:deprecated` without a formal sunset. |
 | `:deprecated` | No longer maintained. Replaced by a newer pack version or superseded by a different approach. | No promotion path. | Should set `:deprecated-on` date and `:replaced-by` pointing to the replacement benchmark ID. May be removed from the registry after one quarter. |
 
@@ -114,7 +114,7 @@ and SHOULD carry a `:benchmark/status-updated` date.
  :benchmark/version         <int>            ;; extracted from filename suffix
  :benchmark/suite-pinned-version <string>    ;; when suite has a versioned manifest
  ...}
- ```
+```
 
 ## Benchmark Descriptions
 

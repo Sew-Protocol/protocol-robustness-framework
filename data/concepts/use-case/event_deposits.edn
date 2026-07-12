@@ -14,6 +14,16 @@
 
  :concept/protocols #{:protocol/sew-v1}
 
+ :concept/maturity :illustrative
+ :concept/support-status :not-asserted
+
+ :concept/related
+ [:consensus/authority
+  :consensus/evidence
+  :consensus/finality
+  :consensus/escalation
+  :consensus/liveness]
+
  :concept/roles
  {:depositor
   {:description "Party that commits funds into the deposit."
@@ -21,14 +31,11 @@
   :beneficiary
   {:description "Party entitled to receive funds if the condition is met."
    :maps-to [:protocol.actor/recipient]}
-   :condition-authority
-   {:description "Entity that determines whether the condition has been satisfied."
-    :maps-to [:protocol.actor/resolver :protocol.actor/oracle]
-    :mapping/confidence :approximate
-    :mapping/note "Role may be either a resolver module or an oracle depending on deposit configuration"}
-   :governance
-  {:description "Protocol governance that can adjust rules or intervene."
-   :maps-to [:protocol.actor/governance]}}
+    :condition-authority
+    {:description "Entity that determines whether the condition has been satisfied."
+     :maps-to [:protocol.actor/resolver :protocol.actor/oracle]
+     :mapping/confidence :approximate
+     :mapping/note "Role may be either a resolver module or an oracle depending on deposit configuration"}}
 
  :concept/entities
  {:deposit
@@ -40,9 +47,14 @@
   :attestation
   {:description "Signed statement that a condition was met or not met."
    :maps-to [:protocol.entity/evidence]}
-  :dispute
-  {:description "A challenge about whether the condition was properly evaluated."
-   :maps-to [:protocol.entity/dispute]}}
+   :dispute
+   {:description "A challenge about whether the condition was properly evaluated."
+    :maps-to [:protocol.entity/dispute]}
+   :appeal-bond
+   {:description "Collateral posted by the challenging party when disputing a condition evaluation; forfeited if the challenge is rejected."
+    :maps-to [:protocol.entity/bond]
+    :mapping/confidence :approximate
+    :mapping/note "Protocol bond primitive is shared across dispute and appeal contexts."}}
 
  :concept/actions
  {:create-deposit
@@ -57,9 +69,14 @@
   :claim-expiry
   {:description "Depositor claims return of funds because the condition window passed."
    :maps-to [:protocol.action/cancel :protocol.action/timeout]}
-  :dispute-condition
-  {:description "A party challenges the condition authority's evaluation."
-   :maps-to [:protocol.action/dispute :protocol.action/appeal]}}
+   :dispute-condition
+   {:description "A party challenges the condition authority's evaluation."
+    :maps-to [:protocol.action/dispute :protocol.action/appeal]}
+   :post-appeal-bond
+   {:description "Challenging party posts collateral when disputing a condition evaluation; forfeited if the challenge is rejected."
+    :maps-to [:protocol.action/bond]
+    :mapping/confidence :approximate
+    :mapping/note "Separates bond post from dispute initiation for clarity; protocol may combine them."}}
 
  :concept/outcomes
  {:deposit-released
@@ -71,9 +88,30 @@
   :deposit-stuck
   {:description "Funds are locked because the condition is disputed and unresolved."
    :maps-to [:protocol.outcome/stuck]}
-  :deposit-misattested
-  {:description "Condition authority incorrectly attested the condition, causing wrongful release or return."
-   :maps-to [:protocol.outcome/adversarial-resolution]}}
+   :deposit-misattested
+   {:description "Condition authority incorrectly attested the condition, causing wrongful release or return."
+    :maps-to [:protocol.outcome/adversarial-resolution]}
+   :evaluation-upheld
+   {:description "After challenge, the original condition evaluation is confirmed as correct."
+    :maps-to [:protocol.outcome/resolved]
+    :mapping/confidence :approximate
+    :mapping/note "Protocol outcome resolved covers the terminal resolution; the 'upheld' nuance is contextual."}
+   :evaluation-reversed
+   {:description "After challenge, the original condition evaluation is overturned."
+    :maps-to [:protocol.outcome/resolved]
+    :mapping/confidence :approximate
+    :mapping/note "Same protocol outcome as upheld; the reversal is inferred from the fund flow direction."}
+   :appeal-rejected
+   {:description "The challenge is dismissed as invalid, out of time, or brought by an unauthorised party."
+    :maps-to [:protocol.outcome/rejected]}
+   :appeal-bond-returned
+   {:description "Appeal bond is returned because the challenge succeeded."
+    :maps-to [:protocol.outcome/released]
+    :mapping/confidence :approximate
+    :mapping/note "Bond return flows through the same protocol release mechanism as fund release."}
+   :appeal-bond-forfeited
+   {:description "Appeal bond is forfeited because the challenge failed or was frivolous."
+    :maps-to [:protocol.outcome/slashed]}}
 
  :concept/failure-modes
  [{:failure/id :false-attestation
@@ -97,7 +135,7 @@
    :protocol-mechanisms [:timeout-check :deadline-config]
    :stakeholder-impact "Beneficiary loses the opportunity to fulfill the condition."}]
 
-:concept/metrics
+ :concept/metrics
   {:time-to-condition
    {:description "Time from deposit creation to condition evaluation."
     :source :derived-from-trace}
@@ -116,4 +154,14 @@
  :concept/out-of-scope
  ["Real-world legal or contractual conditions."
   "Oracle quality, liveness, or security."
-  "Multi-step conditional logic or dependent conditions."]}
+   "Multi-step conditional logic or dependent conditions."]
+
+ :concept/known-gaps
+  ["Evaluation-upheld and evaluation-reversed both map to the same protocol outcome (:protocol.outcome/resolved); the protocol does not distinguish them."
+   "Condition-authority role maps approximately to resolver or oracle — the mapping confidence is documented above."
+   "Governance role was removed because no governance-specific behaviour is modelled in this use-case."]
+
+ :concept/evidence
+ {:scenarios #{}
+  :benchmarks #{}
+  :claims #{}}}
