@@ -1,29 +1,15 @@
 (ns resolver-sim.protocols.sew.equilibrium
   "Sew-specific mechanism-property and equilibrium-concept validators.
-
    These validators are registered with evaluate-mechanism-properties and
    evaluate-equilibrium-concepts via SewProtocol's mechanism-property-validators
    and equilibrium-concept-validators methods.
-
    Sew-specific validators included here:
      Mechanism properties:
-       :individual-rationality       — uses negative-payoff-count / payoff-ledger
-       :collusion-resistance         — uses coalition-net-profit / payoff-ledger
-       :stake-flow-conservation      — uses resolver-stakes Sew world field
-     Equilibrium concepts:
-       :subgame-perfect-equilibrium                — delegates to subgame-cf
-       :bounded-public-state-epsilon-spe           — delegates to subgame-cf
-       :bounded-backward-induction-spe             — delegates to subgame-cf
-       :resolver-reputation-spe                    — delegates to subgame-cf
-       :resolver-reputation-profile-matrix         — delegates to subgame-cf
-
-   Generic validators (budget-balance, incentive-compatibility, sybil-resistance,
-   dominant-strategy-equilibrium, nash-equilibrium, etc.) remain in
-   resolver-sim.scenario.equilibrium and are available to all protocols.
-
-   This namespace is pure — no I/O, no DB, no side effects."
-  (:require [clojure.string :as str]
-            [resolver-sim.scenario.subgame-counterfactual :as subgame-cf]))
+       :individual-rationality       — uses terminal-payoff canonical model
+       :budget-balance-detailed      — uses terminal-payoff decomposition"
+   (:require [clojure.string :as str]
+             [resolver-sim.scenario.subgame-counterfactual :as subgame-cf]
+             [resolver-sim.economics.terminal-payoff :as tp]))
 
 ;; ---------------------------------------------------------------------------
 ;; Shared result constructors (mirrors scenario.equilibrium — kept local to
@@ -94,45 +80,55 @@
 ;; ---------------------------------------------------------------------------
 
 (defn- check-individual-rationality
-  "No required honest participant has a negative net payoff.
+  "No required honest participant ends with a net payoff below the
+   outside-option utility.
 
-   Uses the Sew payoff-ledger (negative-payoff-count metric) when present.
-   Falls back to funds-lost proxy when the ledger is absent.
-   :pass when negative-payoff-count = 0 or (partial) funds-lost = 0."
+   Uses the terminal-payoff canonical IR check when per-actor ledger
+   data is available. Falls back to negative-payoff-count metric or
+   funds-lost proxy when the ledger is absent.
+
+   :pass when every participant's net payoff >= outside-option (default 0)."
   [{:keys [metrics payoff-ledger-summary]}]
-  (let [npc    (:negative-payoff-count metrics)
-        ledger (get payoff-ledger-summary :per-actor {})
-        lost   (:funds-lost metrics 0)]
-    (cond
-      (some? npc)
-      (if (zero? npc)
-        (pass :individual-rationality :single-trace-metric-proxy
-              {:negative-payoff-count npc
-               :actors-evaluated (count ledger)}
-              "no participant ended with negative net payoff")
-        (fail :individual-rationality :single-trace-metric-proxy
-              {:negative-payoff-count npc
-               :actors-evaluated (count ledger)}
-              {:negative-payoff-count 0}
-              (if (seq ledger)
-                (->> ledger
-                     (keep (fn [[actor row]]
-                             (let [net (long (:net-payoff row 0))]
-                               (when (neg? net)
-                                 {:actor actor :net-payoff net :metric :negative-payoff-count}))))
-                     vec)
-                [{:metric :negative-payoff-count :observed npc}])))
-
-      (pos? lost)
-      (fail :individual-rationality :single-trace-metric-proxy
-            {:funds-lost lost}
-            {:funds-lost 0}
-            [{:metric :funds-lost :observed lost
-              :note "partial proxy — full payoff-ledger not tracked"}])
-
-      :else
-      (inconclusive :individual-rationality :absent-evidence
-                    "payoff-ledger not tracked; cannot fully evaluate individual rationality"))))
+  (let [ledger (get payoff-ledger-summary :per-actor {})]
+    (if (seq ledger)
+      ;; Canonical IR check via terminal-payoff model
+      (let [results (mapv (fn [[actor row]]
+                            (let [net (long (:net-payoff row 0))
+                                  ir (tp/ir-check net)]
+                              (assoc ir :actor actor)))
+                          ledger)
+            failures (filter #(not (:rational? %)) results)]
+        (if (empty? failures)
+          (pass :individual-rationality :single-trace-metric-proxy
+                {:actors-evaluated (count ledger)
+                 :ir-results results}
+                "all participants meet or exceed outside-option utility")
+          (fail :individual-rationality :single-trace-metric-proxy
+                {:actors-evaluated (count ledger)
+                 :ir-results results}
+                {:ir-results (mapv #(select-keys % [:actor :net :outside-option :deficit]) failures)}
+                (mapv (fn [f] {:actor (:actor f) :deficit (:deficit f)}) failures))))
+      ;; Fallback: negative-payoff-count metric (pre-coordinated metric)
+      (let [npc (:negative-payoff-count metrics)]
+        (if (some? npc)
+          (if (zero? npc)
+            (pass :individual-rationality :single-trace-metric-proxy
+                  {:negative-payoff-count npc}
+                  "no participant ended with negative net payoff (metric proxy)")
+            (fail :individual-rationality :single-trace-metric-proxy
+                  {:negative-payoff-count npc}
+                  {:negative-payoff-count 0}
+                  [{:metric :negative-payoff-count :observed npc}]))
+          ;; Fallback: funds-lost proxy
+          (let [lost (:funds-lost metrics 0)]
+            (if (pos? lost)
+              (fail :individual-rationality :single-trace-metric-proxy
+                    {:funds-lost lost}
+                    {:funds-lost 0}
+                    [{:metric :funds-lost :observed lost
+                      :note "partial proxy — full payoff-ledger not tracked"}])
+              (inconclusive :individual-rationality :absent-evidence
+                            "payoff-ledger not tracked; cannot fully evaluate individual rationality"))))))))
 
 (defn- check-collusion-resistance
   "Labelled coalition does not profit relative to non-collusive baseline.
@@ -574,6 +570,37 @@
                   held {:EXPECTED "all token balances zero" :actual held}
                   offending)))))))
 
+(defn- check-budget-balance-detailed
+  "Detailed budget balance check using the canonical terminal-payoff model.
+   Verifier that the sum of net payoffs across all participant types equals
+   zero (or is within an allowed epsilon for integer rounding).
+   Uses `resolver-payoff`, `claimant-payoff`, and `protocol-payoff` from
+   the terminal-payoff model when trace-level payoff data is available.
+   Falls back to the simple stock check when breakdown data is absent."
+  [{:keys [metrics payoff-ledger-summary terminal-world]}]
+  (let [held (:total-held-by-token terminal-world {})]
+    (if-let [per-actor (get payoff-ledger-summary :per-actor {})]
+      ;; Use terminal-payoff model when per-actor ledger is available
+      (let [participants (mapv (fn [[actor row]]
+                                 {:role :resolver
+                                  :actor actor
+                                  :net (long (:net-payoff row 0))})
+                               per-actor)
+            bb (tp/budget-balance-check participants :epsilon 1)]
+        (if (:balanced? bb)
+          (pass :budget-balance-detailed :single-trace-terminal-proxy
+                bb "net payoffs sum to zero within rounding epsilon")
+          (fail :budget-balance-detailed :single-trace-terminal-proxy
+                bb {:balanced? true}
+                [{:imbalance (:imbalance bb) :sum (:sum bb)}])))
+      ;; Fallback: simple stock check
+      (if (every? #(zero? (val %)) held)
+        (pass :budget-balance-detailed :single-trace-terminal-proxy
+              held "all token balances zero (terminal-payoff breakdown absent)")
+        (let [offending (filterv (fn [[_ v]] (pos? v)) held)]
+          (fail :budget-balance-detailed :single-trace-terminal-proxy
+                held {:expected "all token balances zero"} offending))))))
+
 (defn- check-force-refund-path-integrity
   "Ensure no workflow marked :refunded is also marked as release path.
    Placeholder integrity check over projection-level workflow outcomes."
@@ -729,13 +756,14 @@
   "Map of Sew-specific mechanism-property keyword → validator-fn.
    Returned by SewProtocol/mechanism-property-validators and merged with the
    framework's built-in generic validators."
-  {:individual-rationality      check-individual-rationality
-   :collusion-resistance        check-collusion-resistance
-   :stake-flow-conservation     check-stake-flow-conservation
-   :budget-balance              check-budget-balance
-   :force-refund-path-integrity check-force-refund-path-integrity
-   :force-reversal-path-integrity check-force-reversal-path-integrity
-   :pending-lifecycle-integrity check-pending-lifecycle-integrity})
+   {:individual-rationality      check-individual-rationality
+    :collusion-resistance        check-collusion-resistance
+    :stake-flow-conservation     check-stake-flow-conservation
+    :budget-balance              check-budget-balance
+    :budget-balance-detailed     check-budget-balance-detailed
+    :force-refund-path-integrity check-force-refund-path-integrity
+    :force-reversal-path-integrity check-force-reversal-path-integrity
+    :pending-lifecycle-integrity check-pending-lifecycle-integrity})
 
 (def equilibrium-concept-validators
   "Map of Sew-specific equilibrium-concept keyword → validator-fn.

@@ -11,7 +11,9 @@
    deterministic — no stochastic sampling, no state explosion beyond the
    configured scope."
   (:require [resolver-sim.yield.partial-fill :as pf]
-            [resolver-sim.yield.exact-math :as m]))
+            [resolver-sim.yield.exact-math :as m]
+            [resolver-sim.validation.deviation-contract :as dc]
+            [resolver-sim.validation.enumeration :as enum]))
 
 ;; ---------------------------------------------------------------------------
 ;; Allocation helper
@@ -45,11 +47,10 @@
 ;; ---------------------------------------------------------------------------
 
 (def default-scope
-  "Default enumeration bounds."
-  {:claim-count-max 5
-   :request-max 20
-   :liquidity-max 20
-   :deviations [:split :merge :permute :sybil :inflate]})
+  "Default enumeration bounds as an EnumerationScope."
+  (enum/make-scope :dimensions {:claim-count [1 5] :request [0 20] :liquidity [0 20]}
+                   :sampling :stratified
+                   :max-states 500))
 
 (defn- enumerate-claim-counts
   "Generate claim counts from 1 to max."
@@ -278,23 +279,28 @@
    - :scope — map with :claim-count-max, :request-max, :liquidity-max
    - :policies — vector of policy maps to test
    - :deviations — vector of deviation keywords to test
-   - :max-states — max states to enumerate (default 500)"
-  [& {:keys [scope policies deviations max-states]
+   - :max-states — max states to enumerate (default 500)
+   - :contract-id — deviation contract id; when set, deviations are derived
+     from the contract and :deviations option is ignored"
+  [& {:keys [scope policies deviations max-states contract-id]
       :or {scope default-scope
            policies (enumerate-policies)
-           deviations (:deviations default-scope)
            max-states 500}}]
-  (let [results (atom [])
+  (let [contract (when contract-id (dc/get-contract contract-id))
+        deviations (or (when contract (dc/deviations-in-contract contract-id))
+                       (vec deviations)
+                       (:deviations default-scope))
+        results (atom [])
         state-count (atom 0)
-        policies (vec policies)]
-    (doseq [claim-count (enumerate-claim-counts (:claim-count-max scope))
-            request-vec (enumerate-request-vectors claim-count (:request-max scope))
-            :let [request-sum (reduce + 0 request-vec)]
-            liquidity (enumerate-liquidity (:liquidity-max scope))
+        policies (vec policies)
+        enum-states (enum/generate-states scope)]
+    (doseq [state enum-states
             policy policies
             :while (< @state-count max-states)]
-      (swap! state-count inc)
-      (let [checks (atom [])]
+      (let [request-vec (:claims state)
+            liquidity (:liquidity state)
+            _ (swap! state-count inc)
+            checks (atom [])]
         (when (some #{:split} deviations)
           (let [v (check-split-invariance request-vec liquidity policy)]
             (swap! checks conj
@@ -344,9 +350,12 @@
           total-checks (count all-verdicts)
           verified (count (filter #{:verified} all-verdicts))
           violated (count (filter #{:violated} all-verdicts))]
-      {:artifact/kind :strategic-closed-form-validation
-       :mechanism :yield/partial-fill
-       :validation-scope (assoc scope :states-examined @state-count)
+       {:artifact/kind :strategic-closed-form-validation
+        :mechanism :yield/partial-fill
+        :contract-id contract-id
+         :validation-scope (assoc {:dimensions (:dimensions scope)
+                                   :sampling (:sampling scope)}
+                                  :states-examined @state-count)
        :properties (->> (mapcat :checks @results)
                         (group-by :property)
                         (mapv (fn [[prop results]]

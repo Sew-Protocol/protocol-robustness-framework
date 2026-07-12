@@ -83,13 +83,15 @@
 
 (defn- check-partial-fill-closed-forms
   "Evaluate selected closed-form checks across every emitted partial-fill decision.
-   A workload with no decision artifact has not exercised this property."
+   Returns witness data indicating which settlement modes and fill modes were
+   exercised.  A workload with no decision artifact has not exercised this property."
   [results check-ids]
   (let [decisions (vec (partial-fill-decisions results))]
     (if (empty? decisions)
       {:outcome :not-exercised
        :violations [{:type :missing-partial-fill-decision
-                     :message "workload produced no partial-fill decision artifact"}]}
+                     :message "workload produced no partial-fill decision artifact"}]
+       :witnesses []}
       (let [failures (->> decisions
                           (mapcat (fn [decision]
                                     (->> (partial-fill/partial-fill-closed-form-checks decision)
@@ -100,9 +102,17 @@
                                                  :decision-id (:decision/id decision)
                                                  :check-id (:check/id check)
                                                  :details (:details check)})))))
-                          vec)]
+                          vec)
+            witnesses (mapv (fn [i decision]
+                              {:decision/index i
+                               :settlement-mode (:settlement-mode decision)
+                               :fill-mode (get-in decision [:policy :mode])
+                               :exercised-fill? (= :partial-fill (:settlement-mode decision))})
+                            (range)
+                            decisions)]
         {:holds? (empty? failures)
-         :violations failures}))))
+         :violations failures
+         :witnesses witnesses}))))
 
 (defn- scenario-group-key
   [result]

@@ -1142,7 +1142,12 @@
    Returns:
      {:batch/valid?        bool
       :batch/summary      {:total-decisions n :passed n :failed [...]}
-      :batch/checks       [[decision check-results] ...]}"
+      :batch/checks       [[decision check-results] ...]
+      :batch/witnesses    [{:decision/index n
+                            :settlement-mode kw
+                            :fill-mode kw
+                            :check-count n
+                            :passed? bool} ...]}"
   [decisions]
   (let [checks (mapv partial-fill-closed-form-checks decisions)
         indexed (map-indexed (fn [i cs]
@@ -1150,11 +1155,20 @@
                                 :pass? (every? #(#{:pass :not-applicable} (:status %)) cs)
                                 :failing-checks (filterv #(= :fail (:status %)) cs)})
                              checks)
-        all-pass? (every? :pass? indexed)]
+        all-pass? (every? :pass? indexed)
+        witnesses (mapv (fn [i decision]
+                          {:decision/index i
+                           :settlement-mode (:settlement-mode decision)
+                           :fill-mode (get-in decision [:policy :mode])
+                           :check-count (count (nth checks i))
+                           :passed? (:pass? (nth indexed i))})
+                        (range)
+                        decisions)]
     {:batch/valid? all-pass?
      :batch/summary {:total-decisions (count decisions)
                      :passed-count (count (filter :pass? indexed))
                      :failed-decisions (vec (remove :pass? indexed))}
+     :batch/witnesses witnesses
      :batch/checks (mapv vector decisions checks)}))
 
 (defn validate-decision-artifact

@@ -342,6 +342,76 @@
                   :fraud-success-rate fraud-success-rate}}))
 
 ;; ---------------------------------------------------------------------------
+;; Claimant and Protocol payoff projections
+;; ---------------------------------------------------------------------------
+
+(defn claimant-payoff
+  "Compute the canonical payoff decomposition for a claimant.
+   Claimant receives escrow minus fees; may incur appeal costs.
+   Returns {:claimant-id kw :components [...] :net int}."
+  [claimant-id escrow-wei fee-wei appeal-cost-wei appeal-filed?]
+  (let [net-escrow (- escrow-wei fee-wei)
+        components (cond-> [(fee-component fee-wei true)]
+                     appeal-filed?
+                     (conj (appeal-cost-component appeal-cost-wei :claimant)))]
+    {:claimant-id claimant-id
+     :components components
+     :net net-escrow}))
+
+(defn protocol-payoff
+  "Compute the canonical payoff decomposition for the protocol treasury.
+   Protocol receives fees, slashing revenue, and appeal bond forfeitures;
+   may pay appeal costs.
+   Returns {:components [...] :net int}."
+  [fee-wei slash-revenue-wei appeal-bond-revenue-wei appeal-cost-wei]
+  (let [net (+ fee-wei slash-revenue-wei appeal-bond-revenue-wei (- (or appeal-cost-wei 0)))
+        components [(fee-component fee-wei true)
+                    (when (pos? (or slash-revenue-wei 0))
+                      (slash-component slash-revenue-wei :resolver :protocol))
+                    (when (pos? (or appeal-bond-revenue-wei 0))
+                      {:type :appeal-bond-revenue
+                       :amount appeal-bond-revenue-wei
+                       :note "appeal bond forfeited to protocol"})]]
+    {:components (vec (remove nil? components))
+     :net net}))
+
+;; ---------------------------------------------------------------------------
+;; Budget balance and individual rationality checks
+;; ---------------------------------------------------------------------------
+
+(defn budget-balance-check
+  "Verify that the sum of net payoffs across all participant types equals
+   zero (strong budget balance) or is within epsilon of zero.
+   If non-zero, reports the imbalance and which participant types contribute.
+
+   `participant-payoffs` — sequence of {:role kw :net int} maps.
+   `epsilon` — allowed deviation (default 0, use 1 for integer rounding).
+
+   Returns {:balanced? bool :sum N :imbalance N :participants [...]}"
+  [participant-payoffs & {:keys [epsilon] :or {epsilon 0}}]
+  (let [total (reduce + 0 (map :net participant-payoffs))
+        abs-imbalance (Math/abs (long total))]
+    {:balanced? (<= abs-imbalance epsilon)
+     :sum (long total)
+     :imbalance abs-imbalance
+     :participants (vec participant-payoffs)}))
+
+(defn ir-check
+  "Individual rationality check: verify that a participant's net payoff
+   meets or exceeds the outside-option utility.
+
+   `net-payoff` — participant's net payoff (integer wei).
+   `outside-option` — outside option utility (default 0).
+
+   Returns {:rational? bool :net N :outside-option N :deficit N}"
+  [net-payoff & {:keys [outside-option] :or {outside-option 0}}]
+  (let [deficit (- outside-option net-payoff)]
+    {:rational? (>= net-payoff outside-option)
+     :net net-payoff
+     :outside-option outside-option
+     :deficit (max 0 deficit)}))
+
+;; ---------------------------------------------------------------------------
 ;; Verification
 ;; ---------------------------------------------------------------------------
 

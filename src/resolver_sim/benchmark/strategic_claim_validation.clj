@@ -220,18 +220,29 @@
 
 (defn- scenario-check-results
   [claim-spec mechanism-level result]
-  (into [{:check/id :scenario-passed
-          :status (if (= :pass (:outcome result)) :pass :fail)
-          :details {:outcome (:outcome result)
-                    :halt-reason (:halt-reason result)}}
-         {:check/id :evidence-root-valid
-          :status (if (sha-256-hex? (:scenario/evidence-root result)) :pass :fail)
-          :details {:scenario/evidence-root (:scenario/evidence-root result)}}
-         {:check/id :no-invariant-errors
-          :status (if (empty? (invariant-failures result)) :pass :fail)
-          :details {:failed-invariants (invariant-failures result)}}]
-        (when (= :allocation/partial-fill mechanism-level)
-          (closed-form-check-results result (:closed-form-check-ids claim-spec)))))
+  (let [base-checks [{:check/id :scenario-passed
+                      :status (if (= :pass (:outcome result)) :pass :fail)
+                      :details {:outcome (:outcome result)
+                                :halt-reason (:halt-reason result)}}
+                     {:check/id :evidence-root-valid
+                      :status (if (sha-256-hex? (:scenario/evidence-root result)) :pass :fail)
+                      :details {:scenario/evidence-root (:scenario/evidence-root result)}}
+                     {:check/id :no-invariant-errors
+                      :status (if (empty? (invariant-failures result)) :pass :fail)
+                      :details {:failed-invariants (invariant-failures result)}}]
+        cf-checks (when (= :allocation/partial-fill mechanism-level)
+                    (closed-form-check-results result (:closed-form-check-ids claim-spec)))
+        ;; Extract exercise witnesses from closed-form check results
+        witnesses (when cf-checks
+                    (let [decisions (:partial-fill-decisions result)]
+                      (mapv (fn [i d]
+                              {:decision/index i
+                               :settlement-mode (:settlement-mode d)
+                               :fill-mode (get-in d [:policy :mode])
+                               :exercised-fill? (= :partial-fill (:settlement-mode d))})
+                            (range) (or decisions []))))]
+    (cond-> (into base-checks (or cf-checks []))
+      (seq witnesses) (assoc :witnesses witnesses))))
 
 (defn- level-verdict
   [level matched-scenarios results claim-spec]
@@ -243,21 +254,39 @@
      :evidence-references []}
     (let [scenario-ids (mapv :scenario/id matched-scenarios)
           level-checks (mapcat (fn [match]
-                                 (let [result (get results (:scenario/source-path match))]
+                                 (let [result (get results (:scenario/source-path match))
+                                       checks (scenario-check-results claim-spec level result)]
                                    (map (fn [check]
                                           (assoc check :scenario/id (:scenario/id match)))
-                                        (scenario-check-results claim-spec level result))))
+                                        (remove #(= :witnesses (:check/id %)) checks))))
                                matched-scenarios)
+          witnesses (mapcat (fn [match]
+                              (let [result (get results (:scenario/source-path match))
+                                    checks (scenario-check-results claim-spec level result)
+                                    ws (:witnesses checks)]
+                                (map #(assoc % :scenario/id (:scenario/id match)) (or ws []))))
+                            matched-scenarios)
           not-exercised? (some #(= :not-exercised (:status %)) level-checks)
+          ;; Require at least one exercised partial-fill decision when checking
+          ;; partial-fill allocation properties
+          partial-fill-exercised? (or (not= :allocation/partial-fill level)
+                                      (some :exercised-fill? witnesses))
           verdict (cond
                     not-exercised? :uncovered
+                    (not partial-fill-exercised?) :unexercised
                     (every? #(= :pass (:status %)) level-checks) :pass
-                    :else :fail)]
+                    :else :fail)
+          uncovered-reason (when (or not-exercised?
+                                     (and (= :allocation/partial-fill level)
+                                          (not partial-fill-exercised?)))
+                              (if not-exercised?
+                                :no-partial-fill-decision-artifacts
+                                :no-exercised-partial-fill))]
       {:mechanism-level level
        :verdict verdict
-       :uncovered-reason (when not-exercised?
-                           :no-partial-fill-decision-artifacts)
+       :uncovered-reason uncovered-reason
        :scenario-ids scenario-ids
+       :witnesses (vec witnesses)
        :check-results (vec level-checks)
        :evidence-references (vec (mapcat :evidence-references matched-scenarios))})))
 
