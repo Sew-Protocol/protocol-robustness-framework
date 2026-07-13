@@ -18,7 +18,7 @@
    :projection-mode          :full
    :require-event-id?        false
    :include-telemetry-evidence? false
-  :evidence-mode              :all})
+   :evidence-mode              :all})
 
 (def fast-regression-flags
   "Fast regression: theory deferred (or disabled)."
@@ -123,8 +123,8 @@
              (boolean (flag-lookup scenario replay-opts :require-event-id? false))
              :evidence-mode
              (keyword (name (or (flag-lookup scenario replay-opts :evidence-mode
-                                              (if (or (:minimal replay-opts) (= profile :minimal)) :none :all))
-                                   :all)))}))))
+                                             (if (or (:minimal replay-opts) (= profile :minimal)) :none :all))
+                                :all)))}))))
 
 (defn runner-opts-from-flags
   "Map replay flags to `scenario.runner` theory opts."

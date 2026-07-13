@@ -464,27 +464,27 @@
                             :epoch epoch
                             :previous-epoch-strategies previous-epoch-strategies}
               result (reduce-kv
-                       (fn [acc id resolver]
-                         (let [from (:strategy resolver)
-                               decision (select-next-strategy selector repeated-ctx resolver)
-                               target (:to decision)]
-                           (cond
-                             (:blocked? decision)
-                             (assoc-in acc [:updated-histories id] resolver)
+                      (fn [acc id resolver]
+                        (let [from (:strategy resolver)
+                              decision (select-next-strategy selector repeated-ctx resolver)
+                              target (:to decision)]
+                          (cond
+                            (:blocked? decision)
+                            (assoc-in acc [:updated-histories id] resolver)
 
-                             (or (:skip? decision) (= from target))
-                             (assoc-in acc [:updated-histories id] resolver)
+                            (or (:skip? decision) (= from target))
+                            (assoc-in acc [:updated-histories id] resolver)
 
-                             :else
-                             (-> acc
-                                 (assoc-in [:updated-histories id]
-                                           (assoc resolver :strategy target))
-                                 (update :defection-events conj
-                                          (event-base epoch id from target
-                                                      selector (:reason decision)
-                                                      nil nil))))))
-                       {:updated-histories {} :defection-events [] :diagnostics []}
-                       resolver-histories)]
+                            :else
+                            (-> acc
+                                (assoc-in [:updated-histories id]
+                                          (assoc resolver :strategy target))
+                                (update :defection-events conj
+                                        (event-base epoch id from target
+                                                    selector (:reason decision)
+                                                    nil nil))))))
+                      {:updated-histories {} :defection-events [] :diagnostics []}
+                      resolver-histories)]
           (assoc result :resolved-config cfg))
 
         :multi-strategy-payoff

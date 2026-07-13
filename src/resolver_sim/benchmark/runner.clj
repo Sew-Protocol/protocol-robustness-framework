@@ -5,6 +5,7 @@
             [resolver-sim.benchmark.coverage :as benchmark-coverage]
             [resolver-sim.concepts.benchmark :as benchmark-concepts]
             [resolver-sim.evidence.chain :as chain]
+            [resolver-sim.evidence.config :as evidence-config]
             [resolver-sim.hash.canonical :as hc]
             [resolver-sim.io.resource-path :as rp]
             [resolver-sim.io.scenarios :as io-sc]
@@ -15,7 +16,9 @@
             [resolver-sim.scenario.suites :as suites]
             [clojure.edn :as edn]
             [clojure.java.io :as io]
-            [clojure.string :as str]))
+            [clojure.string :as str])
+  (:import [java.math BigInteger]
+           [java.security MessageDigest]))
 
 ;; ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -37,10 +40,15 @@
 (defn- resolve-suite-scenarios
   "Resolve a :suite/ keyword from the suite registry to a list of
    java.io.File objects for benchmark execution.
+   Resource paths are resolved to real filesystem paths for io/copy compatibility.
    Returns empty vector if the suite is unknown or has no scenarios."
   [suite-kw]
   (let [paths (suites/suite-paths suite-kw)]
-    (mapv io/file paths)))
+    (mapv (fn [p]
+            (if-let [resolved (rp/resolve-path p)]
+              (io/file (java.net.URI. resolved))
+              (io/file p)))
+          paths)))
 
 (defn- load-scenario [path]
   (io-sc/load-scenario-file path))
@@ -86,15 +94,74 @@
        set
        count))
 
+(defn- safe-path-component
+  [value]
+  (-> (str value)
+      (str/replace #"[^A-Za-z0-9._-]+" "-")
+      (str/replace #"^-|-$" "")))
+
+(defn- execution-output-dir
+  [scenario-output-dir scenario-file run-index]
+  (when scenario-output-dir
+    (let [base-name (.getName scenario-file)
+          scenario-name (str/replace base-name #"\.(edn|json)$" "")]
+      (str (io/file scenario-output-dir
+                    (safe-path-component scenario-name)
+                    (str "run-" run-index))))))
+
+(defn- sha256-file
+  [path]
+  (when (.exists (io/file path))
+    (let [digest (MessageDigest/getInstance "SHA-256")]
+      (with-open [stream (io/input-stream path)]
+        (let [buffer (byte-array 8192)]
+          (loop [read (.read stream buffer)]
+            (when (pos? read)
+              (.update digest buffer 0 read)
+              (recur (.read stream buffer))))))
+      (format "%064x" (BigInteger. 1 (.digest digest))))))
+
+(defn- write-execution-package!
+  [output-dir scenario-file scenario result]
+  (when output-dir
+    (let [dir (io/file output-dir)
+          input-file (io/file dir "input" (.getName scenario-file))
+          replay-file (io/file dir "raw" "replay-output.edn")
+          summary-file (io/file dir "execution-summary.edn")]
+      (.mkdirs (.getParentFile input-file))
+      (.mkdirs (.getParentFile replay-file))
+      (io/copy scenario-file input-file)
+      (spit replay-file (pr-str result))
+      (spit summary-file (pr-str {:scenario/source-path (.getPath scenario-file)
+                                  :scenario/protocol (:protocol scenario)
+                                  :outcome (:outcome result)
+                                  :halt-reason (:halt-reason result)
+                                  :events-processed (:events-processed result)}))
+      {:scenario/artifact-dir output-dir
+       :scenario/input-path (.getPath input-file)
+       :scenario/replay-output (.getPath replay-file)
+       :scenario/summary (.getPath summary-file)
+       :scenario/evidence-registry (let [path (str (io/file dir "evidence-registry.json"))]
+                                     (when (.exists (io/file path)) path))
+       :scenario/chain-cursor (let [path (str (io/file dir "chain-cursor-final.json"))]
+                                (when (.exists (io/file path)) path))})))
+
 (defn- execute-scenario
-  [suite-kw scenario-file run-index run-count]
+  [suite-kw scenario-file run-index run-count scenario-output-dir]
   (let [path (.getPath scenario-file)
         scenario (load-scenario path)
         protocol (:protocol scenario)
-        result   (if (= "yield-v1" protocol)
-                   (replay/replay-yield-scenario scenario)
-                   (sew/replay-with-sew-protocol scenario
-                                                 {:allow-dirty? (or chain/*allow-dirty* false)}))
+        output-dir (execution-output-dir scenario-output-dir scenario-file run-index)
+        run-replay (fn []
+                     (if (= "yield-v1" protocol)
+                       (replay/replay-yield-scenario scenario)
+                       (sew/replay-with-sew-protocol scenario
+                                                     {:allow-dirty? (or chain/*allow-dirty* false)})))
+        result (if output-dir
+                 (binding [evidence-config/*artifact-dir* output-dir]
+                   (run-replay))
+                 (run-replay))
+        execution-package (write-execution-package! output-dir scenario-file scenario result)
         public-id (benchmark-public-scenario-id suite-kw path)
         scenario-evidence (hc/hash-with-intent
                            {:hash/intent :evidence-content}
@@ -130,9 +197,10 @@
                                   (sort-by :decision/id)
                                   vec)
      :invariant-results inv-results
-     :scenario/evidence-root scenario-evidence}))
+     :scenario/evidence-root scenario-evidence
+     :scenario/artifacts execution-package}))
 
-(defrecord SewAdapter []
+(defrecord SewAdapter [scenario-output-dir]
   adapter/RepositoryAdapter
   (load-scenarios [_ benchmark]
     (if-let [suite-kw (:benchmark/scenario-suite benchmark)]
@@ -145,7 +213,7 @@
       (vec
        (mapcat (fn [run-index]
                  (map (fn [scenario-file]
-                        (execute-scenario suite-kw scenario-file run-index run-count))
+                        (execute-scenario suite-kw scenario-file run-index run-count scenario-output-dir))
                       scenarios))
                (range 1 (inc run-count))))))
 
@@ -157,7 +225,35 @@
      :unique-scenario-count (unique-scenario-count results)
      :declared-run-count (apply max 1 (keep :benchmark/run-count results))}))
 
-(def default-adapter (->SewAdapter))
+(def default-adapter (->SewAdapter nil))
+
+;; ── Benchmark artifact index ──────────────────────────────────────────────────
+
+(defn- write-artifact-index!
+  [scenario-output-dir benchmark-id results]
+  (when scenario-output-dir
+    (let [index-path (str (io/file scenario-output-dir "benchmark-index.edn"))
+          executions (mapv (fn [result]
+                             (let [artifacts (:scenario/artifacts result)]
+                               {:scenario/id (:scenario/id result)
+                                :scenario/source-path (:simulator/scenario-path result)
+                                :benchmark/run-index (:benchmark/run-index result)
+                                :benchmark/run-count (:benchmark/run-count result)
+                                :outcome (:outcome result)
+                                :halt-reason (:halt-reason result)
+                                :scenario/evidence-root (:scenario/evidence-root result)
+                                :scenario/artifacts artifacts
+                                :scenario/replay-output-sha256
+                                (some-> artifacts :scenario/replay-output sha256-file)}))
+                           results)
+          index {:artifact-index/version "benchmark-artifact-index.v1"
+                 :benchmark/id benchmark-id
+                 :execution-count (count executions)
+                 :executions executions}]
+      (.mkdirs (.getParentFile (io/file index-path)))
+      (spit index-path (pr-str index))
+      {:path index-path
+       :sha256 (sha256-file index-path)})))
 
 ;; ── Run manifest ────────────────────────────────────────────────────────────────
 
@@ -191,9 +287,13 @@
     (throw (ex-info "Benchmark manifest not found" {:path path}))))
 
 (defn run-benchmark
-  ([manifest-path] (run-benchmark manifest-path default-adapter))
-  ([manifest-path adapter]
-   (let [manifest (load-manifest manifest-path)
+  ([manifest-path] (run-benchmark manifest-path default-adapter {}))
+  ([manifest-path adapter] (run-benchmark manifest-path adapter {}))
+  ([manifest-path adapter {:keys [scenario-output-dir]}]
+   (let [adapter (if scenario-output-dir
+                   (->SewAdapter scenario-output-dir)
+                   adapter)
+         manifest (load-manifest manifest-path)
          repo-meta (repo/metadata)
          scenarios (adapter/load-scenarios adapter manifest)
          _ (do
@@ -201,6 +301,7 @@
              (log/info! "benchmark/execute" {:scenario-count (count scenarios)
                                              :manifest manifest-path}))
          results (adapter/execute-benchmark adapter manifest scenarios)
+         artifact-index (write-artifact-index! scenario-output-dir (:benchmark/id manifest) results)
 
          metrics (adapter/collect-metrics adapter results)
          passed? (= (:total metrics) (:passed metrics))
@@ -276,6 +377,7 @@
                    :concept/section concept-section
                    :concept/coverage concept-coverage
                    :run/manifest run-manifest
+                   :benchmark/artifact-index artifact-index
                    :benchmark-certification certification}
 
          hashable-evidence (dissoc evidence :timestamp)

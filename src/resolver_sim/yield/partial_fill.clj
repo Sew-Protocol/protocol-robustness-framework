@@ -612,7 +612,7 @@
                                                    :rank (some (fn [[i [ck _]]] (when (= ck k) i))
                                                                (map-indexed vector remainders))})))
                                             remainders)
-                                         vec)))]
+                                      vec)))]
       (vec (concat @violations ranking-violations)))))
 
 (def ^:private check-class
@@ -834,23 +834,23 @@
                      (when (neg? (:value entry))
                        entry)))
              vec)
-         deferred-haircut-overlap-violations
-         (->> (keys deferred)
-              (filter (fn [k] (and (contains? haircut k)
-                                   (pos? (long (get deferred k 0)))
-                                   (pos? (long (get haircut k 0))))))
-              (mapv (fn [k] {:claim k :deferred (long (get deferred k 0)) :haircut (long (get haircut k 0))})))
-         deferred-haircut-sum-violations
-         (->> positive-claims
-              (keep (fn [[k claim]]
-                      (let [r (long claim)
-                            d (long (get deferred k 0))
-                            h (long (get haircut k 0))
-                            sum (+ d h)]
-                        (when (< r sum)
-                          {:claim k :requested r :deferred d :haircut h :combined-sum sum :excess (- sum r)}))))
-              vec)
-         evidence (:evidence decision)
+        deferred-haircut-overlap-violations
+        (->> (keys deferred)
+             (filter (fn [k] (and (contains? haircut k)
+                                  (pos? (long (get deferred k 0)))
+                                  (pos? (long (get haircut k 0))))))
+             (mapv (fn [k] {:claim k :deferred (long (get deferred k 0)) :haircut (long (get haircut k 0))})))
+        deferred-haircut-sum-violations
+        (->> positive-claims
+             (keep (fn [[k claim]]
+                     (let [r (long claim)
+                           d (long (get deferred k 0))
+                           h (long (get haircut k 0))
+                           sum (+ d h)]
+                       (when (< r sum)
+                         {:claim k :requested r :deferred d :haircut h :combined-sum sum :excess (- sum r)}))))
+             vec)
+        evidence (:evidence decision)
         evidence-violations
         (let [computed-shortage (max 0 (- total-requested available))]
           (cond-> []
@@ -901,38 +901,38 @@
                                (check-result :partial-fill/pro-rata-cross-product
                                              :not-applicable
                                              {:mode mode})))
-           rounding-fairness-ideal-ch (future
-                                      (if (= :pro-rata mode)
-                                        (let [violations (rounding-fairness-violations
-                                                          positive-claims filled available
-                                                          total-requested rounding-policy)]
-                                          (check-result :partial-fill/rounding-fairness-ideal
-                                                        (if (empty? violations) :pass :fail)
-                                                        {:violations violations
-                                                         :max-allowed-error (case rounding-policy
-                                                                              :largest-remainder 1
-                                                                              0)
-                                                         :ideal-fills (compute-ideal-fills
-                                                                       positive-claims total-requested available)}))
-                                        (check-result :partial-fill/rounding-fairness-ideal
-                                                      :not-applicable {:mode mode})))
-           rounding-remainder-ch (future
+          rounding-fairness-ideal-ch (future
+                                       (if (= :pro-rata mode)
+                                         (let [violations (rounding-fairness-violations
+                                                           positive-claims filled available
+                                                           total-requested rounding-policy)]
+                                           (check-result :partial-fill/rounding-fairness-ideal
+                                                         (if (empty? violations) :pass :fail)
+                                                         {:violations violations
+                                                          :max-allowed-error (case rounding-policy
+                                                                               :largest-remainder 1
+                                                                               0)
+                                                          :ideal-fills (compute-ideal-fills
+                                                                        positive-claims total-requested available)}))
+                                         (check-result :partial-fill/rounding-fairness-ideal
+                                                       :not-applicable {:mode mode})))
+          rounding-remainder-ch (future
                                   (if (= :largest-remainder rounding-policy)
                                     (let [violations (rounding-fairness-violations
                                                       positive-claims filled available
                                                       total-requested rounding-policy)
                                           ranking-violations (filter #(= :unexpected-extra-unit (:kind %))
-                                                                      violations)]
+                                                                     violations)]
                                       (check-result :partial-fill/rounding-fairness-remainder-ranking
                                                     (if (empty? ranking-violations) :pass :fail)
                                                     {:violations ranking-violations
                                                      :remainder-order (->> (compute-ideal-fills
                                                                             positive-claims total-requested available)
-                                                                          (sort-by (fn [[_ v]] (- (:fraction-remainder v))))
-                                                                          (mapv (fn [[k v]] [k (:fraction-remainder v)])))}))
+                                                                           (sort-by (fn [[_ v]] (- (:fraction-remainder v))))
+                                                                           (mapv (fn [[k v]] [k (:fraction-remainder v)])))}))
                                     (check-result :partial-fill/rounding-fairness-remainder-ranking
                                                   :not-applicable {:rounding-policy rounding-policy})))
-           residual-ch (future
+          residual-ch (future
                         (if rounding-applicable?
                           (check-result :partial-fill/rounding-residual-bounded
                                         (if residual-ok? :pass :fail)
@@ -987,15 +987,15 @@
                                      (check-result :partial-fill/settlement-mode-valid
                                                    (if (empty? settlement-mode-valid-violations) :pass :fail)
                                                    {:violations settlement-mode-valid-violations}))
-           overlap-ch (future
-                        (check-result :partial-fill/deferred-haircut-overlap
-                                      (if (empty? deferred-haircut-overlap-violations) :pass :fail)
-                                      {:violations deferred-haircut-overlap-violations}))
-           deferred-haircut-sum-ch (future
-                                     (check-result :partial-fill/deferred-haircut-sum-bound
-                                                   (if (empty? deferred-haircut-sum-violations) :pass :fail)
-                                                   {:violations deferred-haircut-sum-violations}))
-           evidence-ch (future
+          overlap-ch (future
+                       (check-result :partial-fill/deferred-haircut-overlap
+                                     (if (empty? deferred-haircut-overlap-violations) :pass :fail)
+                                     {:violations deferred-haircut-overlap-violations}))
+          deferred-haircut-sum-ch (future
+                                    (check-result :partial-fill/deferred-haircut-sum-bound
+                                                  (if (empty? deferred-haircut-sum-violations) :pass :fail)
+                                                  {:violations deferred-haircut-sum-violations}))
+          evidence-ch (future
                         (check-result :partial-fill/evidence-self-consistency
                                       (if (empty? evidence-violations) :pass :fail)
                                       {:violations evidence-violations}))
@@ -1009,7 +1009,7 @@
                                              {:violations decision-artifact-violations}))]
       (mapv deref [conservation-ch capacity-ch per-claim-ch per-claim-conservation-ch
                    claim-key-ch non-negative-ch settlement-mode-ch settlement-mode-valid-ch
-                    mode-valid-ch overlap-ch deferred-haircut-sum-ch evidence-ch unrealized-ch artifact-format-ch
+                   mode-valid-ch overlap-ch deferred-haircut-sum-ch evidence-ch unrealized-ch artifact-format-ch
                    cross-product-ch rounding-fairness-ideal-ch rounding-remainder-ch
                    principal-first-ch waterfall-ch
                    residual-ch]))))

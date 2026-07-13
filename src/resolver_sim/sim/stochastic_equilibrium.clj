@@ -549,7 +549,7 @@
                             "punishment-loss=%.1f")
                        (if stable? "stable" "unstable")
                        discount-factor threshold
-                        deviation-gain punishment-loss)})))
+                       deviation-gain punishment-loss)})))
 
 ;; ---------------------------------------------------------------------------
 ;; Folk-theorem region detection
@@ -673,7 +673,7 @@
                            (pos? inc-count)     :inconclusive
                            :else                :pass)
         summary          (format "%d/%d claims pass (%d fail, %d inconclusive)"
-                                  pass-count (count claim-results) fail-count inc-count)]
+                                 pass-count (count claim-results) fail-count inc-count)]
     (merge
      {:claim-results       claim-results
       :grim-trigger        grim-trigger

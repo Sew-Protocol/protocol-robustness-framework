@@ -90,7 +90,7 @@
 
 (def equilibrium-concepts
   "Available equilibrium-concept validators across generic and Sew-specific."
-  [   {:id :dominant-strategy-equilibrium
+  [{:id :dominant-strategy-equilibrium
     :source :generic
     :title "Dominant strategy equilibrium"
     :summary "Every player has a single strategy that is optimal regardless of opponents' choices. (Single-trace metric proxy — use :empirical-strategy-dominance for bounded checks.)"}

@@ -99,7 +99,7 @@
   "Maps equilibrium property keywords to their validation class."
   {:incentive-compatibility       :validation.class/payoff-property
    :sybil-resistance              :validation.class/payoff-property
-    :dominant-strategy-equilibrium :validation.class/payoff-property
+   :dominant-strategy-equilibrium :validation.class/payoff-property
    :empirical-strategy-dominance :validation.class/payoff-property
    :nash-equilibrium              :validation.class/equilibrium
    :bounded-nash-diagnostic       :validation.class/equilibrium
@@ -505,7 +505,10 @@
    {:mechanism-results  {property-kw → result-map}
     :mechanism-status   :pass | :fail | :inconclusive | :not-applicable | :not-checked
     :equilibrium-results {concept-kw → result-map}
-    :equilibrium-status :pass | :fail | :inconclusive | :not-applicable | :not-checked}"
+    :equilibrium-status :pass | :fail | :inconclusive | :not-applicable | :not-checked
+    :equilibrium-result-strengths {concept-kw → :pass|:epsilon-pass|:profitable-deviation|:inconclusive|nil}
+                              Granular per-concept result strength, surfaced for research use
+                              (not collapsed by roll-up).  nil when absent from observed map.}"
   [theory result]
   (let [proto        (:protocol result)
         ;; Get projection from protocol's trace-projection if available; otherwise nil.
@@ -537,7 +540,11 @@
                                                        :trust-mode trust-mode
                                                        :explicit-valid-time? explicit-valid-time?
                                                        :attestation-status attestation-status})
-                       {})]
+                       {})
+        eq-result-strengths (into {}
+                                  (map (fn [[kw result]]
+                                         [kw (get-in result [:observed :result-strength])])
+                                       eq-results))]
     {:evidence-schema-version evidence-schema-version
      :equilibrium-claim-tier claim-tier
      :equilibrium-trust-mode trust-mode
@@ -546,6 +553,7 @@
      :mechanism-status   (roll-up-status (vals mech-results))
      :mechanism-reasons  (eq-result/domain-status-reasons mech-results)
      :equilibrium-results eq-results
+     :equilibrium-result-strengths eq-result-strengths
      :equilibrium-status  (roll-up-status (vals eq-results))
      :equilibrium-reasons (eq-result/domain-status-reasons eq-results)}))
 

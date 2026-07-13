@@ -23,8 +23,8 @@
     (let [members [{:resolver-id :r1 :net-payoff 100}
                    {:resolver-id :r2 :net-payoff 20}]
           result (tp/coalition-ev-from-payoff members
-                   :coordination-cost 5
-                   :side-payments [{:from :r1 :to :r2 :amount 15}])]
+                                              :coordination-cost 5
+                                              :side-payments [{:from :r1 :to :r2 :amount 15}])]
       (is (= 120 (:coalition-total result)))
       (is (= 115 (:net-of-costs result)))
       (is (= 85 (get-in (:member-payoffs result) [0 :after-side-payment])))
@@ -71,20 +71,20 @@
 (deftest budget-balance-check-passes
   (testing "budget-balance-check returns balanced? true when sum = 0"
     (let [result (tp/budget-balance-check [{:role :resolver :net 100}
-                                            {:role :protocol :net -100}])]
+                                           {:role :protocol :net -100}])]
       (is (true? (:balanced? result)))
       (is (= 0 (:imbalance result))))))
 
 (deftest budget-balance-check-fails
   (testing "budget-balance-check returns balanced? false when sum != 0"
     (let [result (tp/budget-balance-check [{:role :resolver :net 100}
-                                            {:role :protocol :net -50}])]
+                                           {:role :protocol :net -50}])]
       (is (false? (:balanced? result)))
       (is (= 50 (:imbalance result))))))
 
 (deftest budget-balance-check-with-epsilon
   (testing "budget-balance-check with epsilon tolerance"
     (let [result (tp/budget-balance-check [{:role :resolver :net 100}
-                                            {:role :protocol :net -99}]
-                   :epsilon 1)]
+                                           {:role :protocol :net -99}]
+                                          :epsilon 1)]
       (is (true? (:balanced? result))))))

@@ -70,7 +70,7 @@
     (let [resolvers [{:resolver-id :r1 :strategy :honest :net-payoff 100 :coalition-id :coll}
                      {:resolver-id :r2 :strategy :malicious :net-payoff 50 :coalition-id :coll}]
           result (e/coalition-aggregate-payoff resolvers :coll
-                   :coordination-cost-fn (fn [n] (* n 10)))]
+                                               :coordination-cost-fn (fn [n] (* n 10)))]
       (is (= 130 (:coalition-net result)))
       (is (= 20 (:coordination-cost result))))))
 

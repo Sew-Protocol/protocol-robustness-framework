@@ -10,8 +10,33 @@
    semantic property is proxied by invariant results from check-all.
 
    See benchmarks/DESIGN_CLAIM_VERIFICATION.md for maturity level definitions."
-  (:require [resolver-sim.io.resource-path :as rp]
+  (:require [resolver-sim.claims.engine :as evidence-claims]
+            [resolver-sim.definitions.passive-registries :as passive-registries]
+            [resolver-sim.io.resource-path :as rp]
             [resolver-sim.yield.partial-fill :as partial-fill]))
+
+;; ── Claim provenance bridge ───────────────────────────────────────────────────
+
+(defn claim-provenance
+  "Return passive-registry provenance for a benchmark claim when available.
+
+   Benchmark claims without a matching passive definition remain valid benchmark
+   catalogue entries, but are explicitly marked so reports do not imply a
+   hash-bound evidence-node definition."
+  [claim-id]
+  (if-let [definition (evidence-claims/claim-definition claim-id)]
+    {:claim/definition-source :passive-registry
+     :claim/definition-hash (:canonical-hash definition)
+     :claim/concept-hash (:concept-hash definition)
+     :claim/registry-version (:registry-version passive-registries/claim-definition-registry)
+     :claim/evidence-binding :benchmark-result}
+    {:claim/definition-source :benchmark-catalogue-only
+     :claim/registry-version (:registry-version passive-registries/claim-definition-registry)
+     :claim/evidence-binding :benchmark-result}))
+
+(defn- with-provenance
+  [claim-result]
+  (merge claim-result (claim-provenance (:claim/id claim-result))))
 
 ;; ── Claim ref normalization ───────────────────────────────────────────────────
 ;; Benchmark packs may declare claims as flat keywords or as maps with
@@ -606,27 +631,28 @@
    (let [scenario-result (:scenario/result context)
          scenario-fields (select-keys scenario-result
                                       [:scenario/id :simulator/scenario-path :file])]
-     (if-let [{:keys [scope check]} (evaluator-resolver claim-id)]
-       (let [{:keys [holds? violations outcome]} (check context)]
+     (with-provenance
+       (if-let [{:keys [scope check]} (evaluator-resolver claim-id)]
+         (let [{:keys [holds? violations outcome]} (check context)]
+           (merge {:claim/id claim-id
+                   :claim/outcome (or outcome (if holds? :pass :fail))
+                   :claim/severity severity
+                   :claim/evidence (mapv :type violations)}
+                  (when (= scope :scenario)
+                    {:claim/scope :scenario
+                     :scenario/id (:scenario/id scenario-fields)
+                     :scenario/file (:file scenario-fields)
+                     :simulator/scenario-path (:simulator/scenario-path scenario-fields)})))
          (merge {:claim/id claim-id
-                 :claim/outcome (or outcome (if holds? :pass :fail))
+                 :claim/outcome :not-implemented
                  :claim/severity severity
-                 :claim/evidence (mapv :type violations)}
-                (when (= scope :scenario)
+                 :claim/evidence []
+                 :claim/error (str "No evaluator registered for " claim-id)}
+                (when scenario-result
                   {:claim/scope :scenario
                    :scenario/id (:scenario/id scenario-fields)
                    :scenario/file (:file scenario-fields)
-                   :simulator/scenario-path (:simulator/scenario-path scenario-fields)})))
-       (merge {:claim/id claim-id
-               :claim/outcome :not-implemented
-               :claim/severity severity
-               :claim/evidence []
-               :claim/error (str "No evaluator registered for " claim-id)}
-              (when scenario-result
-                {:claim/scope :scenario
-                 :scenario/id (:scenario/id scenario-fields)
-                 :scenario/file (:file scenario-fields)
-                 :simulator/scenario-path (:simulator/scenario-path scenario-fields)}))))))
+                   :simulator/scenario-path (:simulator/scenario-path scenario-fields)})))))))
 
 (defn evaluate-manifest-claims
   "Evaluate all claims declared in a benchmark manifest against scenario results.

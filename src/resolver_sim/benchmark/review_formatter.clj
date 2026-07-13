@@ -63,6 +63,7 @@
         experimental? (= :experimental status)
         repo-meta (get-in bundle [:repo :repo])
         run-manifest (:run/manifest bundle)
+        artifact-index (:benchmark/artifact-index bundle)
         passed (or (:passed metrics) (count-status results :pass))
         total (or (:total metrics) (count results))]
     (str "# Benchmark Summary — " (title bundle) "\n\n"
@@ -88,6 +89,12 @@
                   (str "**Declared reason:** " reason "\n\n"))))
          "## What was evaluated\n\n"
          (or (:benchmark/purpose benchmark) (:benchmark/description benchmark) "No purpose was recorded in the bundle.") "\n\n"
+         (when artifact-index
+           (str "## Scenario evidence package\n\n"
+                "| Field | Value |\n|---|---|\n"
+                "| Artifact index | `" (:path artifact-index) "` |\n"
+                "| Artifact-index SHA-256 | `" (:sha256 artifact-index) "` |\n"
+                "| Per-execution packages | " (count results) " |\n\n"))
          "## Claim outcome summary\n\n"
          "| Outcome | Count |\n|---|---:|\n"
          (if (seq claims)
@@ -113,8 +120,8 @@
            (apply str
                   (for [[directory grouped] (sort-by key (group-by scenario-source-directory results))]
                     (str "## Source directory: `" directory "`\n\n"
-                         "| Scenario | Run | Outcome | Events | Halt reason | Evidence root |\n"
-                         "|---|---:|---|---:|---|---|\n"
+                         "| Scenario | Run | Outcome | Events | Halt reason | Evidence root | Artifact package |\n"
+                         "|---|---:|---|---:|---|---|---|\n"
                          (apply str
                                 (for [result (sort-by (juxt scenario-label :benchmark/run-index) grouped)]
                                   (str "| " (markdown-cell (scenario-label result))
@@ -122,7 +129,8 @@
                                        " | " (markdown-cell (:outcome result))
                                        " | " (markdown-cell (get-in result [:metrics :events-processed]))
                                        " | " (markdown-cell (:halt-reason result))
-                                       " | `" (short-hash (:scenario/evidence-root result)) "` |\n")))
+                                       " | `" (short-hash (:scenario/evidence-root result)) "`"
+                                       " | " (markdown-cell (get-in result [:scenario/artifacts :scenario/artifact-dir])) " |\n")))
                          "\n")))
            "_No scenario results were recorded in this bundle._\n"))))
 
@@ -133,20 +141,21 @@
     (str "# Claim Results\n\n"
          "> Claim outcomes are independent from scenario outcomes. `:not-exercised`, `:not-implemented`, and `:inconclusive` are not passes.\n\n"
          (if (seq claims)
-           (str "| Claim | Scope | Scenario | Outcome | Severity | Evidence / error |\n"
-                "|---|---|---|---|---|---|\n"
+           (str "| Claim | Scope | Scenario | Outcome | Definition provenance | Definition hash | Evidence / error |\n"
+                "|---|---|---|---|---|---|---|\n"
                 (apply str
                        (for [claim (sort-by (juxt (comp str :claim/id) (comp str :scenario/id)) claims)]
                          (let [detail (or (seq (:claim/evidence claim)) (:claim/error claim))]
                            (str "| " (markdown-cell (:claim/id claim))
                                 " | " (markdown-cell (:claim/scope claim))
                                 " | " (markdown-cell (or (:scenario/id claim)
-                                                           (:simulator/scenario-path claim)
-                                                           (:scenario/file claim)))
+                                                         (:simulator/scenario-path claim)
+                                                         (:scenario/file claim)))
                                 " | " (markdown-cell (:claim/outcome claim))
-                                " | " (markdown-cell (:claim/severity claim))
+                                " | " (markdown-cell (:claim/definition-source claim))
+                                " | `" (short-hash (:claim/definition-hash claim)) "`"
                                 " | " (markdown-cell detail) " |\n"))))
-           "_No evaluated claim results were recorded in this bundle._\n")))))
+                "_No evaluated claim results were recorded in this bundle._\n")))))
 
 (defn write-review!
   "Write reviewer Markdown files for an evidence bundle.

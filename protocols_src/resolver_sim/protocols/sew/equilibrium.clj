@@ -345,7 +345,7 @@
   (let [projection' (update projection :spe-config assoc :evaluation-mode :backward-induction)
         {:keys [status basis regret-table max-regret threshold checked-nodes requires
                 continuation-policy replay-boundary utility-spec
-                spe-result strategy-profile
+                spe-result result-strength strategy-profile
                 proper-subgames-checked information-set-nodes-checked not-checkable-nodes
                 counterexamples off-path-coverage epsilon-abs epsilon-rel
                 class-counts exceed-epsilon-count memoization regret-distribution
@@ -363,6 +363,7 @@
       (= status :pass)
       (pass eq-concept basis
             {:spe-result spe-result
+             :result-strength result-strength
              :spe-max-regret max-regret
              :spe-threshold threshold
              :spe-epsilon-abs epsilon-abs
@@ -383,6 +384,7 @@
       (= status :fail)
       (fail eq-concept basis
             {:spe-result spe-result
+             :result-strength result-strength
              :spe-max-regret max-regret
              :spe-threshold threshold
              :counterexamples counterexamples
@@ -415,7 +417,7 @@
                                       (fn [us] (merge us {:type :resolver-reputation-v1})))))
         {:keys [status basis regret-table max-regret threshold checked-nodes requires
                 continuation-policy replay-boundary utility-spec
-                spe-result strategy-profile
+                spe-result result-strength strategy-profile
                 proper-subgames-checked information-set-nodes-checked not-checkable-nodes
                 counterexamples off-path-coverage epsilon-abs epsilon-rel
                 class-counts exceed-epsilon-count memoization regret-distribution
@@ -435,6 +437,7 @@
       (= status :pass)
       (pass eq-concept basis
             {:spe-result spe-result
+             :result-strength result-strength
              :spe-max-regret max-regret
              :spe-threshold threshold
              :spe-epsilon-abs epsilon-abs
@@ -455,6 +458,7 @@
       (= status :fail)
       (fail eq-concept basis
             {:spe-result spe-result
+             :result-strength result-strength
              :spe-max-regret max-regret
              :spe-threshold threshold
              :counterexamples counterexamples
@@ -693,7 +697,7 @@
    :inconclusive when no cancel decisions were present in the trace (no data)."
   [projection]
   (let [{:keys [status basis regret-table max-regret threshold checked-nodes requires
-                spe-result strategy-profile proper-subgames-checked
+                spe-result result-strength strategy-profile proper-subgames-checked
                 information-set-nodes-checked not-checkable-nodes
                 counterexamples epsilon-abs epsilon-rel
                 class-counts exceed-epsilon-count memoization regret-distribution
@@ -718,7 +722,8 @@
 
       (pos? cancel-fail-count)
       (fail eq-concept evidence-basis
-            {:cancel-nodes-checked cancel-count
+            {:result-strength result-strength
+             :cancel-nodes-checked cancel-count
              :cancel-max-regret cancel-max-regret
              :cancel-fails (mapv #(select-keys % [:seq :agent :action-taken :chosen-utility
                                                    :max-alt-utility :local-regret])
@@ -739,7 +744,8 @@
 
       :else
       (pass eq-concept evidence-basis
-            {:cancel-nodes-checked cancel-count
+            {:result-strength result-strength
+             :cancel-nodes-checked cancel-count
              :cancel-max-regret cancel-max-regret
              :all-nodes-checked checked-nodes
              :strategy-profile strategy-profile

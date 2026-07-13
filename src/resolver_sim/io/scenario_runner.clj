@@ -591,7 +591,7 @@
   (let [report-format (or (:report-format opts) :table)
         silent?       (= :table report-format)
         summary       (io-fix/run-suite-from-key suite-key mode nil
-                                                  (assoc opts :silent? silent?))]
+                                                 (assoc opts :silent? silent?))]
     (if (= :table report-format)
       (report/print-report summary
                            (default-report-opts
@@ -1093,8 +1093,8 @@
                           (log-event :warn :dag-write-failed :error (.getMessage e))))
 
                       (let [output-path (or (:output-file dispatch)
-                                           (when (:output-dir dispatch)
-                                             (str (:output-dir dispatch) "/replay-output.json")))]
+                                            (when (:output-dir dispatch)
+                                              (str (:output-dir dispatch) "/replay-output.json")))]
                         (when output-path
                           (io/make-parents output-path)
                           (write-result-json output-path enriched-root)))
@@ -1104,13 +1104,13 @@
           ;; Top-level catch: produce minimal output on complete failure
             (catch Throwable t
               (log-event :error :run-failed :error (.getMessage t) :exception (str (class t)))
-               (let [minimal-root (build-minimal-error-root dispatch protocol-id source-provenance t)
-                     err-path (or (:output-file dispatch)
-                                  (when (:output-dir dispatch)
-                                    (str (:output-dir dispatch) "/replay-output.json")))]
-                 (when err-path
-                   (io/make-parents err-path)
-                   (write-result-json err-path minimal-root))
+              (let [minimal-root (build-minimal-error-root dispatch protocol-id source-provenance t)
+                    err-path (or (:output-file dispatch)
+                                 (when (:output-dir dispatch)
+                                   (str (:output-dir dispatch) "/replay-output.json")))]
+                (when err-path
+                  (io/make-parents err-path)
+                  (write-result-json err-path minimal-root))
                 {:exit-code 1
                  :bundle-root minimal-root
                  :execution-node nil}))))))))

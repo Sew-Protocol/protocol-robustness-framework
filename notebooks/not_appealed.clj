@@ -419,8 +419,8 @@
 ^{::clerk/visibility {:code :hide :result :show}}
 (clerk/md (let [{:keys [benchmark-id label passed? summary]} @f6-results]
             (str "**" label " (" benchmark-id ")** — "
-                 (if passed? "PASS" "FAIL")
-                 (when summary
+                 (if (true? passed?) "PASS" "FAIL")
+                 (when (and (true? passed?) summary)
                    (str " — pass rate: " (int (* 100 (:pass-rate summary 0))) "%"
                         " (" (:healthy-trials summary 0) "/" (:total-trials summary 0) " trials)")))))
 
@@ -433,8 +433,8 @@
 ^{::clerk/visibility {:code :hide :result :show}}
 (clerk/md (let [{:keys [benchmark-id label passed? summary]} @m3-results]
             (str "**" label " (" benchmark-id ")** — "
-                 (if passed? "PASS" "FAIL")
-                 (when summary
+                 (if (true? passed?) "PASS" "FAIL")
+                 (when (and (true? passed?) summary)
                    (str " — discouragement rate: " (int (* 100 (:discouraged-trials summary 0))) "%"
                         " (" (:discouraged-trials summary 0) "/" (:total-trials summary 0) " trials)")))))
 
@@ -492,6 +492,24 @@
 ;; --- 7b: Full appeal simulation ---
 
 ^{::clerk/visibility {:code :hide :result :hide}}
+(def ^:private simulation-ground-truth
+  "Correct decision for the simulated dispute (buyer is honest)."
+  true)
+
+^{::clerk/visibility {:code :hide :result :hide}}
+(def ^:private simulation-resolver-corruption
+  "Per-round resolver corruption flags: [r0-honest? r1-corrupt? r2-corrupt?].
+   All honest — no corruption modeled in this simulation."
+  [true false false])
+
+^{::clerk/visibility {:code :hide :result :hide}}
+(def ^:private simulation-time-pressures
+  "Per-round time pressure multipliers: [factor-r0 factor-r1 factor-r2].
+   Lower = more time available. 0.3 (r0) reflects tight initial deadline;
+   0.2 (r2) models unlimited Kleros review."
+  [0.3 0.4 0.2])
+
+^{::clerk/visibility {:code :hide :result :hide}}
 (defn- run-full-appeal-sims
   "Run simulate-full-appeal under different conditions."
   []
@@ -501,10 +519,10 @@
     (for [diff difficulties
           ev evidence-levels]
       (let [res (dq/simulate-full-appeal
-                 rng true
-                 [true false false]
-                 [0.3 0.4 0.2]
-                 diff ev)]
+                  rng simulation-ground-truth
+                  simulation-resolver-corruption
+                  simulation-time-pressures
+                  diff ev)]
         {:difficulty diff
          :evidence-quality ev
          :final-decision (:final-decision res)

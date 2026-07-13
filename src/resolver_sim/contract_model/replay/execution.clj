@@ -530,8 +530,8 @@
                                                                        (and alias-key new-id) (assoc alias-key new-id)
                                                                        (and agent-alias-key new-agent-id) (assoc agent-alias-key new-agent-id))))
                                               (update :trace conj entry)
-                                               (assoc :metrics (metrics/accum-metrics protocol (:metrics acc) event entry agent-index working-world metrics-profile))
-                                               (assoc :states (assoc (:states acc) (:seq event) (proto/world-snapshot protocol new-world)))
+                                              (assoc :metrics (metrics/accum-metrics protocol (:metrics acc) event entry agent-index working-world metrics-profile))
+                                              (assoc :states (assoc (:states acc) (:seq event) (proto/world-snapshot protocol new-world)))
                                               (assoc :world-checkpoints (assoc (:world-checkpoints acc) (:seq event) working-world)))))))))
                               {:world base-world
                                :trace trace

@@ -119,11 +119,12 @@
                  :old-resolver old-resolver
                  :new-resolver new-resolver
                  :idempotent? true))
-        (let [rotation {:from old-resolver :to new-resolver :at (time-ctx/block-ts world)}
-              world'   (-> world
-                           (assoc-in [:escrow-transfers workflow-id :dispute-resolver]
-                                     new-resolver)
-                           (update-in [:resolver-rotations workflow-id]
+          (let [rotation {:from old-resolver :to new-resolver :at (time-ctx/block-ts world)}
+               world'   (-> world
+                            (assoc-in [:escrow-transfers workflow-id :dispute-resolver]
+                                      new-resolver)
+                            (update-in [:escrow-settings workflow-id] dissoc :custom-resolver)
+                            (update-in [:resolver-rotations workflow-id]
                                       (fnil conj []) rotation)
                            (t/decrement-resolver-capacity old-resolver)
                            (t/increment-resolver-capacity new-resolver))]

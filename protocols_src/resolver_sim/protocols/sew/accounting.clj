@@ -84,7 +84,9 @@
    :resolver-slash-custody-debited {:held/account :resolver-slash-custody
                                      :scope-keys [:held/resolver :held/workflow-id]}
    :partial-fill-principal-loss {:held/account :escrow-principal
-                                 :scope-keys [:held/workflow-id]}})
+                                 :scope-keys [:held/workflow-id]}
+   :yield-negative-excess {:held/account :escrow-principal
+                           :scope-keys [:held/workflow-id]}})
 
 (defn- validate-held-inputs!
   [token amount]

@@ -116,12 +116,21 @@ The task descriptions in `bb.edn` are authoritative for arguments and side effec
 After running a benchmark, create a human-readable companion package without modifying the authoritative EDN bundle:
 
 ```bash
-bb benchmark:review results/evidence/latest.edn send-to-ef/03-active-benchmark
+bb benchmark:run --non-interactive \
+  :benchmark/prf-deterministic-replay-v1 \
+  --output send-to-ef/03-active-benchmark/evidence-bundle.edn \
+  --scenario-output-dir send-to-ef/03-active-benchmark/scenarios
+
+bb benchmark:review \
+  send-to-ef/03-active-benchmark/evidence-bundle.edn \
+  send-to-ef/03-active-benchmark
 ```
 
 The formatter writes `BENCHMARK_SUMMARY.md`, `scenario-results.md`, and
-`claim-results.md`. It shows benchmark executions rather than assuming each row
-is a unique scenario, and it labels source-directory grouping as non-semantic.
+`claim-results.md`. When `--scenario-output-dir` is supplied, it also links each
+execution to its isolated raw replay and evidence package. The formatter shows
+benchmark executions rather than assuming each row is a unique scenario, and it
+labels source-directory grouping as non-semantic.
 
 ## Optional local services
 

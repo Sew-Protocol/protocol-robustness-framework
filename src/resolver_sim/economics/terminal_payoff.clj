@@ -175,26 +175,26 @@
         include-capital? (:include-capital-cost? assumptions)
         include-effort? (:include-effort-cost? assumptions)
         _components [(fee-component fee-wei fee-retained?)
-                      (bond-component bond-wei bond-returned? bond-slashed?)
-                      (when (and bond-slashed? (pos? slash-amount))
-                        (slash-component slash-amount :resolver :protocol))
-                      (when appeal-filed?
-                        (appeal-cost-component appeal-cost-wei :resolver))
-                      (when (and (pos? fraud-upside-wei) (pos? fraud-success-rate))
-                        (fraud-gain-component
-                          (long (* fraud-upside-wei fraud-success-rate))
-                          capturable?))
-                      (when (and (not verdict-correct?) (pos? detection-prob))
-                        (slash-component
-                          (long (* slash-amount detection-prob))
-                          :resolver :protocol))
-                      (when include-capital?
-                        (capital-cost-component
-                          (econ/calculate-fee (* bond-wei (:capital-cost-rate-bps assumptions))
-                                             10000)
-                          locked-duration-seconds))
-                      (when include-effort?
-                        (effort-cost-component (:effort-cost-wei assumptions)))]
+                     (bond-component bond-wei bond-returned? bond-slashed?)
+                     (when (and bond-slashed? (pos? slash-amount))
+                       (slash-component slash-amount :resolver :protocol))
+                     (when appeal-filed?
+                       (appeal-cost-component appeal-cost-wei :resolver))
+                     (when (and (pos? fraud-upside-wei) (pos? fraud-success-rate))
+                       (fraud-gain-component
+                        (long (* fraud-upside-wei fraud-success-rate))
+                        capturable?))
+                     (when (and (not verdict-correct?) (pos? detection-prob))
+                       (slash-component
+                        (long (* slash-amount detection-prob))
+                        :resolver :protocol))
+                     (when include-capital?
+                       (capital-cost-component
+                        (econ/calculate-fee (* bond-wei (:capital-cost-rate-bps assumptions))
+                                            10000)
+                        locked-duration-seconds))
+                     (when include-effort?
+                       (effort-cost-component (:effort-cost-wei assumptions)))]
         components (vec (remove nil? _components))]
     {:resolver-id resolver-id
      :components components
@@ -209,8 +209,8 @@
    Delegates to `resolver-payoff` with honest-appropriate assumptions."
   [fee-wei appeal-prob-if-correct]
   (let [payoff (resolver-payoff :honest-resolver fee-wei 0 1 0
-                                 true false false
-                                 0 0.0 0.0 0)]
+                                true false false
+                                0 0.0 0.0 0)]
     (:net payoff)))
 
 (defn malicious-ev-from-payoff
@@ -220,9 +220,9 @@
    & {:keys [fraud-upside fraud-success-rate]
       :or {fraud-upside 0 fraud-success-rate 0.0}}]
   (let [payoff (resolver-payoff :malicious-resolver fee-wei 0 1 0
-                                 false false false
-                                 fraud-upside fraud-success-rate detection-prob
-                                 0)]
+                                false false false
+                                fraud-upside fraud-success-rate detection-prob
+                                0)]
     (:net payoff)))
 
 (defn lazy-ev-from-payoff
@@ -256,9 +256,9 @@
         fraud-success-rate 0.5  ;; collusion increases fraud success
         fraud-upside (* fee-wei gain-rate)
         payoff (resolver-payoff :collusive-resolver fee-wei 0 1 0
-                                 false false false
-                                 fraud-upside fraud-success-rate effective-detection
-                                 0)]
+                                false false false
+                                fraud-upside fraud-success-rate effective-detection
+                                0)]
     (:net payoff)))
 
 ;; ---------------------------------------------------------------------------
@@ -348,9 +348,9 @@
                           (long high)
                           (let [mid (/ (+ low high) 2.0)
                                 malicious (malicious-ev-from-payoff
-                                            fee-wei (long mid) detection-prob
-                                            :fraud-upside fraud-upside
-                                            :fraud-success-rate fraud-success-rate)
+                                           fee-wei (long mid) detection-prob
+                                           :fraud-upside fraud-upside
+                                           :fraud-success-rate fraud-success-rate)
                                 honest (honest-ev-from-payoff fee-wei 0.0)]
                             (if (>= (- honest malicious) 0)
                               (recur low mid)
@@ -366,16 +366,16 @@
    Returns {:min-detection N :parameters {...}}.
    Uses binary search over [0.0, 1.0]."
   [fee-wei bond-wei & {:keys [fraud-upside fraud-success-rate precision]
-                        :or {fraud-upside 0, fraud-success-rate 0.0, precision 0.001}}]
+                       :or {fraud-upside 0, fraud-success-rate 0.0, precision 0.001}}]
   (let [det-search (fn []
                      (loop [low 0.0 high 1.0]
                        (if (< (- high low) precision)
                          (double high)
                          (let [mid (/ (+ low high) 2.0)
                                malicious (malicious-ev-from-payoff
-                                           fee-wei bond-wei mid
-                                           :fraud-upside fraud-upside
-                                           :fraud-success-rate fraud-success-rate)
+                                          fee-wei bond-wei mid
+                                          :fraud-upside fraud-upside
+                                          :fraud-success-rate fraud-success-rate)
                                honest (honest-ev-from-payoff fee-wei 0.0)]
                            (if (>= (- honest malicious) 0)
                              (recur low mid)
@@ -473,8 +473,8 @@
                       {:label "malicious with fraud"
                        :fn #(econ/malicious-expected-value 100 50 0.2 500 0.3)
                        :canonical-fn #(malicious-ev-from-payoff 100 50 0.2
-                                                               :fraud-upside 500
-                                                               :fraud-success-rate 0.3)}
+                                                                :fraud-upside 500
+                                                                :fraud-success-rate 0.3)}
                       {:label "lazy base"
                        :fn #(econ/lazy-expected-value 100 0.8 0.3 0.5)
                        :canonical-fn #(lazy-ev-from-payoff 100 0.8 0.3 0.5)}

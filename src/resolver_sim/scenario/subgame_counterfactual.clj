@@ -696,7 +696,12 @@
    Returns:
    {:status                :pass|:fail|:inconclusive  (backward-compat)
     :spe-result            :spe/pass|...              (Phase H rich vocab)
-    :result-strength       :pass|:epsilon-pass|:profitable-deviation|:inconclusive
+    :result-strength       One of:
+                           :pass                   — all evaluated nodes within epsilon bounds; no caveats
+                           :epsilon-pass           — all nodes pass but some exceeded epsilon thresholds
+                           :profitable-deviation   — at least one node has positive regret exceeding threshold;
+                                                     a profitable deviation exists
+                           :inconclusive           — zero evaluated-count; insufficient evidence to assess
     :basis                 kw
     :regret-table          [...]
     :max-regret            n

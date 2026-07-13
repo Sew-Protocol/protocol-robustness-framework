@@ -14,7 +14,11 @@
           {:seq 9 :time 1200 :agent "keeper" :action "execute_pending_settlement" :params {:workflow-id 1}}
           {:seq 10 :time 4700 :agent "keeper" :action "set_resolver_unavailable" :params {:resolver "0xresolver1" :unavailable? false}}
           {:seq 11 :time 4700 :agent "keeper" :action "set_resolver_unavailable" :params {:resolver "0xresolver2" :unavailable? false}}
-          {:seq 12 :time 4701 :agent "buyer3" :action "raise_dispute" :params {:workflow-id 2}}]
+           {:seq 12 :time 4701 :agent "buyer3" :action "raise_dispute" :params {:workflow-id 2}}
+           {:seq 13 :time 4800 :agent "resolver1" :action "execute_resolution" :params {:workflow-id 0 :is-release true :resolution-hash "0xhash"}}
+           {:seq 14 :time 4900 :agent "keeper" :action "execute_pending_settlement" :params {:workflow-id 0}}
+           {:seq 15 :time 4901 :agent "resolver1" :action "execute_resolution" :params {:workflow-id 2 :is-release true :resolution-hash "0xhash"}}
+           {:seq 16 :time 5000 :agent "keeper" :action "execute_pending_settlement" :params {:workflow-id 2}}]
  :schema-version "1.0"
  :scenario-title "Circuit breaker recovery — unavailable resolvers, cooldown passes, breaker deactivates, dispute succeeds"
  :scenario-author "@kilo-research"

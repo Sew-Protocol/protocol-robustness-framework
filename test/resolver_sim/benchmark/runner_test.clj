@@ -12,6 +12,30 @@
             [clojure.edn :as edn]
             [clojure.string :as str]))
 
+(deftest scenario-output-packages-are-isolated-per-execution
+  (let [root (doto (java.io.File/createTempFile "benchmark-artifacts-" "")
+               (.delete)
+               (.mkdirs))
+        scenario-file (java.io.File. root "S03_dr3-dispute-refund.edn")
+        _ (spit scenario-file "{:scenario-id \"S03\"}")
+        run-1 (#'runner/execution-output-dir (.getPath root) scenario-file 1)
+        run-2 (#'runner/execution-output-dir (.getPath root) scenario-file 2)]
+    (try
+      (testing "each replay index receives a distinct deterministic directory"
+        (is (not= run-1 run-2))
+        (is (.endsWith run-1 "S03_dr3-dispute-refund/run-1"))
+        (is (.endsWith run-2 "S03_dr3-dispute-refund/run-2")))
+      (testing "a package retains input, raw result, and execution summary"
+        (let [package (#'runner/write-execution-package!
+                       run-1 scenario-file {:protocol "sew-v1"}
+                       {:outcome :pass :events-processed 3})]
+          (is (.exists (java.io.File. (:scenario/input-path package))))
+          (is (.exists (java.io.File. (:scenario/replay-output package))))
+          (is (.exists (java.io.File. (:scenario/summary package))))))
+      (finally
+        (doseq [file (reverse (file-seq root))]
+          (.delete file))))))
+
 (deftest test-hashing-determinism
   (testing "Identical data produces identical hashes"
     (let [data {:a 1 :b [1 2 3] :c {:d "foo"}}

@@ -85,7 +85,7 @@
                   (let [ns-str (when (keyword? k) (namespace k))]
                     (when (and ns-str
                                (not (contains? #{nil "suite" "protocol" "state" "authority"
-                                                  "threshold" "actor" "token" "minimize"} ns-str)))
+                                                 "threshold" "actor" "token" "minimize"} ns-str)))
                       (throw (ex-info "Unrecognized fixture namespace keyword"
                                       {:key k :namespace ns-str})))
                     (assoc m k (if (contains? #{:suite/id :protocol/id :state/id :authority/id :threshold/id :actor/id :token/id :protocol-params-ref} k)
@@ -263,33 +263,33 @@
                                             :source        :fixture}
                                            runner-opts)
                                theory-res-for-golden (get-in base-entry [:checks :theory :result])
-                                report (generate-golden-report (:suite/id suite) trace-id res
-                                                               {:theory-res theory-res-for-golden
-                                                                :theory-decl (:theory trace)})
-                                comparison (when (= mode :verify)
-                                             (compare-golden-report (:suite/id suite)
-                                                                    {:trace-id trace-id :golden-report report}
-                                                                    {:golden-verify-mode golden-verify-mode}))]
-                            (when (= mode :save)
-                              (save-golden-report (:suite/id suite) {:trace-id trace-id :golden-report report}))
-                            (scenario-runner/finalize-fixture-entry
-                             base-entry
-                             {:expected-outcome     expected-outcome
-                              :expected-halt-reason expected-halt-reason
-                              :threshold-validation threshold-validation
-                              :golden-comparison    comparison
-                              :golden-report        report
-                              :metrics              (:metrics res)
-                              :trace-id             trace-id
-                              :scenario-author      (:scenario-author trace)
-                              :purpose              (:purpose trace)
-                              :theory-source        (:theory trace)}
-                             runner-opts)))
-                        traces)
-          elapsed-ms (- (System/currentTimeMillis) t0)
-          suite-result (scenario-summary/build-summary results
-                                                       {:suite-id           (:suite/id suite)
-                                                        :golden-verify-mode golden-verify-mode})
+                               report (generate-golden-report (:suite/id suite) trace-id res
+                                                              {:theory-res theory-res-for-golden
+                                                               :theory-decl (:theory trace)})
+                               comparison (when (= mode :verify)
+                                            (compare-golden-report (:suite/id suite)
+                                                                   {:trace-id trace-id :golden-report report}
+                                                                   {:golden-verify-mode golden-verify-mode}))]
+                           (when (= mode :save)
+                             (save-golden-report (:suite/id suite) {:trace-id trace-id :golden-report report}))
+                           (scenario-runner/finalize-fixture-entry
+                            base-entry
+                            {:expected-outcome     expected-outcome
+                             :expected-halt-reason expected-halt-reason
+                             :threshold-validation threshold-validation
+                             :golden-comparison    comparison
+                             :golden-report        report
+                             :metrics              (:metrics res)
+                             :trace-id             trace-id
+                             :scenario-author      (:scenario-author trace)
+                             :purpose              (:purpose trace)
+                             :theory-source        (:theory trace)}
+                            runner-opts)))
+                       traces)
+         elapsed-ms (- (System/currentTimeMillis) t0)
+         suite-result (scenario-summary/build-summary results
+                                                      {:suite-id           (:suite/id suite)
+                                                       :golden-verify-mode golden-verify-mode})
          expectations-by-trace-id (into {}
                                         (keep (fn [{:keys [trace]}]
                                                 (when-let [id (:scenario-id trace)]
@@ -346,10 +346,10 @@
                      :reduction            (- (count (:events effective-trace))
                                               (count (:events minimized)))
                      :minimized-trace      minimized})))))
-      {:suite-id         (:suite/id suite)
-       :target-invariant target-invariant
-       :minimized-count  (count @results)
-       :results          @results})))
+     {:suite-id         (:suite/id suite)
+      :target-invariant target-invariant
+      :minimized-count  (count @results)
+      :results          @results})))
 
 ;; ──────────────────────────────────────────────────────────────────────────────
 ;; MC batch runner: drives scenario protocol-params → stochastic batch analysis

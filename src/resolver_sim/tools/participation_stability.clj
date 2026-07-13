@@ -249,8 +249,8 @@
        {:status          :pass
         :evaluation-mode :classified
         :reason          (format "classified check: honest-exit-rate=%.1f%% (≤%.0f%%), productive-exit-rate=%.1f%% (≤%.0f%%)"
-                                (* 100 (or h-rate 0)) (* 100 h-threshold)
-                                (* 100 (or prod-rate 0)) (* 100 p-threshold))
+                                 (* 100 (or h-rate 0)) (* 100 h-threshold)
+                                 (* 100 (or prod-rate 0)) (* 100 p-threshold))
         :evidence        (merge passthrough
                                 {:honest-exit-rate             h-rate
                                  :productive-exit-rate         prod-rate
@@ -271,8 +271,8 @@
        {:status          :fail
         :evaluation-mode :classified
         :reason          (format "classified check: honest-exit-rate=%.1f%% (limit %.0f%%), productive-exit-rate=%.1f%% (limit %.0f%%)"
-                                (* 100 (or h-rate 0)) (* 100 h-threshold)
-                                (* 100 (or prod-rate 0)) (* 100 p-threshold))
+                                 (* 100 (or h-rate 0)) (* 100 h-threshold)
+                                 (* 100 (or prod-rate 0)) (* 100 p-threshold))
         :evidence        (merge passthrough
                                 {:honest-exit-rate             h-rate
                                  :productive-exit-rate         prod-rate
@@ -315,7 +315,7 @@
        {:status          :pass
         :evaluation-mode :fallback
         :reason          (format "classified data unavailable; fallback: aggregate-exit-rate=%.1f%% < %.0f%% (retention floor %.0f%%)"
-                                (* 100 agg-rate) (* 100 threshold) (* 100 retention-floor))
+                                 (* 100 agg-rate) (* 100 threshold) (* 100 retention-floor))
         :evidence        (merge passthrough
                                 {:aggregate-fallback-threshold threshold
                                  :retention-floor              retention-floor
@@ -332,7 +332,7 @@
        {:status          :fail
         :evaluation-mode :fallback
         :reason          (format "classified data unavailable; fallback: aggregate-exit-rate=%.1f%% ≥ %.0f%% (retention floor %.0f%%)"
-                                (* 100 agg-rate) (* 100 threshold) (* 100 retention-floor))
+                                 (* 100 agg-rate) (* 100 threshold) (* 100 retention-floor))
         :evidence        (merge passthrough
                                 {:aggregate-fallback-threshold threshold
                                  :retention-floor              retention-floor

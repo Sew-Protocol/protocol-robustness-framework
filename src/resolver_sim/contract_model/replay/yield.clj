@@ -115,18 +115,18 @@
         :halt-reason (:error validation)
         :detail (:detail validation)
         :protocol protocol}
-           (let [agents      (:agents scenario)
-                 p-params    (get scenario :protocol-params {})
-                 scenario-id (:scenario-id scenario)
-                 run-id (or (:run-id scenario) (str scenario-id "-run"))
-                 context     (-> (proto/build-execution-context protocol agents p-params)
-                                 (assoc :replay-flags yield-replay-flags
-                                        :run-id run-id))
-                 world0      (-> (proto/init-world protocol scenario)
-                                 (assoc-in [:params :scenario-id] scenario-id))
-                 events      (:events scenario)]
-             (log/info! "yield-replay/start" {:id scenario-id})
-             (let [raw (run-yield-loop protocol context scenario-id events world0)]
+       (let [agents      (:agents scenario)
+             p-params    (get scenario :protocol-params {})
+             scenario-id (:scenario-id scenario)
+             run-id (or (:run-id scenario) (str scenario-id "-run"))
+             context     (-> (proto/build-execution-context protocol agents p-params)
+                             (assoc :replay-flags yield-replay-flags
+                                    :run-id run-id))
+             world0      (-> (proto/init-world protocol scenario)
+                             (assoc-in [:params :scenario-id] scenario-id))
+             events      (:events scenario)]
+         (log/info! "yield-replay/start" {:id scenario-id})
+         (let [raw (run-yield-loop protocol context scenario-id events world0)]
            (log/info! "yield-replay/end" {:id scenario-id :outcome (:outcome raw)})
            (let [result (analysis/finalize-scenario-result scenario raw yield-replay-flags)]
              (assoc result :risk-events (risk/events)))))))))

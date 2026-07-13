@@ -10,11 +10,11 @@
             [resolver-sim.community.report :as report]
             [resolver-sim.community.result :as result]
             [resolver-sim.evidence.chain :as chain]
-             [resolver-sim.evidence.node :as ev-node]
-             [resolver-sim.benchmark.runner :as runner]
-             [resolver-sim.graph.export :as gex]
-             [resolver-sim.vcs :as vcs]
-             [resolver-sim.hash.canonical :as hc]))
+            [resolver-sim.evidence.node :as ev-node]
+            [resolver-sim.benchmark.runner :as runner]
+            [resolver-sim.graph.export :as gex]
+            [resolver-sim.vcs :as vcs]
+            [resolver-sim.hash.canonical :as hc]))
 
 (declare compute-code-hash compute-env-hash compute-registry-hash)
 
@@ -366,9 +366,9 @@
             (let [passed? (= (get-in evidence [:metrics :passed])
                              (get-in evidence [:metrics :total]))
                   claimed-stable-hash (get-in original-att [:assertion :result-projection-hash])
-                   bundle-root (:evidence/hash evidence)
-                   repro-proj (result/project-stable-result evidence)
-                   repro-hash (:stable/hash repro-proj)
+                  bundle-root (:evidence/hash evidence)
+                  repro-proj (result/project-stable-result evidence)
+                  repro-hash (:stable/hash repro-proj)
                   matched? (and claimed-stable-hash (= repro-hash claimed-stable-hash))
                   comp-status (if matched? :matched :mismatched)]
               (println (str "Original stable hash: " claimed-stable-hash))

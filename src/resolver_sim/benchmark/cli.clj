@@ -78,6 +78,7 @@
 (def cli-options
   [["-o" "--output PATH" "Output path for evidence bundle"
     :default "results/evidence/latest.edn"]
+   [nil "--scenario-output-dir DIR" "Write isolated evidence packages for each benchmark scenario execution"]
    ["-k" "--key PATH" "Path to private key for signing/attesting"]
    ["-p" "--password PASS" "Password for private key"]
    ["-v" "--verify" "Verify evidence bundle integrity and signature"]
@@ -200,8 +201,10 @@
                         :else default-benchmark-manifest)
         _ (println "Running benchmark:" manifest-path)]
     (try
-      (let [evidence ((requiring-resolve 'resolver-sim.benchmark.runner/run-benchmark)
-                      manifest-path)
+      (let [run-benchmark (requiring-resolve 'resolver-sim.benchmark.runner/run-benchmark)
+            default-adapter (requiring-resolve 'resolver-sim.benchmark.runner/default-adapter)
+            evidence (run-benchmark manifest-path @default-adapter
+                                    {:scenario-output-dir (:scenario-output-dir options)})
             output-path (:output options)
             final-evidence (if-let [key-path (:key options)]
                              (let [sig (signing/sign-hash (:evidence/hash evidence) key-path (:password options))
@@ -451,6 +454,8 @@
         (println "Flags:")
         (println "  -l, --list          List available benchmarks")
         (println "  -o, --output PATH   Output path for evidence bundle")
+        (println "      --scenario-output-dir DIR")
+        (println "                       Write isolated per-execution evidence packages")
         (println "  -k, --key PATH      Path to private key")
         (println "  -v, --verify        Verify evidence bundle")
         (println "  -H, --hash-only     Compute hash of evidence bundle")

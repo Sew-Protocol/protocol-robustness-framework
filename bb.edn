@@ -785,7 +785,7 @@ cli-args (cond-> ["-M:run:with-sew" "--invariants" "--scenario" scenario]
                                     bps
                                     "))")))}
 
-  benchmark:run {:doc "Run a benchmark manifest and generate evidence bundle. Usage: bb benchmark:run [manifest-path|id] [-o output-path]"
+  benchmark:run {:doc "Run a benchmark manifest and generate evidence bundle. Usage: bb benchmark:run [manifest-path|id] [-o output-path] [--scenario-output-dir dir]"
                  :task (apply clojure "-M:with-sew" "-m" "resolver-sim.benchmark.cli" *command-line-args*)}
 
   benchmark:reproduce {:doc "Reproduce a benchmark run from evidence bundle. Usage: bb benchmark:reproduce <evidence-path>"

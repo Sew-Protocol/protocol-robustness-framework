@@ -350,12 +350,12 @@
           total-checks (count all-verdicts)
           verified (count (filter #{:verified} all-verdicts))
           violated (count (filter #{:violated} all-verdicts))]
-       {:artifact/kind :strategic-closed-form-validation
-        :mechanism :yield/partial-fill
-        :contract-id contract-id
-         :validation-scope (assoc {:dimensions (:dimensions scope)
-                                   :sampling (:sampling scope)}
-                                  :states-examined @state-count)
+      {:artifact/kind :strategic-closed-form-validation
+       :mechanism :yield/partial-fill
+       :contract-id contract-id
+       :validation-scope (assoc {:dimensions (:dimensions scope)
+                                 :sampling (:sampling scope)}
+                                :states-examined @state-count)
        :properties (->> (mapcat :checks @results)
                         (group-by :property)
                         (mapv (fn [[prop results]]
@@ -368,7 +368,7 @@
                                                               (filter #(= :violated (:verdict %)))
                                                               (take 2)
                                                               (mapcat :counterexamples)
-                                                               (take 3))})))
+                                                              (take 3))})))
        :summary {:states-examined @state-count
                  :properties-examined (count (distinct (mapcat (fn [r] (map :property (:checks r))) @results)))
                  :total-checks total-checks

@@ -109,10 +109,10 @@
    "S-DR-090-circuit-breaker-recovery"
    "S-DR-091-unavailable-resolver-mid-dispute"
    "S-DR-092-automate-timed-actions"
-    "S-DR-093-evidence-during-freeze"
-    "S-DR-094-evidence-at-capacity"
-    "S-DR-095-evidence-after-settlement-attempt-rejected"
-    "S-DR-096-evidence-forking-strategist-combined"])
+   "S-DR-093-evidence-during-freeze"
+   "S-DR-094-evidence-at-capacity"
+   "S-DR-095-evidence-after-settlement-attempt-rejected"
+   "S-DR-096-evidence-forking-strategist-combined"])
 
 (def ^:private sew-reference-scenario-paths
   "Curated reference scenarios for external verifier reproducibility.

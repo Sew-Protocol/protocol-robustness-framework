@@ -6,6 +6,21 @@
 (def deterministic-replay-manifest
   (edn/read-string (slurp "benchmarks/packs/prf-core/deterministic-replay-v1.edn")))
 
+(deftest benchmark-claim-provenance-is-explicit
+  (testing "unmapped benchmark claims do not imply passive-registry provenance"
+    (is (= {:claim/definition-source :benchmark-catalogue-only
+            :claim/registry-version 1
+            :claim/evidence-binding :benchmark-result}
+           (claims/claim-provenance :claim/replay-identical-results))))
+  (testing "matching passive definitions carry their canonical identity"
+    (let [provenance (with-redefs [resolver-sim.claims.engine/claim-definition
+                                   (fn [_] {:canonical-hash "definition-hash"
+                                            :concept-hash "concept-hash"})]
+                       (claims/claim-provenance :claim/example))]
+      (is (= :passive-registry (:claim/definition-source provenance)))
+      (is (= "definition-hash" (:claim/definition-hash provenance)))
+      (is (= "concept-hash" (:claim/concept-hash provenance))))))
+
 (deftest prf-replay-claims-have-registered-evaluators
   (testing "all declared PRF replay claims resolve to benchmark evaluators"
     (doseq [claim-id [:claim/replay-identical-results

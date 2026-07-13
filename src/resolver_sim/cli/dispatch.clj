@@ -34,18 +34,18 @@
              :run-scenario          (requiring-resolve 'resolver-sim.commands.scenario/run)
              :run-invariants        (requiring-resolve 'resolver-sim.commands.invariants/run)
              :run-benchmark         (requiring-resolve 'resolver-sim.commands.run-benchmark/run)
-              :fmt-check             (requiring-resolve 'resolver-sim.commands.validate/fmt-check)
-              :lint                  (requiring-resolve 'resolver-sim.commands.validate/lint)
-              :run-simulation        (requiring-resolve 'resolver-sim.commands.run-simulation/run)
-              :community-task-list   (requiring-resolve 'resolver-sim.commands.community/task-list)
-              :community-task-show   (requiring-resolve 'resolver-sim.commands.community/task-show)
-              :community-task-register (requiring-resolve 'resolver-sim.commands.community/task-register)
-              :community-task-run    (requiring-resolve 'resolver-sim.commands.community/task-run)
-              :community-task-reproduce (requiring-resolve 'resolver-sim.commands.community/task-reproduce)
-              :community-task-verify (requiring-resolve 'resolver-sim.commands.community/task-verify)
-              :community-task-report (requiring-resolve 'resolver-sim.commands.community/task-report)
-              :community-graph-export (requiring-resolve 'resolver-sim.commands.community/graph-export)
-              :community-mailbox-clear (requiring-resolve 'resolver-sim.commands.community/mailbox-clear)}))
+             :fmt-check             (requiring-resolve 'resolver-sim.commands.validate/fmt-check)
+             :lint                  (requiring-resolve 'resolver-sim.commands.validate/lint)
+             :run-simulation        (requiring-resolve 'resolver-sim.commands.run-simulation/run)
+             :community-task-list   (requiring-resolve 'resolver-sim.commands.community/task-list)
+             :community-task-show   (requiring-resolve 'resolver-sim.commands.community/task-show)
+             :community-task-register (requiring-resolve 'resolver-sim.commands.community/task-register)
+             :community-task-run    (requiring-resolve 'resolver-sim.commands.community/task-run)
+             :community-task-reproduce (requiring-resolve 'resolver-sim.commands.community/task-reproduce)
+             :community-task-verify (requiring-resolve 'resolver-sim.commands.community/task-verify)
+             :community-task-report (requiring-resolve 'resolver-sim.commands.community/task-report)
+             :community-graph-export (requiring-resolve 'resolver-sim.commands.community/graph-export)
+             :community-mailbox-clear (requiring-resolve 'resolver-sim.commands.community/mailbox-clear)}))
   @handler-cache)
 
 ;; ---------------------------------------------------------------------------
@@ -185,7 +185,7 @@
             sub-parsed (cli/parse-opts raw-opts cli-options)
             merged-opts (merge options (:options sub-parsed))
             resolved (resolve-command cmd-path)]
-          (if resolved
+        (if resolved
           (let [[cmd-id cmd-args] resolved
                 handler-var (get (get-command-handlers) cmd-id)]
             (if handler-var

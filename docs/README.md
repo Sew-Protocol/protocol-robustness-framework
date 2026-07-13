@@ -19,6 +19,7 @@ Primary project framing and status live in the root `../README.md`.
 | Capability and coverage status | `overview/CAPABILITY_STATUS.md` |
 | Local services and persistence | `operations/LOCAL_SERVICES.md` |
 | Generated-document workflow | `reference/GENERATED_DOCUMENTS.md` |
+| Registry ownership, validation, and change rules | `reference/REGISTRIES.md` |
 | Runnable and visual examples | `../examples/README.md` |
 
 ## Specifications
@@ -103,6 +104,7 @@ Primary project framing and status live in the root `../README.md`.
 | `architecture/SYSTEM_CONTEXT_AND_RUNTIME_TOPOLOGY.md` | Execution surfaces, runtime boundaries, artifacts, CI, and external integrations |
 | `architecture/BENCHMARK_EXECUTION_ARCHITECTURE.md` | Benchmark manifests, replay, claims, bundles, signing, reporting, and portability |
 | `architecture/ARTIFACT_LIFECYCLE_ARCHITECTURE.md` | Source baselines, generated output, evidence finalization, and CI artifact retention |
+| `architecture/CLAIMS_AND_REGISTRY_ARCHITECTURE.md` | Claim semantics, evaluator paths, dependencies, registry boundaries, and auditability |
 | `architecture/ADAPTER_AUTHORING_GUIDE.md` | How to implement a protocol adapter |
 | `architecture/DECISION_FRAMEWORK.md` | Confidence-level calibration for reviewers |
 | `architecture/framework-boundaries.md` | Framework / adapter / Sew / research track boundaries |
@@ -211,6 +213,7 @@ Primary project framing and status live in the root `../README.md`.
 | `reference/CODEBASE_INDEX.md` | Codebase file index |
 | `reference/scenario-run-report.md` | Scenario run report format |
 | `reference/GENERATED_DOCUMENTS.md` | Generated-document sources, regeneration, and checks |
+| `reference/REGISTRIES.md` | Operational catalogue of protocol, command, scenario, benchmark, semantic, and evidence registries |
 | `../schemas/README.md` | Machine-readable schema catalog |
 | `operations/LOCAL_SERVICES.md` | Local XTDB and forensic-runner operational guidance |
 

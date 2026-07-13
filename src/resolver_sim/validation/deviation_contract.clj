@@ -92,7 +92,7 @@
   [deviations]
   (let [dev-set (set deviations)]
     (filter (fn [c] (seq (clojure.set/intersection dev-set
-                                                    (set (:deviation-generators c)))))
+                                                   (set (:deviation-generators c)))))
             (vals registered-contracts))))
 
 (defn deviations-in-contract

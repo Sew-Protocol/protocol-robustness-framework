@@ -955,10 +955,24 @@
                                               :reason :yield-accrued
                                               :extra {:held/workflow-id workflow-id}})
                               (neg? yield-delta)
-                              (acct/sub-held tok (- yield-delta)
-                                             {:action "yield-accrual"
-                                              :reason :yield-accrued
-                                              :extra {:held/workflow-id workflow-id}}))
+                              ((fn [w]
+                                 (let [deduct-amount (- yield-delta)
+                                       pos-id [:held/position tok :yield-custody workflow-id]
+                                       held-balance (or (get-in w [:held-ledger/index :by-position pos-id])
+                                                        0)
+                                       yield-deduct (min deduct-amount held-balance)
+                                       excess-deduct (- deduct-amount yield-deduct)]
+                                   (-> w
+                                       (cond-> (pos? yield-deduct)
+                                         (acct/sub-held tok yield-deduct
+                                                        {:action "yield-accrual"
+                                                         :reason :yield-accrued
+                                                         :extra {:held/workflow-id workflow-id}}))
+                                       (cond-> (pos? excess-deduct)
+                                         (acct/sub-held tok excess-deduct
+                                                        {:action "yield-accrual"
+                                                         :reason :yield-negative-excess
+                                                         :extra {:held/workflow-id workflow-id}})))))))
                     world''' (-> world''
                                 (assoc-in [:escrow-transfers workflow-id :last-accrual-time] now)
                                 (assoc-in [:escrow-transfers workflow-id :accumulated-yield] (+ unrealized-after realized-after)))]

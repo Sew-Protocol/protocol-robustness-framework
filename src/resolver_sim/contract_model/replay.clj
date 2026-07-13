@@ -210,44 +210,44 @@
    (chain/with-fresh-registry
      (chain/with-fresh-chain-cursor
        (risk/with-fresh-risk-context
-          (let [result (replay-events protocol scenario replay-opts)]
-            (if (= :invalid (:outcome result))
-              result
-              (let [run-id (get-in result [:context/source :run-id])
-                    scenario-id (or (:scenario-id result)
-                                    (get-in result [:context/source :scenario-id]))]
-                (attr/with-attribution
-                  {:ctx/scenario-id scenario-id
-                   :ctx/run-id run-id}
-                  (attr/log-with-attr :info "scenario/start" {:id scenario-id}))
-                (when-let [theory (:diagnostics result)]
-                  (try
-                    (let [f (io/file (evcfg/artifact-path :theory-eval))]
-                      (.mkdirs (.getParentFile f))
-                      (spit f (json/write-str theory {:indent true})))
-                    (catch Exception e
-                      (log/warn! :theory-diagnostics-write-failed
-                                 {:path (evcfg/artifact-path :theory-eval)
-                                  :error (.getMessage e)}))))
-                (when-not (:skip-finalize replay-opts)
-                  (let [signing-key (or (:signing-key replay-opts)
-                                        chain/*signing-key*
-                                        (System/getenv "PRF_SIGNING_KEY"))
-                        signing-pw (or (:signing-password replay-opts)
-                                       chain/*signing-password*
-                                       (System/getenv "PRF_SIGNING_PASSWORD"))
-                        tsa-url (or (:tsa-url replay-opts)
-                                    ts/*tsa-url*
-                                    (System/getenv "PRF_TSA_URL"))
-                        allow-dirty? (:allow-dirty? replay-opts)]
-                    (chain/finalize-and-attest!
-                     :run-id run-id
-                     :private-key-path signing-key
-                     :password signing-pw
-                     :tsa-url tsa-url
-                     :allow-dirty? allow-dirty?)))
-                (chain/register-scenario-snapshot!)
-                (assoc result :risk-events (risk/events))))))))))
+         (let [result (replay-events protocol scenario replay-opts)]
+           (if (= :invalid (:outcome result))
+             result
+             (let [run-id (get-in result [:context/source :run-id])
+                   scenario-id (or (:scenario-id result)
+                                   (get-in result [:context/source :scenario-id]))]
+               (attr/with-attribution
+                 {:ctx/scenario-id scenario-id
+                  :ctx/run-id run-id}
+                 (attr/log-with-attr :info "scenario/start" {:id scenario-id}))
+               (when-let [theory (:diagnostics result)]
+                 (try
+                   (let [f (io/file (evcfg/artifact-path :theory-eval))]
+                     (.mkdirs (.getParentFile f))
+                     (spit f (json/write-str theory {:indent true})))
+                   (catch Exception e
+                     (log/warn! :theory-diagnostics-write-failed
+                                {:path (evcfg/artifact-path :theory-eval)
+                                 :error (.getMessage e)}))))
+               (when-not (:skip-finalize replay-opts)
+                 (let [signing-key (or (:signing-key replay-opts)
+                                       chain/*signing-key*
+                                       (System/getenv "PRF_SIGNING_KEY"))
+                       signing-pw (or (:signing-password replay-opts)
+                                      chain/*signing-password*
+                                      (System/getenv "PRF_SIGNING_PASSWORD"))
+                       tsa-url (or (:tsa-url replay-opts)
+                                   ts/*tsa-url*
+                                   (System/getenv "PRF_TSA_URL"))
+                       allow-dirty? (:allow-dirty? replay-opts)]
+                   (chain/finalize-and-attest!
+                    :run-id run-id
+                    :private-key-path signing-key
+                    :password signing-pw
+                    :tsa-url tsa-url
+                    :allow-dirty? allow-dirty?)))
+               (chain/register-scenario-snapshot!)
+               (assoc result :risk-events (risk/events))))))))))
 
 (defn replay-yield-scenario
   "Thin sequential replay for `yield-v1` (see `replay.yield`)."

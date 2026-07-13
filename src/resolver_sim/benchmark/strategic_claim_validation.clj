@@ -7,7 +7,7 @@
    - level-scoped checks
    - replayable evidence references
    - explicit coverage gaps"
-   (:require [clojure.data.json :as json]
+  (:require [clojure.data.json :as json]
             [clojure.java.io :as io]
             [clojure.string :as str]
             [resolver-sim.benchmark.runner :as runner]
@@ -271,10 +271,10 @@
                                 (map #(assoc % :scenario/id (:scenario/id match)) (or ws []))))
                             matched-scenarios)
           integrity-gate (gate/evaluate-integrity-gate
-                           level-checks
-                           :witnesses witnesses
-                           :required-mechanisms (when (= :allocation/partial-fill level)
-                                                  (set (keep :fill-mode witnesses))))
+                          level-checks
+                          :witnesses witnesses
+                          :required-mechanisms (when (= :allocation/partial-fill level)
+                                                 (set (keep :fill-mode witnesses))))
           not-exercised? (some #(= :not-exercised (:status %)) level-checks)
           ;; Require at least one exercised partial-fill decision when checking
           ;; partial-fill allocation properties
@@ -288,17 +288,17 @@
           uncovered-reason (when (or not-exercised?
                                      (and (= :allocation/partial-fill level)
                                           (not partial-fill-exercised?)))
-                              (if not-exercised?
-                                :no-partial-fill-decision-artifacts
-                                :no-exercised-partial-fill))]
+                             (if not-exercised?
+                               :no-partial-fill-decision-artifacts
+                               :no-exercised-partial-fill))]
       {:mechanism-level level
-        :verdict verdict
-        :integrity-gate integrity-gate
-        :uncovered-reason uncovered-reason
-        :scenario-ids scenario-ids
-        :witnesses (vec witnesses)
-        :check-results (vec level-checks)
-        :evidence-references (vec (mapcat :evidence-references matched-scenarios))})))
+       :verdict verdict
+       :integrity-gate integrity-gate
+       :uncovered-reason uncovered-reason
+       :scenario-ids scenario-ids
+       :witnesses (vec witnesses)
+       :check-results (vec level-checks)
+       :evidence-references (vec (mapcat :evidence-references matched-scenarios))})))
 
 (defn- strategic-claim-artifact
   [claim-spec manifest evidence]
@@ -351,19 +351,19 @@
         ;; Evaluate economic-model gate using upstream integrity verdicts
         combined-integrity (first integrity-verdicts)
         economic-model-gate (gate/evaluate-economic-model-gate
-                              (or combined-integrity {:gate :integrity :verdict :pass})
-                              all-check-results
-                              :assumptions {:claim-id (:claim/id claim-spec)})
+                             (or combined-integrity {:gate :integrity :verdict :pass})
+                             all-check-results
+                             :assumptions {:claim-id (:claim/id claim-spec)})
         ;; Strategic gate — currently collects deviation-resistance results
         ;; from available level-verdict properties. As strategic checks
         ;; (split/merge/sybil etc.) are integrated into the claim pipeline,
         ;; their results will feed into this gate automatically.
         strategic-gate (gate/evaluate-strategic-gate
-                         economic-model-gate
-                         (mapcat :properties level-verdicts)
-                         []
-                         :contract-id nil
-                         :scope {:mechanism-levels (:mechanism-levels claim-spec)})]
+                        economic-model-gate
+                        (mapcat :properties level-verdicts)
+                        []
+                        :contract-id nil
+                        :scope {:mechanism-levels (:mechanism-levels claim-spec)})]
     {:artifact/kind artifact-kind
      :artifact/version artifact-version
      :claim/id (:claim/id claim-spec)
@@ -375,32 +375,32 @@
      :matched-scenarios matched-scenarios
      :level-verdicts level-verdicts
      :coverage-gaps coverage-gaps
-      :gates {:integrity (first integrity-verdicts)
-              :economic-model economic-model-gate
-              :strategic strategic-gate}
-      :gates-summary (let [integrity-v (get (first integrity-verdicts) :verdict :pass)
-                           economic-v (:verdict economic-model-gate)
-                           strategic-v (:verdict strategic-gate)]
-                       (cond
-                         (= :blocked integrity-v) :integrity-blocked
-                         (= :blocked economic-v) :economic-model-blocked
-                         (= :blocked strategic-v) :strategic-blocked
-                         (= :violated strategic-v) :strategic-violated
-                         :else :all-pass))
-      :summary {:matched-scenario-count (count matched-scenarios)
-                :passed-level-count passed-level-count
-                :failed-level-count failed-level-count
-                :uncovered-level-count uncovered-level-count
-                :gates-blocked? (some #(= :blocked (:verdict %))
+     :gates {:integrity (first integrity-verdicts)
+             :economic-model economic-model-gate
+             :strategic strategic-gate}
+     :gates-summary (let [integrity-v (get (first integrity-verdicts) :verdict :pass)
+                          economic-v (:verdict economic-model-gate)
+                          strategic-v (:verdict strategic-gate)]
+                      (cond
+                        (= :blocked integrity-v) :integrity-blocked
+                        (= :blocked economic-v) :economic-model-blocked
+                        (= :blocked strategic-v) :strategic-blocked
+                        (= :violated strategic-v) :strategic-violated
+                        :else :all-pass))
+     :summary {:matched-scenario-count (count matched-scenarios)
+               :passed-level-count passed-level-count
+               :failed-level-count failed-level-count
+               :uncovered-level-count uncovered-level-count
+               :gates-blocked? (some #(= :blocked (:verdict %))
                                      [(first integrity-verdicts)
                                       economic-model-gate
                                       strategic-gate])
-                :valid? (and (zero? failed-level-count)
-                             (zero? uncovered-level-count)
-                             (not (some #(= :blocked (:verdict %))
-                                        [(first integrity-verdicts)
-                                         economic-model-gate
-                                         strategic-gate])))}}))
+               :valid? (and (zero? failed-level-count)
+                            (zero? uncovered-level-count)
+                            (not (some #(= :blocked (:verdict %))
+                                       [(first integrity-verdicts)
+                                        economic-model-gate
+                                        strategic-gate])))}}))
 
 (defn- valid-coverage-gap?
   [gap]

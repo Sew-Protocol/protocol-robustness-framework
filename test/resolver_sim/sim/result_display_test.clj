@@ -136,7 +136,7 @@
 
 (deftest run-suite-return-map-excludes-display-only-keys
   (let [result (fixtures/run-suite-from-key :suites/equivalence-escalation-boundaries
-                                   nil nil {:silent? true})]
+                                            nil nil {:silent? true})]
     (is (map? result))
     (is (contains? result :ok?))
     (is (contains? result :results))

@@ -123,7 +123,7 @@
             :assumptions map
             :blocked-reason nil | string}"
   [integrity-verdict check-results & {:keys [assumptions]
-                                       :or {assumptions {}}}]
+                                      :or {assumptions {}}}]
   (if (= :blocked (:verdict integrity-verdict))
     {:gate :economic-model
      :verdict :blocked
@@ -227,15 +227,15 @@
   [integrity-checks economic-checks strategic-deviation-results strategic-equilibrium-results
    & {:keys [witnesses required-mechanisms assumptions contract-id scope]}]
   (let [integrity (evaluate-integrity-gate integrity-checks
-                    :witnesses witnesses
-                    :required-mechanisms required-mechanisms)
+                                           :witnesses witnesses
+                                           :required-mechanisms required-mechanisms)
         economic (evaluate-economic-model-gate integrity economic-checks
-                   :assumptions assumptions)
+                                               :assumptions assumptions)
         strategic (evaluate-strategic-gate economic
-                    strategic-deviation-results
-                    strategic-equilibrium-results
-                    :contract-id contract-id
-                    :scope scope)
+                                           strategic-deviation-results
+                                           strategic-equilibrium-results
+                                           :contract-id contract-id
+                                           :scope scope)
         verdicts [(:verdict integrity) (:verdict economic) (:verdict strategic)]
         ;; Weakest verdict wins
         overall (cond

@@ -423,7 +423,7 @@
               :flow-total-bond-loss       (get result-accumulator :total-bond-loss 0)
               :flow-total-fraud-upside    (get result-accumulator :total-fraud-upside 0)
               :coalition-net-profit       (let [hp (if (seq h-profits) (double (apply + h-profits)) 0.0)
-                                                 mp (if (seq m-profits) (double (apply + m-profits)) 0.0)]
+                                                mp (if (seq m-profits) (double (apply + m-profits)) 0.0)]
                                             (- mp hp))})
 
 ;; Legacy equity-only trajectories (backward compat)

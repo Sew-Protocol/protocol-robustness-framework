@@ -296,19 +296,19 @@
                         c (get coords (:node/id node))]
                   :when c]
               (str "  <g>\n"
-                    "    <rect x=\"" (:x c) "\" y=\"" (:y c) "\""
-                    " width=\"" (:w c) "\" height=\"" (:h c) "\""
-                    " rx=\"6\" ry=\"6\""
-                    " fill=\"" color "\" fill-opacity=\"0.12\""
-                    " stroke=\"" color "\" stroke-width=\"1.2\"/>\n"
-                    "    <text x=\"" (+ (:x c) 12) "\" y=\"" (+ (:y c) 18) "\""
-                    " fill=\"" color "\" font-size=\"11\" font-weight=\"600\""
-                    " font-family=\"system-ui,-apple-system,sans-serif\">"
-                    label "</text>\n"
-                    "    <text x=\"" (+ (:x c) 12) "\" y=\"" (+ (:y c) 33) "\""
-                    " fill=\"#64748B\" font-size=\"9\""
-                    " font-family=\"JetBrains Mono,monospace\">"
-                    nid "</text>\n"
+                   "    <rect x=\"" (:x c) "\" y=\"" (:y c) "\""
+                   " width=\"" (:w c) "\" height=\"" (:h c) "\""
+                   " rx=\"6\" ry=\"6\""
+                   " fill=\"" color "\" fill-opacity=\"0.12\""
+                   " stroke=\"" color "\" stroke-width=\"1.2\"/>\n"
+                   "    <text x=\"" (+ (:x c) 12) "\" y=\"" (+ (:y c) 18) "\""
+                   " fill=\"" color "\" font-size=\"11\" font-weight=\"600\""
+                   " font-family=\"system-ui,-apple-system,sans-serif\">"
+                   label "</text>\n"
+                   "    <text x=\"" (+ (:x c) 12) "\" y=\"" (+ (:y c) 33) "\""
+                   " fill=\"#64748B\" font-size=\"9\""
+                   " font-family=\"JetBrains Mono,monospace\">"
+                   nid "</text>\n"
                    "  </g>\n")))
      ;; Legend
      "<g transform=\"translate(20, " (- svg-height 80) ")\">\n"
@@ -472,9 +472,9 @@
      "\n"
      "nodeGroup.append('rect')\n"
      "  .attr('width', function(d) { return Math.max(80, d.label.length * 6.5); })\n"
-      "  .attr('height', 26)\n"
-      "  .attr('x', function(d) { return -Math.max(80, d.label.length * 6.5) / 2; })\n"
-      "  .attr('y', -13)\n"
+     "  .attr('height', 26)\n"
+     "  .attr('x', function(d) { return -Math.max(80, d.label.length * 6.5) / 2; })\n"
+     "  .attr('y', -13)\n"
      "  .attr('rx', 4)\n"
      "  .attr('ry', 4)\n"
      "  .attr('fill', function(d) { return colors[d.group] || colors[4]; })\n"
@@ -482,14 +482,14 @@
      "  .attr('stroke', function(d) { return colors[d.group] || colors[4]; })\n"
      "  .attr('stroke-width', 1.2);\n"
      "\n"
-      "nodeGroup.append('text')\n"
-      "  .text(function(d) { return d.label; })\n"
-      "  .attr('text-anchor', 'middle')\n"
-      "  .attr('dy', 4)\n"
-      "  .attr('fill', function(d) { return colors[d.group] || colors[4]; })\n"
-      "  .attr('font-size', 10)\n"
-      "  .attr('font-weight', 600)\n"
-      "  .attr('font-family', 'system-ui, -apple-system, sans-serif');\n"
+     "nodeGroup.append('text')\n"
+     "  .text(function(d) { return d.label; })\n"
+     "  .attr('text-anchor', 'middle')\n"
+     "  .attr('dy', 4)\n"
+     "  .attr('fill', function(d) { return colors[d.group] || colors[4]; })\n"
+     "  .attr('font-size', 10)\n"
+     "  .attr('font-weight', 600)\n"
+     "  .attr('font-family', 'system-ui, -apple-system, sans-serif');\n"
      "\n"
      "// Tooltip\n"
      "var tooltip = d3.select('#tooltip');\n"
@@ -498,7 +498,7 @@
      "  .on('mouseenter', function(event, d) {\n"
      "    tooltip\n"
      "      .classed('show', true)\n"
-      "      .html('<div class=\"tt-label\">' + d.label + '</div><div class=\"tt-id\">' + d.shortId + '</div><div class=\"tt-detail\">' + d.id + '</div>')\n"
+     "      .html('<div class=\"tt-label\">' + d.label + '</div><div class=\"tt-id\">' + d.shortId + '</div><div class=\"tt-detail\">' + d.id + '</div>')\n"
      "      .style('left', (event.offsetX + 12) + 'px')\n"
      "      .style('top', (event.offsetY - 10) + 'px');\n"
      "  })\n"
@@ -583,15 +583,15 @@
                                                                    (get-in n [:node/kind] "unknown")))
                                       :runner (name (get-in n [:node/data :runner] "unknown"))
                                       :timestamp (get-in n [:node/data :timestamp] "")
-:parentHashes (vec (mapv str (get-in n [:node/data :parent-hashes]
+                                      :parentHashes (vec (mapv str (get-in n [:node/data :parent-hashes]
                                                                            (:parent-hashes n []))))}
-                                      (dissoc (:node/data n) :status :parent-hashes))]
+                                     (dissoc (:node/data n) :status :parent-hashes))]
                       {:id node-id
                        :type "evidenceNode"
                        :position {:x (double (:x c 0))
                                   :y (double (:y c 0))}
                        :data node-data}))
-                    nodes)
+                  nodes)
      :edges (mapv (fn [e]
                     (let [from (str (:edge/from e))
                           to (str (:edge/to e))]
@@ -663,9 +663,9 @@
      ".react-flow__controls-button { background: #0F172A !important; border-bottom: 1px solid #1E293B !important; fill: #94A3B8 !important; }\n"
      ".react-flow__controls-button:hover { background: #1E293B !important; }\n"
      ".react-flow__minimap { border: 1px solid #1E293B !important; border-radius: 6px !important; overflow: hidden; }\n"
-      ".react-flow__edge-path { stroke: #334155 !important; stroke-width: 2 !important; }\n"
-      ".react-flow__edge.selected .react-flow__edge-path { stroke: #7ADDDC !important; stroke-width: 2.5 !important; }\n"
-      ".react-flow__edge.animated .react-flow__edge-path { stroke-dasharray: 6 4; stroke: #7ADDDC !important; stroke-width: 2.5 !important; }\n"
+     ".react-flow__edge-path { stroke: #334155 !important; stroke-width: 2 !important; }\n"
+     ".react-flow__edge.selected .react-flow__edge-path { stroke: #7ADDDC !important; stroke-width: 2.5 !important; }\n"
+     ".react-flow__edge.animated .react-flow__edge-path { stroke-dasharray: 6 4; stroke: #7ADDDC !important; stroke-width: 2.5 !important; }\n"
      ".react-flow__edge-text { font-size: 9px !important; fill: #64748B !important; font-family: 'JetBrains Mono', monospace !important; }\n"
      ".react-flow__node { cursor: pointer !important; }\n"
      "</style>\n"
@@ -675,29 +675,29 @@
      "<script crossorigin src=\"https://unpkg.com/react@18.3.1/umd/react.production.min.js\"></script>\n"
      "<script crossorigin src=\"https://unpkg.com/react-dom@18.3.1/umd/react-dom.production.min.js\"></script>\n"
      "<script crossorigin src=\"https://unpkg.com/reactflow@11.11.4/dist/umd/index.js\"></script>\n"
-      "<script>\n"
-      "// React Flow UMD globals\n"
-      "var RF = window.ReactFlow;\n"
-      "var RFReactFlow = RF.ReactFlow, Background = RF.Background, Controls = RF.Controls, MiniMap = RF.MiniMap, useNodesState = RF.useNodesState, useEdgesState = RF.useEdgesState, MarkerType = RF.MarkerType;\n"
-      "\n"
-      "// Data\n"
-      "var initialData = " json-str ";\n"
+     "<script>\n"
+     "// React Flow UMD globals\n"
+     "var RF = window.ReactFlow;\n"
+     "var RFReactFlow = RF.ReactFlow, Background = RF.Background, Controls = RF.Controls, MiniMap = RF.MiniMap, useNodesState = RF.useNodesState, useEdgesState = RF.useEdgesState, MarkerType = RF.MarkerType;\n"
+     "\n"
+     "// Data\n"
+     "var initialData = " json-str ";\n"
      "var layerColors = ['#1A73E8','#34A853','#FBBC04','#8B5CF6','#9CA3AF'];\n"
      "var statusStyles = {'pass':'#34A853','fail':'#EA4335','error':'#FBBC04'};\n"
      "\n"
      "// Custom node component\n"
-      "function EvidenceNode({ data, selected }) {\n"
-      "  var color = layerColors[data.layer] || layerColors[4];\n"
-      "  var badgeBg = statusStyles[data.status] || '#9CA3AF';\n"
-      "  var badgeChar = data.status === 'pass' ? '\\u2713' : data.status === 'fail' ? '\\u2717' : '\\u25B3';\n"
-      "  var selStyle = selected ? { outline: '2px solid ' + color, outlineOffset: 2, boxShadow: '0 0 14px ' + color + '66' } : {};\n"
-      "  return React.createElement('div', {\n"
-      "    style: Object.assign({\n"
-      "      background: color + '1A', border: '1.5px solid ' + (selected ? color : color + '88'),\n"
-      "      borderRadius: 6, padding: '6px 10px', minWidth: 120,\n"
-      "      fontFamily: 'system-ui,-apple-system,sans-serif', transition: 'box-shadow 0.15s, border-color 0.15s'\n"
-      "    }, selStyle)\n"
-      "  },\n"
+     "function EvidenceNode({ data, selected }) {\n"
+     "  var color = layerColors[data.layer] || layerColors[4];\n"
+     "  var badgeBg = statusStyles[data.status] || '#9CA3AF';\n"
+     "  var badgeChar = data.status === 'pass' ? '\\u2713' : data.status === 'fail' ? '\\u2717' : '\\u25B3';\n"
+     "  var selStyle = selected ? { outline: '2px solid ' + color, outlineOffset: 2, boxShadow: '0 0 14px ' + color + '66' } : {};\n"
+     "  return React.createElement('div', {\n"
+     "    style: Object.assign({\n"
+     "      background: color + '1A', border: '1.5px solid ' + (selected ? color : color + '88'),\n"
+     "      borderRadius: 6, padding: '6px 10px', minWidth: 120,\n"
+     "      fontFamily: 'system-ui,-apple-system,sans-serif', transition: 'box-shadow 0.15s, border-color 0.15s'\n"
+     "    }, selStyle)\n"
+     "  },\n"
      "    React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: 6, marginBottom: 2 } },\n"
      "      React.createElement('span', { style: { display: 'inline-block', width: 14, height: 14, lineHeight: '14px', textAlign: 'center', borderRadius: 3, fontSize: 10, fontWeight: 700, background: badgeBg, color: '#fff' } }, badgeChar),\n"
      "      React.createElement('span', { style: { color: color, fontSize: 12, fontWeight: 600, lineHeight: 1.2 } }, data.label)\n"
@@ -851,17 +851,17 @@
   ([graph-projection metadata out-dir {:keys [pretty-print?]
                                        :or {pretty-print? true}}]
    (let [artifact (build-graph-evidence-artifact graph-projection metadata)
-          svg (graph->svg artifact)
-          d3-data (graph->d3-data artifact)
-          d3-html (graph->d3-html artifact)
-          rf-html (graph->react-flow-html artifact)
-          out (io/file out-dir)
-          _ (.mkdirs out)
-          indent (if pretty-print? true false)
-          write-json (fn [filename data]
-                       (let [f (io/file out filename)]
-                         (spit f (clojure.data.json/write-str data {:indent indent}))
-                         (.getPath f)))]
+         svg (graph->svg artifact)
+         d3-data (graph->d3-data artifact)
+         d3-html (graph->d3-html artifact)
+         rf-html (graph->react-flow-html artifact)
+         out (io/file out-dir)
+         _ (.mkdirs out)
+         indent (if pretty-print? true false)
+         write-json (fn [filename data]
+                      (let [f (io/file out filename)]
+                        (spit f (clojure.data.json/write-str data {:indent indent}))
+                        (.getPath f)))]
      {:svg-path (let [f (io/file out "evidence-graph.svg")]
                   (spit f svg)
                   (.getPath f))
@@ -968,11 +968,11 @@
                   label (str (name kind) " [" (name status) "]")
                   parent-hashes (vec (:parent-hashes node []))
                   data {:execution-id (get-in node [:execution :execution-id])
-                         :runner (get-in node [:execution :runner])
-                         :status status
-                         :timestamp (get-in node [:timestamp] "")
-                         :parent-hashes parent-hashes
-                         :extensions (get node :extensions {})}]
+                        :runner (get-in node [:execution :runner])
+                        :status status
+                        :timestamp (get-in node [:timestamp] "")
+                        :parent-hashes parent-hashes
+                        :extensions (get node :extensions {})}]
               (swap! nodes conj {:node/id node-id
                                  :node/label label
                                  :node/short-id short-id

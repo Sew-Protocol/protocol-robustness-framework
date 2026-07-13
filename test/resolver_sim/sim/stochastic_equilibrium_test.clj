@@ -387,11 +387,11 @@
   (testing "Missing some per-strategy classified keys falls back to aggregate"
     (let [result {:initial-resolver-count 100
                   :aggregated-stats {:total-resolver-exits 10
-                                    :final-resolver-count 90
-                                    :honest-exit-count 2
+                                     :final-resolver-count 90
+                                     :honest-exit-count 2
                                     ;; intentionally omit :lazy-exit-count,
                                     ;; :malicious-exit-count, :collusive-exit-count
-                                    }}
+                                     }}
           report (sut/evaluate-stochastic-equilibrium result)
           claim (some #(when (= :participation-stable (:claim-id %)) %) (:claim-results report))]
       (is (= :fallback (get-in claim [:evidence :evaluation-mode]))
