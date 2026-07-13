@@ -16,10 +16,10 @@
             [resolver-sim.contract-model.replay.validation :as validation]
             [resolver-sim.contract-model.replay.analysis :as analysis]
             [resolver-sim.contract-model.replay.temporal :as temporal]
-            [resolver-sim.contract-model.replay.yield :as yield-replay]
             [resolver-sim.contract-model.replay.flags :as replay-flags]
             [resolver-sim.contract-model.replay.checkpoints :as replay-checkpoints]
             [resolver-sim.contract-model.replay.execution :as execution]
+            [resolver-sim.contract-model.replay.profile-adapter :as profile-adapter]
             [resolver-sim.protocols.protocol :as proto]
             [resolver-sim.protocols.registry :as preg]
             [resolver-sim.util.attribution :as attr]
@@ -143,7 +143,10 @@
   (execution/trace-entry->replay-event entry))
 
 (defn replay-events
-  "Replay a scenario and return trace + metrics without evidence chain or I/O.
+  "Pure canonical scenario computation.
+
+   Returns trace + metrics without evidence chain, I/O, signing, or risk monitoring.
+   Callers (e.g. `replay-with-protocol`) add those layers externally.
 
    Accepts optional opts map — passed through to `resolve-replay-flags`:
    - :flags   — replay flag overrides (see `replay.flags`)
@@ -151,10 +154,7 @@
    - :run-id  — identifier for the replay run
 
    Returns the full simulation result including :trace, :metrics, :outcome,
-   and (when `:evaluate-expectations?` is true) expectation and theory analysis.
-
-   This is a pure computation — no evidence chain, no I/O, no risk monitoring.
-   Callers (e.g. `replay-with-protocol`) add those layers externally."
+   and (when `:evaluate-expectations?` is true) expectation and theory analysis."
   [protocol scenario & [opts]]
   (let [flags              (replay-flags/resolve-replay-flags scenario opts)
         vocab              (if (satisfies? proto/EconomicModel protocol)
@@ -199,12 +199,12 @@
           trimmed-result)))))
 
 (defn replay-with-protocol
-  "Replay a scenario map using tiered protocol implementations.
+  "Full replay plus evidence-chain, persistence, signing, timestamping and
+   risk-monitor integration.
 
+   Layers evidence chain, I/O, and risk monitoring on top of `replay-events`.
    Optional third argument `replay-opts` may include `:flags` (see `replay.flags`).
-   Scenario `:options {:minimal true}` or `:options {:flags {...}}` merge the same way.
-
-   Layers evidence chain, I/O, and risk monitoring on top of `replay-events`."
+   Scenario `:options {:minimal true}` or `:options {:flags {...}}` merge the same way."
   ([protocol scenario] (replay-with-protocol protocol scenario {}))
   ([protocol scenario replay-opts]
    (chain/with-fresh-registry
@@ -247,32 +247,105 @@
                     :tsa-url tsa-url
                     :allow-dirty? allow-dirty?)))
                (chain/register-scenario-snapshot!)
-               (assoc result :risk-events (risk/events))))))))))
+                (assoc result :risk-events (risk/events))))))))))
 
 (defn replay-yield-scenario
-  "Thin sequential replay for `yield-v1` (see `replay.yield`)."
-  ([scenario] (yield-replay/replay-yield-scenario scenario))
-  ([protocol scenario] (yield-replay/replay-yield-scenario protocol scenario)))
+  "INTERNAL COMPATIBILITY ADAPTER — delegates to replay.yield/replay-yield-scenario.
+
+   This is a thin bridge for existing callers that imported replay-yield-scenario
+   from this namespace. Prefer `simple-replay` or `replay-yield-events` instead.
+
+   Removal condition: all callers migrated to simple-replay or replay-yield-events."
+  ([scenario] ((requiring-resolve 'resolver-sim.contract-model.replay.yield/replay-yield-scenario) scenario))
+  ([protocol scenario] ((requiring-resolve 'resolver-sim.contract-model.replay.yield/replay-yield-scenario) protocol scenario)))
+
+(defn prepare-simple-scenario
+  "Prepare a scenario for simple replay by applying defaults.
+
+   Currently defaults missing :schema-version to \"1.0\".
+   Returns {:scenario <prepared-map> :normalizations [<map>...]}.
+
+   Normalization entries have the shape:
+     {:field :schema-version :value \"1.0\" :reason :simple-replay-default}
+
+   This is a pure, deterministic function. The input is not mutated."
+  [scenario]
+  (let [has-version? (contains? scenario :schema-version)]
+    (if has-version?
+      {:scenario scenario
+       :normalizations []}
+      {:scenario (assoc scenario :schema-version "1.0")
+       :normalizations [{:field :schema-version
+                         :value "1.0"
+                         :reason :simple-replay-default}]})))
+
+(defn normalize-simple-result
+  "Add common simple-replay result metadata to a raw result.
+
+   Applies to all outcomes (pass, fail, invalid):
+   - :replay-profile :simple
+   - :protocol-id (string)
+   - :execution descriptor (profile + engine)
+   - :context/version and :context/source (if not present)
+   - :scenario-normalizations vector
+
+   Does not overwrite existing :outcome, :trace, :metrics or :halt-reason."
+  [result protocol scenario-normalizations execution-descriptor & [run-id]]
+  (let [protocol-id (proto/protocol-id protocol)
+        scenario-id (:scenario-id result)
+        effective-run-id (or run-id
+                             (get-in result [:context/source :run-id])
+                             (str scenario-id "-simple-run"))
+        base {:replay-profile :simple
+              :protocol-id protocol-id
+              :execution execution-descriptor}
+        base (if (seq scenario-normalizations)
+               (assoc base :scenario-normalizations scenario-normalizations)
+               base)
+        base (if (or (not (:context/version result))
+                     (not (:context/source result)))
+               (assoc base :context/version "1.0"
+                            :context/source {:scenario-id scenario-id
+                                             :run-id effective-run-id})
+               base)]
+    (merge result base)))
 
 (defn simple-replay
-  "Replay with library-style defaults: no temporal enforcement, no theory DSL, relaxed validation.
+  "Replay a scenario under the lightweight (:simple) replay profile.
 
-   For `yield-v1`, delegates to `replay-yield-scenario` (thin runner). Other protocols
-   use `replay-events` with `minimal-replay-flags`. Caller `replay-opts` apply
-   on the generic path.
+   Two explicit arities:
+     (simple-replay protocol scenario)
+     (simple-replay protocol scenario replay-opts)
 
-   Auto-defaults :schema-version to \"1.0\" when missing so hand-built
-   notebook scenarios work without an explicit version key."
-  [protocol scenario & [replay-opts]]
-  (let [scenario (if (:schema-version scenario)
-                   scenario
-                   (assoc scenario :schema-version "1.0"))]
-    (if (= "yield-v1" (proto/protocol-id protocol))
-      (yield-replay/replay-yield-scenario protocol scenario)
-      (replay-events protocol scenario
-                     (merge {:minimal true
-                             :flags replay-flags/minimal-replay-flags}
-                            replay-opts)))))
+   The simple profile:
+   - Disables temporal enforcement
+   - Disables theory DSL evaluation
+   - Uses relaxed validation
+   - Skips evidence, persistence, signing, timestamping
+   - Skips risk-monitor side effects
+
+   Dispatches protocol-specific execution via profile-adapter multimethod.
+   Default uses replay-events; yield-v1 uses replay-yield-events.
+
+   Replay-opts currently supports:
+   - :run-id — identifier for the replay run
+   - :flags  — replay flag overrides (merged with minimal defaults)
+
+   Prohibited opts (throws ex-info): :evidence-mode, :signing-key,
+   :signing-password, :tsa-url, :skip-finalize, :allow-dirty?"
+  ([protocol scenario]
+   (simple-replay protocol scenario nil))
+  ([protocol scenario replay-opts]
+   (let [prep         (prepare-simple-scenario scenario)
+         prepared     (:scenario prep)
+         normalizations (:normalizations prep)
+         simple-opts  (profile-adapter/extract-simple-opts replay-opts :simple-replay)
+         raw-result   (profile-adapter/run-simple-profile :simple protocol prepared simple-opts)
+         execution-descriptor
+         (if (= "yield-v1" (proto/protocol-id protocol))
+           {:profile :simple :engine :yield-thin-loop :adapter? true}
+           {:profile :simple :engine :canonical-loop})]
+     (normalize-simple-result raw-result protocol normalizations execution-descriptor (:run-id simple-opts)))))
 (defn resume-from-snapshot
   "Resume a simulation from a world snapshot and a sequence of events.
    Useful for exploring counterfactual subgames."
