@@ -4,6 +4,15 @@
             [resolver-sim.protocols.sew.registry :as reg]
             [resolver-sim.protocols.sew.accounting :as acct]))
 
+(deftest register-stake-rejects-non-positive-amounts
+  (doseq [amount [nil -1 0]]
+    (let [error (try
+                  (reg/register-stake (t/empty-world 1000) "0xRes" amount)
+                  nil
+                  (catch clojure.lang.ExceptionInfo e e))]
+      (is (= :invalid-stake-amount (:type (ex-data error)))
+          (str "amount " amount " must be rejected")))))
+
 (deftest slash-resolver-stake-immutability
   (testing "slash-resolver-stake does not mutate the input world map"
     (let [world (-> (t/empty-world 1000)

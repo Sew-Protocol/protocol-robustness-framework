@@ -567,7 +567,11 @@
    - The position under :yield/positions (updates current-index, current-value,
      unrealized-yield, accrual-dust-remainder, last-accrual-time/index, flags)
    - :total-yield-generated for the token (cumulative gross yield)
-   - :total-held for the token (protocol-wide ledger, including negative deltas)
+
+   This generic yield-layer function intentionally does not mutate :total-held.
+   A protocol integration must recognize the resulting position delta through
+   its canonical custody ledger (Sew uses lifecycle/accrue-yield and
+   accounting/add-held or sub-held).
 
    Returns the updated world. Pure — returns a new map without side effects."
   [world decision]

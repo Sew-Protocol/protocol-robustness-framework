@@ -57,11 +57,14 @@
 
    ── dependency resolution mode ──
 
-     The current implementation resolves dependencies by matching
-     verifies_against strings against artifact schema_version values.
-     This mode is recorded in the validation root's :extra key:
+     When artifacts use the canonical :dependencies field (v1.2+), the
+     resolver checks each dependency :id against the set of artifact :id
+     values.  When only :verifies_against is present (legacy), the resolver
+     matches schema version strings against artifact :schema_version values.
+     The active mode is recorded in the validation root's :extra key:
 
-       :dependency-resolution :schema-version
+       :dependency-resolution :dependencies-field    (canonical, v1.2+)
+       :dependency-resolution :verifies-against-field (legacy fallback)
 
    ── known external schema dependencies ──
 
@@ -115,14 +118,25 @@
   (set (get (evcfg/get-config) :exempt_schemas #{})))
 
 (defn- parse-verifies-against
-  "Extract the set of schema versions an artifact depends on."
+  "Extract the set of schema versions an artifact depends on (legacy field)."
   [artifact]
   (set (:verifies_against artifact)))
+
+(defn- parse-dependencies
+  "Extract the set of artifact :id strings an artifact depends on (canonical v1.2 field).
+   Returns an empty set when :dependencies is nil or empty."
+  [artifact]
+  (set (map :id (:dependencies artifact))))
 
 (defn- provided-schemas
   "Collect the set of schema_version strings from all artifacts."
   [artifacts]
   (set (keep :schema_version artifacts)))
+
+(defn- provided-artifact-ids
+  "Collect the set of artifact :id strings from all artifacts."
+  [artifacts]
+  (set (keep :id artifacts)))
 
 (defn- schema-version->artifacts
   "Build a map from schema_version to the count of artifacts providing it."
@@ -134,8 +148,9 @@
           {} artifacts))
 
 (defn- dangling-dependencies
-  "Return a vector of check maps for dependencies that are not provided
-   by any artifact in the registry."
+  "Return a vector of check maps for verifies_against schema dependencies
+   that are not provided by any artifact in the registry.
+   This is the legacy resolution mode (schema-version match)."
   [artifacts]
   (let [provided (provided-schemas artifacts)
         all-deps (mapcat parse-verifies-against artifacts)
@@ -148,6 +163,21 @@
              :error-key :registry/dangling-dependency
              :severity  :critical
              :message   (str "Dependency " dep " is not provided by any artifact")})
+          dangling)))
+
+(defn- dangling-dependency-refs
+  "Return a vector of check maps for dependency :id refs (canonical v1.2
+   :dependencies field) that are not provided by any artifact in the registry."
+  [artifacts]
+  (let [provided (provided-artifact-ids artifacts)
+        all-deps (mapcat parse-dependencies artifacts)
+        dangling (remove #(contains? provided %) all-deps)]
+    (mapv (fn [dep]
+            {:check/id  :registry/dangling-dep-ref
+             :status    :failed
+             :error-key :registry/dangling-dependency-ref
+             :severity  :critical
+             :message   (str "Dependency ref '" dep "' (by :id) is not provided by any artifact")})
           dangling)))
 
 (defn- ambiguous-schema-versions
@@ -167,12 +197,21 @@
 
 ;; ── public API ───────────────────────────────────────────────────────────────
 
+(defn- dependency-resolution-mode
+  "Determine the dependency resolution mode.
+   Returns :dependencies-field when any artifact uses the canonical v1.2
+   :dependencies field, otherwise :verifies-against-field (legacy fallback)."
+  [artifacts]
+  (if (some (comp seq :dependencies) artifacts)
+    :dependencies-field
+    :verifies-against-field))
+
 (defn validate-artifact-registry
   "Run registry diagnostics and return a finalized validation-root.v1 map.
 
    registry-map:
      :artifacts     — vector of artifact entries (each with :schema_version,
-                      :verifies_against, :id, :path, :sha256)
+                      :verifies_against, :dependencies, :id, :path, :sha256)
      :run-id        — string
 
    opts (optional map):
@@ -184,9 +223,10 @@
   [registry-map & [opts]]
   (let [artifacts   (:artifacts registry-map [])
         run-id      (or (:run-id opts) (:run-id registry-map "unknown"))
+        dep-mode    (dependency-resolution-mode artifacts)
         meta        {:run-id                run-id
                      :artifact-count        (count artifacts)
-                     :dependency-resolution :schema-version}
+                     :dependency-resolution dep-mode}
         metadata    (merge meta (:extra-metadata opts))]
     (adapter/registry-result->validation-root
      {:checks   (into [{:check/id :registry/artifacts-present
@@ -194,6 +234,7 @@
                         :error-key :registry/no-artifacts
                         :message  (str (count artifacts) " artifact(s) in registry")}]
                       (concat (dangling-dependencies artifacts)
+                              (dangling-dependency-refs artifacts)
                               (ambiguous-schema-versions artifacts)
                               (:extra-checks opts)))
       :errors   (:extra-errors opts [])

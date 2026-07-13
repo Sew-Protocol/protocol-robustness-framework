@@ -155,8 +155,21 @@
    Bound by resolver-sim.io.event-evidence at load time to the actual
    persistence implementation. Protocol-layer code should call
    capture-event-evidence! which delegates through this var.
-   
-   Default implementation returns nil (no-op) until bound."
+
+   Default implementation returns nil (no-op) until bound.
+   Callers can rebind to `noop-capture` to suppress evidence globally."
+  (fn
+    ([reason pre post inputs] nil)
+    ([reason pre post inputs calc] nil)
+    ([reason pre post inputs calc ctx-or-opts] nil)
+    ([evidence] nil)))
+
+(def noop-capture
+  "The default no-op evidence capture implementation.
+   Bind *capture-event-evidence!* to this to suppress all evidence
+   capture, including protocol-level capture-event-evidence! calls.
+   Defined as a literal fn so it is never affected by alter-var-root
+   from resolver-sim.io.event-evidence."
   (fn
     ([reason pre post inputs] nil)
     ([reason pre post inputs calc] nil)

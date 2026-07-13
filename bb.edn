@@ -641,6 +641,12 @@ cli-args (cond-> ["-M:run:with-sew" "--invariants" "--scenario" scenario]
   fmt:check {:doc "Check code formatting with cljfmt without rewriting files"
              :task (shell "clojure -M:fmt/check")}
 
+  check:direct-writes
+  {:doc "Static CI rule: flag direct writes to :total-held, :held/positions,
+         and :resolver-stakes outside the explicit allowlist.
+         These keys must only be mutated through canonical accounting paths."
+   :task (shell "clojure" "-M:test" "-m" "scripts.scenarios.check-direct-writes")}
+
   validate {:doc "Structural validation pipeline: lint + notebook namespace check"
             :task (let [ok? (fn [ok?-label ok?-f]
                               (print (str "▶ " ok?-label "... "))
@@ -805,6 +811,9 @@ cli-args (cond-> ["-M:run:with-sew" "--invariants" "--scenario" scenario]
 
   benchmark:attest {:doc "Generate an independent attestation for an evidence bundle. Usage: bb benchmark:attest <evidence-path> -k <private-key>"
                     :task (apply clojure "-M:with-sew" "-m" "resolver-sim.benchmark.cli" "--attest" *command-line-args*)}
+
+  benchmark:menu {:doc "Open the interactive post-run menu for an existing evidence bundle. Usage: bb benchmark:menu <evidence-path> [-k <private-key>]"
+                  :task (apply clojure "-M:with-sew" "-m" "resolver-sim.benchmark.cli" "--menu" *command-line-args*)}
 
   benchmark:verify-attestation {:doc "Verify an independent attestation. Usage: bb benchmark:verify-attestation <attestation-path>"
                                 :task (apply clojure "-M:with-sew" "-m" "resolver-sim.benchmark.cli" "--verify-attestation" *command-line-args*)}

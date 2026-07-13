@@ -1,6 +1,7 @@
 (ns resolver-sim.yield.accounting-test
   (:require [clojure.test :refer :all]
             [resolver-sim.yield.accounting :as acct]
+            [resolver-sim.yield.invariants :as inv]
             [resolver-sim.yield.modules.liquid-lending :as liquid]
             [resolver-sim.yield.modules.fixed :as fixed]))
 
@@ -21,6 +22,14 @@
     (if (pos? remainder)
       (fixed/fixed-accrue world* module {:token token :dt remainder})
       world*)))
+
+(deftest token-key-consistency-rejects-split-accounting
+  (let [split {:total-held {:USDC 100 "USDC" 50}}
+        consistent {:total-held {:USDC 150}}]
+    (is (false? (:holds? (inv/check-token-key-consistency split))))
+    (is (= [{:path [:total-held] :token "USDC" :keys [:USDC "USDC"]}]
+           (:violations (inv/check-token-key-consistency split))))
+    (is (true? (:holds? (inv/check-token-key-consistency consistent))))))
 
 (deftest test-liquid-lending-deposit-mints-shares-from-entry-index
   (testing "Deposit mints shares = principal / entry share price (Model A)"
@@ -57,8 +66,8 @@
           world' (liquid/withdraw world {:module/id :aave-v3} {:owner/id "user1"})
           pos    (get-in world' [:yield/positions "user1"])]
       (is (= :withdrawn (:status pos)))
-      (is (== 0 (:realized-yield pos))
-          "realized-yield is 0 because :unrealized-yield-treatment is :not-claimable (default)")
+      (is (== 100 (:realized-yield pos))
+          "withdrawal crystallizes the marked unrealized yield into realized-yield")
       (is (zero? (:unrealized-yield pos))))))
 
 (deftest test-fixed-rate-accrual-math

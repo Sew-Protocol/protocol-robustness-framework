@@ -27,23 +27,23 @@
  {:id :artifact-registry
   :label "Artifact registry + manifest attestation"
   :terms ["artifact registry" "test-artifacts.json" "artifact-registry-emitter" "run manifest"]
-  :expected-paths ["scripts/write_scenario_run_manifest.py"
-                   "scripts/verify_artifact_registry.py"
-                   "schemas/test-run-v1.json"
-                   "schemas/test-artifacts-v1.json"
-                   "schemas/scenario-v1.json"
-                   "r/manifest.json"
-                   "r/provenance.json"]
-  :tags [:evidence :schema :script]
-  :note "Artifact registry is the evidence anchor; missing paths break the attestation chain."}
+   :expected-paths ["scripts/evidence/write_scenario_run_manifest.py"
+                    "scripts/validate/verify_artifact_registry.py"
+                    "schemas/test-run-v1.json"
+                     "schemas/test-artifacts-v1.2.json"
+                    "schemas/scenario-v1.json"]
+   :deprecated-paths ["scripts/write_scenario_run_manifest.py"
+                      "scripts/verify_artifact_registry.py"]
+   :tags [:evidence :schema :script]
+   :note "Artifact registry is the evidence anchor; missing paths break the attestation chain."}
 
  {:id :fork-isolation
   :label "Fork isolation (scenario S33)"
   :terms ["fork isolation" "S33" "two-escrow-fork-isolation"]
-  :expected-paths ["scenarios/edn/S33_forking-strategist-two-escrow-fork-isolation.edn"
-                   "docs/scenarios.md"
-                   "src/resolver_sim/protocols/sew/invariant_scenarios/forking_strategist.clj"
-                   "data/fixtures/suites/forking-strategist.edn"]
+   :expected-paths ["scenarios/edn/S33_forking-strategist-two-escrow-fork-isolation.edn"
+                    "docs/scenarios.md"
+                    "protocols_src/resolver_sim/protocols/sew/invariant_scenarios/forking_strategist.clj"
+                    "data/fixtures/suites/forking-strategist.edn"]
   :tags [:scenario :invariant :adversarial]
   :note "Fork isolation is a key safety property; must be traceable from docs to code."}
 
@@ -92,9 +92,9 @@
  {:id :speds-narrative
   :label "SPEDS evidence design system"
   :terms ["SPEDS" "evidence design" "story engine" "carousel" "frame-specs"]
-  :expected-paths ["src/resolver_sim/notebooks/speds/story.clj"
-                   "src/resolver_sim/notebooks/speds/core.clj"
-                   "src/resolver_sim/notebooks/speds/config.clj"
+   :expected-paths ["src/resolver_sim/notebook_support/speds/story.clj"
+                    "src/resolver_sim/notebook_support/speds/core.clj"
+                    "src/resolver_sim/notebook_support/speds/config.clj"
                    "docs/visual/PROTOCOL_EVIDENCE_DESIGN_SYSTEM.md"
                    "docs/visual/VISUAL_EVIDENCE_NARRATIVE.md"]
   :tags [:visual :narrative :evidence]
@@ -119,7 +119,7 @@
                     "src/resolver_sim/sim/batch.clj"
                     "src/resolver_sim/sim/sweep.clj"
                     "scripts/run_sweep.sh"
-                    "src/resolver_sim/research/sew/analytic/phase_c_corruption_economics.clj"
+                    "protocols_src/resolver_sim/research/sew/analytic/phase_c_corruption_economics.clj"
                    "src/resolver_sim/sim/trial_router.clj"
                    "docs/overview/REUSABLE_COMPONENTS.md"]
   :tags [:simulation :infrastructure]
@@ -128,18 +128,16 @@
  {:id :evidence-chain
   :label "Evidence chain (claim -> artifact -> notebook)"
   :terms ["evidence" "claim" "manifest" "provenance" "artifact"]
-  :expected-paths ["docs/evidence/README.md"
-                   "docs/evidence/RESEARCHER_EVIDENCE_PACK.md"
-                   "docs/evidence/EVIDENCE_DAG_OVERVIEW.md"
-                   "docs/evidence/summary.md"
-                   "docs/evidence/investigation_guide_S19.md"
-                   "docs/architecture/EVIDENCE_DAG_ARCHITECTURE.md"
-                   "docs/architecture/EVIDENCE_CHAIN_ARCHITECTURE.md"
-                   "r/manifest.json"
-                   "r/provenance.json"
-                   "schemas/claimable-classification-v2.json"]
-  :tags [:evidence :claims]
-  :note "Evidence chain integrity is the framework's core value proposition."}
+   :expected-paths ["docs/evidence/README.md"
+                    "docs/evidence/RESEARCHER_EVIDENCE_PACK.md"
+                    "docs/evidence/EVIDENCE_DAG_OVERVIEW.md"
+                    "docs/evidence/investigation_guide_S19.md"
+                    "docs/architecture/EVIDENCE_DAG_ARCHITECTURE.md"
+                    "docs/architecture/EVIDENCE_CHAIN_ARCHITECTURE.md"
+                    "schemas/claimable-classification-v2.json"]
+   :deprecated-paths ["docs/evidence/summary.md"]
+   :tags [:evidence :claims]
+   :note "Evidence chain integrity is the framework's core value proposition."}
 
  {:id :yield-scenarios
   :label "Yield scenario suite (S68-S115)"
@@ -158,23 +156,23 @@
  {:id :adversarial-scenarios
   :label "Adversarial + forking strategist suite"
   :terms ["adversarial" "forking strategist" "S26" "S42" "bribery loop" "malicious resolver"]
-  :expected-paths ["scenarios/edn/S26_forking-strategist-l1-reversal.edn"
-                   "scenarios/edn/S42_resolver-buyer-bribery-loop.edn"
-                   "scenarios/edn/S08_state-machine-attack-gauntlet.edn"
-                   "data/fixtures/suites/forking-strategist.edn"
-                   "src/resolver_sim/protocols/sew/invariant_scenarios/adversarial.clj"]
+   :expected-paths ["scenarios/edn/S26_forking-strategist-l1-reversal.edn"
+                    "scenarios/edn/S42_resolver-buyer-bribery-loop.edn"
+                    "scenarios/edn/S08_state-machine-attack-gauntlet.edn"
+                    "data/fixtures/suites/forking-strategist.edn"
+                    "protocols_src/resolver_sim/protocols/sew/invariant_scenarios/adversarial.clj"]
   :tags [:adversarial :scenario :invariant]
   :note "Adversarial scenarios are the main evidence of protocol robustness."}
 
  {:id :temporal-evidence
   :label "Temporal rules + deadline enforcement"
   :terms ["temporal" "deadline" "window" "appeal-window" "time-lock" "timeout"]
-  :expected-paths ["src/resolver_sim/contract_model/replay/temporal.clj"
-                   "src/resolver_sim/time/model.clj"
-                   "src/resolver_sim/time/invariants.clj"
-                   "docs/protocol/temporal-rules.md"
-                   "scenarios/edn/S04_dispute-timeout-autocancel.edn"
-                   "scenarios/edn/S57_pending-settlement-expiry-boundary-1s.edn"]
+   :expected-paths ["src/resolver_sim/contract_model/replay/temporal.clj"
+                    "src/resolver_sim/time/model.clj"
+                    "src/resolver_sim/time/invariants.clj"
+                    "docs/framework/temporal-rules.md"
+                    "scenarios/edn/S04_dispute-timeout-autocancel.edn"
+                    "scenarios/edn/S57_pending-settlement-expiry-boundary-1s.edn"]
   :tags [:temporal :invariant :scenario]
   :note "Temporal rules govern all dispute windows; docs/code alignment is essential."}
 
@@ -182,11 +180,11 @@
   :label "Claim boundary + CDRS theory schema"
   :terms ["claim boundary" "claimable" "settlement-principal-boundary" "CDRS"
           "claimable-classification" "claimable-v2"]
-  :expected-paths ["docs/CDRS-v1.1-THEORY-SCHEMA.md"
-                   "src/resolver_sim/protocols/sew/invariants.clj"
-                   "schemas/claimable-classification-v2.json"
-                   "schemas/trace-end-projection-v1.json"
-                   "src/resolver_sim/protocols/sew/claimable_classification.clj"]
+   :expected-paths ["docs/concepts/CDRS-v1.1-THEORY-SCHEMA.md"
+                    "protocols_src/resolver_sim/protocols/sew/invariants.clj"
+                    "schemas/claimable-classification-v2.json"
+                    "schemas/trace-end-projection-v1.json"
+                    "protocols_src/resolver_sim/protocols/sew/claimable_classification.clj"]
   :tags [:theory :schema :invariant]
   :note "Claim boundary invariants protect against accounting bugs; must have clear theory docs."}
 
@@ -194,12 +192,11 @@
   :label "Reference validation v1 suite"
   :terms ["reference validation" "reference-validation-v1" "evidence matrix"
           "security evidence"]
-  :expected-paths ["suites/reference-validation-v1/SUITE.yaml"
-                   "suites/reference-validation-v1/manifest.edn"
-                   "suites/reference-validation-v1/docs/scenario-catalog.md"
-                   "suites/reference-validation-v1/docs/reproducibility-notes.md"
-                   "suites/reference-validation-v1/docs/limitations.md"
-                   "suites/reference-validation-v1/reports/reference-validation-v1.md"
-                   "suites/reference-validation-v1/reports/security-evidence-matrix.md"]
+   :expected-paths ["suites/reference-validation-v1/SUITE.yaml"
+                    "suites/reference-validation-v1/manifest.edn"
+                    "suites/reference-validation-v1/docs/scenario-catalog.md"
+                    "suites/reference-validation-v1/docs/reproducibility-notes.md"
+                    "suites/reference-validation-v1/docs/limitations.md"
+                    "suites/reference-validation-v1/docs/interpreting-results.md"]
   :tags [:suite :evidence :validation]
   :note "Reference validation suite is the public-facing evidence package; every file must be present."}]

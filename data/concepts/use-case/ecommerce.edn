@@ -185,6 +185,12 @@
    "Governance role is defined but governance-specific actions and outcomes (rotation, override) are not modelled."]
 
  :concept/evidence
- {:scenarios #{}
-  :benchmarks #{}
-  :claims #{}}}
+  {:scenarios #{}
+   :benchmarks #{:benchmark/sew-escrow-dispute-v1
+                 :benchmark/sew-dispute-liveness-v1
+                 :benchmark/sew-resolver-slashing-v1}
+   :claims #{:claim/no-unauthorized-release
+             :claim/funds-conserved
+             :claim/dispute-liveness
+             :claim/bounded-resolution-time
+             :claim/appeal-bond-adequacy}}}

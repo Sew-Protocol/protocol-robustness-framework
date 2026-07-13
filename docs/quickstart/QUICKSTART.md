@@ -68,6 +68,8 @@ bb test
 For an edit-loop-friendly gate:
 
 ```bash
+bb test:fast
+# Equivalent direct runner:
 ./scripts/test.sh fast
 ```
 
@@ -92,6 +94,9 @@ bb docs:scenarios
 
 # Check generated documentation is current
 make docs-as-code-check
+
+# Run PRF CLI commands from a built jar
+java -jar target/prf-runner-core-<version>.jar help
 ```
 
 ## Where to go next

@@ -2,8 +2,7 @@
   "Replay capability flags — opt-in orchestration for theory, temporal, and validation.
 
    Defaults preserve existing Sew invariant-suite behaviour. Use
-   `replay-yield-scenario` for yield-v1; `minimal-replay-flags` / `simple-replay`
-   for other library-style scenarios.")
+   `simple-replay` for library-style scenarios; `replay-events` for full control.")
 
 (def default-replay-flags
   "Full replay: invariants on, expectations on, strict validation, temporal from scenario.
@@ -18,7 +17,8 @@
    :projection-mode          :full
    :require-event-id?        false
    :include-telemetry-evidence? false
-   :evidence-mode              :all})
+   :evidence-mode              :all
+   :yield-dt-validation?       false})
 
 (def fast-regression-flags
   "Fast regression: theory deferred (or disabled)."
@@ -35,10 +35,16 @@
   (assoc default-replay-flags
          :include-telemetry-evidence? true))
 
-(def profiles
-  {:replay/fast-regression fast-regression-flags
-   :replay/golden-full     golden-full-flags
-   :replay/audit           audit-flags})
+(def simple-forced-flags
+  "Flags the :simple profile enforces after scenario and caller flags merge.
+   They preserve the profile's no-evidence/no-checkpoint contract; callers may
+   still opt into safe evaluation flags such as :strict-validation?."
+  {:evidence-mode :none
+   :include-telemetry-evidence? false
+   :world-checkpoint-policy :omit
+   :projection-mode :finalize-only})
+
+
 
 (def minimal-replay-flags
   "Library-style replay: no temporal enforcement, no theory DSL, relaxed validation, no evidence."
@@ -50,6 +56,12 @@
          :world-checkpoint-policy  :omit
          :require-event-id?        false
          :evidence-mode            :none))
+
+(def profiles
+  {:replay/fast-regression fast-regression-flags
+   :replay/golden-full     golden-full-flags
+   :replay/audit           audit-flags
+   :replay/simple          minimal-replay-flags})
 
 (def external-log-replay-flags
   "External log / chain-ingestion replay: require event-id on replay-sensitive actions."
@@ -89,10 +101,10 @@
          theory-present? (boolean (:theory scenario))
          temporal-cfg    (:temporal-evidence scenario)
          temporal-default? (boolean (:enabled? temporal-cfg))]
-     (merge base
-            (select-keys (or (get-in scenario [:options :flags]) {}) (keys base))
-            (select-keys (or (:flags replay-opts) {}) (keys base))
-            {:evaluate-theory?
+     (let [resolved (merge base
+                           (select-keys (or (get-in scenario [:options :flags]) {}) (keys base))
+                           (select-keys (or (:flags replay-opts) {}) (keys base))
+                           {:evaluate-theory?
              (let [v (flag-lookup scenario replay-opts :evaluate-theory? nil)]
                (if (nil? v)
                  (and (not (or (:minimal replay-opts) (= profile :minimal))) theory-present?)
@@ -124,7 +136,10 @@
              :evidence-mode
              (keyword (name (or (flag-lookup scenario replay-opts :evidence-mode
                                              (if (or (:minimal replay-opts) (= profile :minimal)) :none :all))
-                                :all)))}))))
+                                :all)))})]
+       (if (= profile :replay/simple)
+         (merge resolved simple-forced-flags)
+         resolved)))))
 
 (defn runner-opts-from-flags
   "Map replay flags to `scenario.runner` theory opts."

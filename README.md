@@ -179,7 +179,7 @@ Single-trace execution is not a formal proof of safety across all possible infor
 * Adversarial and multi-actor scenario modelling
 * Optional evidence and artifact generation
 * Validation-root builder for structured result accumulation
-* Python adversarial suite integration through gRPC
+* Adversarial agent suite (Python/gRPC) with Babashka wrappers (`bb adv:broad`, `bb adv:deep`)
 
 ## Advanced Capabilities & Observability
 
@@ -530,27 +530,17 @@ Runs fast in-process invariant scenarios.
 
 ### 4. Run adversarial exploration
 
-Start the gRPC simulation server:
+Run the adversarial agent suite:
 
 ```bash
-bb adv:server
-```
-
-Run the Python failure-mode suite:
-
-```bash
-python3 test/integration/python/invariant_suite.py
+bb adv:broad           # broad discovery preset
+bb adv:deep            # deeper exploit-chain preset
+bb adv:all:broad       # start server + broad (all-in-one)
 ```
 
 ### 5. Run dispute-resolution robustness validation
 
-Run all dispute-resolution phases:
-
-```bash
-./run.sh all
-```
-
-Run individual phases using Babashka:
+Search and run individual scenarios:
 
 ```bash
 bb run:scenario:search <text>

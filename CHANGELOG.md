@@ -2,6 +2,65 @@
 
 ## [Unreleased]
 
+### Reviewed (2026-07-14)
+
+- **Solvency review — assurance boundary:** Replay `:solvency` establishes modeled held-custody/liability reconciliation, not deployed-contract or external-reserve solvency. The local SHA-256 state commitment is an integrity commitment, not by itself an independently verifiable solvency proof. `calculate-solvency-ratio` is a cumulative, cross-token conservation KPI rather than a current per-token solvency check. (`protocols_src/resolver_sim/protocols/sew/{invariants.clj,invariants/solvency.clj,financial/solvency.clj}`, `docs/architecture/HELD_CUSTODY_ACCOUNTING_AND_FORCE_AUTHORISATION.md`)
+
+- **Contract payout solvency invariant:** Added `:contract-payout-solvency`, an external-evidence-aware check that compares an observed per-contract ERC-20 balance snapshot against modeled held custody, canonical v2 claimables, and unwithdrawn fee buckets. It reports `:unverified` when no snapshot is supplied and reports explicit missing-balance or shortfall records otherwise. (`protocols_src/resolver_sim/protocols/sew/{invariants.clj,invariants/solvency.clj}`, `protocols_src/test/resolver_sim/protocols/sew/accounting_test.clj`)
+
+### Changed (2026-07-14)
+
+- **`--output-dir` flag for `bb run:scenario` — consolidated artifact output:** Replaces `--save-output`. Writes ALL generated artifacts (forensic event-evidence, claims, attestations, evidence-nodes, manifest files, extracted summaries, world state, raw replay) into a single self-contained directory instead of scattering across `prf-runs/`, `results/runs/`, and `prf-artifacts/`. The Clojure runner accepts `:output-dir` in the dispatch map, overriding `*artifact-dir*` so forensic artifacts write directly into the output dir. `write_scenario_run_manifest.py` accepts `--output-dir` to write manifest stubs there. A new `run_scenario.py` wrapper handles the full pipeline for the simplified bb.edn. (`src/resolver_sim/io/scenario_runner.clj`, `scripts/evidence/write_scenario_run_manifest.py`, `scripts/evidence/run_scenario.py`, `scripts/evidence/consolidate_artifacts.py`, `bb.edn`)
+
+- **`ctx/scenario-id` and `ctx/run-id` fixed in yield protocol event-evidence:** `replay-yield-scenario` in the yield replay path never computed a `run-id` or stored `scenario-id` in the world's `:params` map, causing null attribution context in all 6 yield event-evidence files. Fixed by computing `(str scenario-id "-run")`, associng `:run-id` into the execution context, and associng `:scenario-id` into `world[:params]` after init-world. (`src/resolver_sim/contract_model/replay/yield.clj:118-124`)
+
+- **World-final and summary extraction fixed for bundle-root format:** The extract script `normalize_replay()` now detects bundle-root format and extracts scenario fields from `overview.results[0]` + `run/scenario-results[0]`. The enriched bundle root injects raw `world`, `trace`, and `metrics` from `thunk-result` before writing, using a safe JSON value-fn that converts Clojure records, keywords, refs, and fns. (`scripts/evidence/extract_scenario_artifacts.py`, `src/resolver_sim/io/scenario_runner.clj`)
+
+- **`calculation: null` removed from event-evidence:** The `:calculation` field is now omitted from evidence when nil (was always null since no caller ever passed a calc). (`src/resolver_sim/io/event_evidence.clj:231`)
+
+- **`total-held: null` fixed in Sew evidence pre-states:** Evidence capture in lifecycle.clj and accounting.clj now uses `(get-in ... 0)` with a `0` default instead of bare `get-in` that returned nil for the first escrow creation. (`protocols_src/resolver_sim/protocols/sew/lifecycle.clj`, `protocols_src/resolver_sim/protocols/sew/accounting.clj`)
+
+- **Trace-summary actor populated for yield protocol:** The extract script now checks the `agent` trace field (used by yield protocol) in addition to `caller` and `actor`. (`scripts/evidence/extract_scenario_artifacts.py:152`)
+
+- **Metrics `available_ratio` extracted from yield risk state:** Added `_find_available_ratio()` helper that walks the yield protocol's `world["yield/risk"][module][token]["shortfall"]["available-ratio"]` chain, used as fallback when not in top-level metrics. (`scripts/evidence/extract_scenario_artifacts.py`)
+
+- **Artifact registry validation fixed:** The extract script now registers `test-run.json` and `test-summary.json` as artifacts (synthesizing minimal versions when absent), satisfying verifies_against cross-references. Added `"test-run.v1"` and `"test-summary.v2"` to exempt_schemas as safety net. (`scripts/evidence/extract_scenario_artifacts.py`, `config/evidence.json`)
+
+- **Claimable classification extracted for yield protocol:** `_extract_claimable_from_world()` discovers claimable entries from both generic `world["claimable"]` and yield-specific `yield/partial-fill-decisions` (deferred amounts) and `yield/positions` (shortfall data). (`scripts/evidence/extract_scenario_artifacts.py`)
+
+- **Use-case concept system — non-normative status, maturity tracking, and expanded catalogue:** All use-case files now carry `:concept/maturity :illustrative` and `:concept/support-status :not-asserted` to prevent implied product-support interpretation. Added `:concept/related` (cross-references), `:concept/known-gaps`, and `:concept/evidence` fields. Documented `:concept/metrics` and the non-normative statement in `data/concepts/README.md`. (`data/concepts/README.md`, all `data/concepts/use-case/*.edn` files)
+
+- **Use-case fixes — mapping annotations, bond entities, governance removal:** Ecommerce added `:dispute-bond` and `:appeal-bond` entities with approximate annotations, replacing undifferentiated slash outcome. Fixed-price consolidated into ecommerce as a `:concept/variants` profile (file and registry entry removed). Event deposit removed unused governance role and added 5 appeal outcomes (upheld, reversed, rejected, bond returned/forfeited). Controlled escrow balance (renamed from "Spending account") added `:payee` counterparty, replaced adversarial-resolution mapping for unauthorized-release with vocabulary gap note, and added missing approximate annotations on `place-hold`, `deposit-funds`. All files fixed for brace balance and metrics indentation. (`data/concepts/use-case/{ecommerce,event_deposits,controlled_escrow_balance}.edn`, `data/concepts/registry.edn`)
+
+- **New use-cases — mechanism-first stakeholder concepts:** Added 5 new use-case files establishing shared concepts for the existing catalogue: `dispute_appeal_escalation.edn` (appeal lifecycle, bonds, tiers, keeper role, finality), `resolver_participation_bonding.edn` (resolver registration, stake bonding, capacity limits, slashing), `yield_bearing_escrow.edn` (principal vs. accrued yield, shortfall, partial-fill, loss bearer), `governance_rule_transition.edn` (rule changes during active escrows, snapshot isolation), `goal_contingent_pooled_escrow.edn` (pooled contributions toward goal, renamed from IEO, scoped to donation/reward structures). All registered in `registry.edn` and listed in README file layout. (`data/concepts/use-case/{dispute_appeal_escalation,resolver_participation_bonding,yield_bearing_escrow,governance_rule_transition,goal_contingent_pooled_escrow}.edn`)
+
+- **Graph evidence export** — SVG, D3, and React Flow viewers for evidence DAGs:** New `resolver-sim.graph.export` namespace provides multi-format graph visualization for evidence DAGs. `build-graph-evidence-artifact` wraps graph projections in a content-addressed evidence envelope. `graph->svg` renders a wrapped multi-row SVG layout with color-coded layers. `graph->svg-html` omits the XML declaration for HTML embedding. `graph->d3-data` produces D3 force-directed JSON. `graph->d3-html` generates a self-contained D3 viewer with pan, zoom, drag, and hover tooltips. `graph->react-flow-data` and `graph->react-flow-html` generate a self-contained React Flow viewer with custom `EvidenceNode` components (status badge, label, short hash), click-to-inspect side panel showing full node metadata (parent hashes, extensions, evidence I/O, timestamps), animated edges on selection, MiniMap, Controls, and a multi-layer legend. Layer 3 color changed from red (`#EA4335`) to violet (`#8B5CF6`) to avoid false alarm. `write-graph-artifacts!` writes all formats (SVG, D3 HTML, React Flow HTML, D3 JSON, evidence artifact) to a directory. `build-evidence-node-graph` reads evidence node `.edn` files into the common graph projection format. `build-execution-dag-graph` reads `execution-dag.json` files into the same format.
+
+- **Evidence pack integration:** Extended `forensic.evidence-pack` `pack-manifest-fields` to include `graph-evidence.json`, `evidence-graph.svg`, and `evidence-graph.json` in the portable evidence pack archive.
+
+- **Community CLI graph export extended:** `community.cli` `graph:export` now accepts `--out <dir>` to write SVG + D3 JSON + GraphML to a directory in addition to stdout GraphML output.
+
+- **Fee recipient model — protocol fees now track where they go:**
+
+  **Fee generation.** Protocol fees are generated in two places: (1) escrow creation via `record-fee` in `lifecycle.clj`, where a percentage (in bps) of the escrow amount is deducted and accumulated into `:total-fees[token]`; and (2) yield distribution in `yield/policy.clj`, where the protocol takes a fee from generated yield.
+
+  **Fee withdrawal model (before).** `withdraw-fees` accepted only `[world token]`. The governance actor was resolved by `run-governance-action` but discarded (`_addr`). The emitted evidence recorded only `{:fee/token :fee/amount}` — no recipient binding. The model could prove "fees left the accrued bucket" but not "fees arrived at treasury address Y." The `:total-withdrawn` counter conflated fee withdrawals with escrow claimable withdrawals, providing no per-recipient audit trail.
+
+  **Fee withdrawal model (after).** `withdraw-fees` now accepts `[world token recipient authorized-by]`. The action dispatch layer resolves `recipient` from a configured policy rather than accepting a caller-chosen parameter:
+
+  - World state gained `:fee-recipients` — a map with `:default` (zero-address sentinel when unset) and `:by-token` for per-token overrides.
+  - New governance-gated action `set-fee-recipient` allows governance to set default or per-token recipients at runtime; changes are recorded as `:fee-recipient-updated` evidence with before/after state.
+  - Withdrawals now increment both `:total-withdrawn[token]` (aggregate outflow, shared with escrow withdrawals) and `:total-fees-withdrawn[token]` (fee-specific cumulative counter). Per-recipient payouts are tracked in `:fee-payouts[token][recipient-addr]`.
+  - Evidence now includes `:recipient/address`, `:authorized-by`, and `:fee/bucket :protocol` alongside `:fee/token` and `:fee/amount`.
+
+  **New invariants.**
+  - `fee-payouts-sum-equals-total-fees-withdrawn?` — per-token, sum of all per-recipient payouts equals the fee-specific withdrawal counter. Added to `check-all`.
+  - `fee-payouts-monotonic?` — per (token, recipient) cumulative payouts never decrease. Added to `check-transition`.
+
+  **Coverage gap closed.** Before: the model could not demonstrate "protocol fee amount X was paid to configured treasury address Y." After: evidence binds every withdrawal to a resolved recipient, with per-recipient cumulative tracking and invariant reconciliation against a dedicated fee-withdrawal counter.
+
+  (`protocols_src/resolver_sim/protocols/sew/{types.clj,accounting.clj,sew.clj,invariants.clj,trace_metadata.clj}`, `protocols_src/test/resolver_sim/protocols/sew/{accounting_test.clj}`, `scenarios/edn/S114_withdraw-fees-governance.edn`)
+
 ### Changed (2026-07-12)
 
 - **Stochastic equilibrium — coverage ratio and budget-balance ratcheting:** `evaluate-stochastic-equilibrium` now returns a `:coverage` metric (`(pass + fail) / total`). Budget-balance ratchets from `:inconclusive` to `:fail` when shared-world mode is active but flow tracking keys are missing (a simulation bug). Fixed NPE in `evaluate-participation-stable` where `agg-rate` was computed before the nil check on `initial-resolver-count`. Added 3 tests covering inconclusive paths, ratcheting, and overall-status propagation. (`src/resolver_sim/sim/stochastic_equilibrium.clj`, `test/resolver_sim/sim/stochastic_equilibrium_test.clj`)
@@ -23,6 +82,8 @@
 - **Community participation thin slice — P2 mailbox clear command (2.4):** New `community:mailbox:clear` command and `bb community:mailbox:clear` task to clear all mailbox messages. (`src/resolver_sim/community/cli.clj`, `bb.edn`)
 
 - **Community participation thin slice — P2 evidence node resolution check (2.5):** `community:verify` now attempts to resolve evidence node references from the local artifact directory and reports whether the node file exists, with a notice for hash-only references. (`src/resolver_sim/community/cli.clj`)
+
+- **Community participation thin slice — P2 Clerk evidence graph notebook (2.1, designed):** Designed `notebooks/community_evidence_graph.clj` — a Clerk notebook that loads community mailbox tasks, builds evidence graph projections via `build-task-graph-projection`, and renders each task's DAG as inline SVG with deterministic layered layout (blue=task, green=attestation, yellow=mailbox, violet=other), plus a task overview table with RAG status. SVG uses Hiccup `clerk/html` (no JS dependency) and reuses the coordinate logic from `export-graphml`. Implementation deferred to next cycle. (`notebooks/community_evidence_graph.clj`)
 
 - **CI failure resolution — dispute-coverage, slashing, game-theory, and golden-artifact regeneration:** Fixed `scenario-exists?` and `scenario-tags` in the dispute-resolution coverage report to use `rp/path-exists?` for `resource:` URIs instead of `(.exists (io/file ...))`. Added resolution events to theory-falsification scenarios S-DR-012 and S-DR-013 to avoid `:open-entities-at-end` halts. Updated slashing pro-rata claim-count assertions from 7→9 to match the two new claims (`:pro-rata-fairness`, `:partial-fill-fairness`) added to the evaluator registry. Bound `chain/*allow-dirty*` to true in the real-benchmark game-theory test and updated expected verdict values (`:allocation/partial-fill` now `:uncovered`, `:allocation/shortfall` now `:pass`). Threaded `:allow-dirty? true` replay-opts through `reference-validation` `generate!`. Replaced legacy `:claimable` path with `:claimable-v2 :settlement/principal` in the withdraw-escrow accounting test. Changed `save-agent-as` alias capture to store agent IDs instead of addresses for agent-index compatibility, and included alias keys in `known-ids` during scenario validation to prevent `:unknown-agent-in-event` rejection. Updated `S110_resolver-yield-accrual` expected totals to reflect current yield calculation. Regenerated `suites/reference-validation-v1/expected/` golden artifacts. (`src/resolver_sim/scenario/dispute_coverage.clj`, `src/resolver_sim/contract_model/replay/validation.clj`, `src/resolver_sim/contract_model/replay/execution.clj`, `src/resolver_sim/sim/reference_validation.clj`, `scenarios/S-DR-013-evidence-at-deadline.{json,edn}`, `scenarios/S-DR-012-late-evidence-rejected.{json,edn}`, `protocols_src/test/resolver_sim/protocols/sew/{slashing_test,accounting_test,alias_test,resolver_yield_accrual_test}.clj`, `protocols_src/test/resolver_sim/protocols/sew/evidence/slashing_test.clj`, `test/resolver_sim/benchmark/game_theory_validation_test.clj`)
 
@@ -933,3 +994,43 @@
 - **Pro-rata claims evaluator edge case tests:** Added 7 tests covering rounding-bounded (exact division, large deviation, zero basis), conservation (exact allocation, mismatch), and pro-rata-fairness (3-claimant proportional, single unfair claimant). (`test/resolver_sim/yield/pro_rata_claims_test.clj`)
 
 - **Yield invariant hardening tests:** Created `invariants_hardening_test.clj` with 11 tests for partial-liquidity-principal, value-conservation, and deferred-reclaim invariants. (`test/resolver_sim/yield/invariants_hardening_test.clj`)
+
+## [Unreleased]
+
+### Changed (2026-07-14)
+
+- **Yield fix — negative yield exceeding yield-custody balance:** `accrue-yield-monadic` in `lifecycle.clj` now caps deduction from yield-custody at the available balance and deducts the excess from escrow-principal as a new `:yield-negative-excess` held reason. Previously it threw `sub-held position underflow`. (`protocols_src/resolver_sim/protocols/sew/lifecycle.clj:957-978`, `protocols_src/resolver_sim/protocols/sew/accounting.clj`)
+
+- **Resolver rotation clears custom-resolver:** `rotate-dispute-resolver` now clears `:custom-resolver` from `escrow-settings` so the governance-rotated resolver passes `authorized-resolver?` Priority 1. Previously the stale custom-resolver caused `:not-authorized-resolver` rejection. (`protocols_src/resolver_sim/protocols/sew/resolution.clj:126`)
+
+- **Yield-v1 canonical-loop migration:** `YieldProviderProtocol` now implements `proto/EconomicModel` (6 stubs). The `[:simple "yield-v1"]` profile adapter now routes through `replay-events` with `:yield-dt-validation? true` instead of the thin `run-yield-loop`. Added `:yield-dt-validation?` flag to `default-replay-flags`. `replay-yield-events` merged into `replay-yield-scenario`. Execution descriptor changed from `:yield-thin-loop` to `:canonical-loop`. (`src/resolver_sim/protocols/yield.clj`, `src/resolver_sim/contract_model/replay.clj`, `src/resolver_sim/contract_model/replay/profile_adapter.clj`, `src/resolver_sim/contract_model/replay/flags.clj`, `src/resolver_sim/contract_model/replay/yield.clj`)
+
+- **`simple-replay` evidence suppression:** `replay-events` now binds `*capture-event-evidence!*` to `noop-capture` when `:evidence-mode :none` is active, suppressing protocol-level `capture-event-evidence!` calls. `contextual-pmap` propagates the binding to worker threads. `noop-capture` redefined as a literal fn (not a var copy) so it survives `alter-var-root` from `io.event-evidence`. `extract-simple-opts` strips prohibited evidence/telemetry/checkpoint flags from nested `:flags` maps. (`src/resolver_sim/contract_model/replay.clj`, `src/resolver_sim/evidence/capture.clj`, `src/resolver_sim/util/evidence.clj`, `src/resolver_sim/contract_model/replay/profile_adapter.clj`)
+
+- **Benchmark runner migrated from legacy yield path:** `benchmark/runner.clj` now calls `replay-events` with yield-specific flags instead of `replay/replay-yield-scenario`. (`src/resolver_sim/benchmark/runner.clj:156-159`)
+
+- **`partial-release` uses registered settlement reason:** Changed `:reason :settlement-release` to `:reason :escrow-settlement-released` (registered in `held-position-policy` with `:held/account :escrow-principal`). Added `:owner/address` and `:held/recipient` to `:extra`. Previously the unregistered reason left no `:held/position-id` or account, breaking position-level custody isolation. (`protocols_src/resolver_sim/protocols/sew/lifecycle.clj:633-650`)
+
+- **Force-authorised grant consumption deferred to finalization:** `execute-force-authorised-action` no longer sets `:consumed? true` or `:authorization/status :consumed` at resolution submission. The grant stays `:active` until `sub-held` consumes it during `finalize`. `mark-force-authorisation-consumed` now also updates the main grant record's `:consumed?` and `:authorization/status`. Error message for `:consumed` status changed from "not active" to "already consumed". Event evidence updated to reflect actual post-execution (pre-finalization) state. (`protocols_src/resolver_sim/protocols/sew.clj:791-803`, `protocols_src/resolver_sim/protocols/sew/accounting.clj:140-149,303-310`)
+
+- **Interactive force-authorised resolution creates persisted grant:** `interactive_resolution.clj` now creates a `:force-authorisations` entry before calling `apply-resolution-transition`, matching the same grant shape as scenario-created grants. Fixed scope-map `:authorization/id nil` issue — scope-hash is computed without the id, then the map is rebuilt with the real auth-id for verification. (`src/resolver_sim/repl/interactive_resolution.clj:332-349`)
+
+- **`final-held-summary` — derived reporting function:** Replaces the earlier `final-held` with the recommended per-token (`:opening/:in/:out/:final`) and per-workflow (`:principal-final/:yield-custody-final/:final-held`) surface. Adds `:reconstruction-valid?` flag (replay of all adjustments matches `:total-held`). Computed from the ledger — never a second source of truth. (`protocols_src/resolver_sim/protocols/sew/accounting.clj:1250-1309`)
+
+- **`simple-replay` protocol-ID checks eliminated:** `simple-replay` now uses `simple-execution-descriptor` multimethod in the profile adapter instead of a hard-coded `(= "yield-v1" ...)` check. (`src/resolver_sim/contract_model/replay.clj:349-352`, `src/resolver_sim/contract_model/replay/profile_adapter.clj:87-108`)
+
+- **Documentation fixes:** Fixed double-quote in `finalization-accounting-correct?` docstring that broke file parsing. Clarified `:by-owner` as net custody-flow attribution (not a balance) in `replay-held-adjustment-state` docstring. Noted yield-path weakness in `finalization-accounting-correct?` with cross-reference to `final-held-summary`. (`protocols_src/resolver_sim/protocols/sew/invariants.clj:528`, `protocols_src/resolver_sim/protocols/sew/accounting.clj:583-597`)
+
+### Added (2026-07-14)
+
+- **Characterization tests for `simple-replay`:** 27 tests covering generic protocol path (schema-version defaults, no evidence chain, no theory diagnostics, temporal disabled, core result keys), yield path (opts ignored, result shape differs, metrics profile, unsupported opts rejected), flag resolution (single override leaves other defaults, scenario-level overridden by caller opts, minimal defaults cover all keys, profile merge), and schema preparation determinism. (`test/resolver_sim/contract_model/replay_simple_characterization_test.clj`)
+
+- **Transition-level parity tests:** 11 tests comparing `simple-replay` vs `replay-events` for successful, expected-error, invalid, and flag-override scenarios. Includes 3 real Sew scenarios (S-DR-001 basic release, S-DR-003 duplicate dispute, S-DR-030 biased resolver appealed). Includes evidence-invariant tests confirming zero artifacts in registry after simple-replay and prohibited flags are stripped. (`test/resolver_sim/contract_model/replay_simple_parity_test.clj`)
+
+- **`profile-adapter` namespace:** Multimethod dispatch on `[profile protocol-id]` separating protocol-specific execution from `simple-replay`. Default calls `replay-events`; yield-v1 adapter sets dt-validation and metrics-profile flags. (`src/resolver_sim/contract_model/replay/profile_adapter.clj`)
+
+- **`prepare-simple-scenario` pure function:** Extracts schema normalization into `{:scenario <map> :normalizations [<fields>]}` return shape. Used by `simple-replay`. (`src/resolver_sim/contract_model/replay.clj:257-275`)
+
+- **`normalize-simple-result` function:** Adds `:replay-profile :simple`, `:protocol-id`, `:execution` descriptor, `:context/version`, `:context/source`, and `:scenario-normalizations` to all simple replay results. (`src/resolver_sim/contract_model/replay.clj:277-323`)
+
+- **Scenario EDN recovery events:** Added `execute_pending_settlement` or resolution events to S-DR-051, S-DR-054, S-DR-076, and S-DR-090 to close escrows after expected guard rejections. (`scenarios/edn/S-DR-051-challenge-without-escalation.edn`, `scenarios/edn/S-DR-054-missing-escalation-level.edn`, `scenarios/edn/S-DR-076-non-governance-rotate-rejected.edn`, `scenarios/edn/S-DR-090-circuit-breaker-recovery.edn`)

@@ -1014,6 +1014,42 @@
                    principal-first-ch waterfall-ch
                    residual-ch]))))
 
+(defn partial-fill-application-deltas
+  "Return the source-bucket deductions implied by a partial-fill decision."
+  [decision]
+  {:principal (+ (long (get-in decision [:filled :principal] 0))
+                 (long (get-in decision [:deferred :principal] 0))
+                 (long (get-in decision [:haircut :principal] 0)))
+   :realized-yield (+ (long (get-in decision [:filled :realized-yield] 0))
+                      (long (get-in decision [:deferred :realized-yield] 0))
+                      (long (get-in decision [:haircut :realized-yield] 0)))
+   :deferred-yield (+ (long (get-in decision [:filled :deferred-yield] 0))
+                      (long (get-in decision [:deferred :deferred-yield] 0))
+                      (long (get-in decision [:haircut :deferred-yield] 0)))})
+
+(defn validate-partial-fill-application!
+  "Reject a decision that would debit more from a position bucket than exists.
+   This validates the mutation boundary independently of decision generation,
+   so stale, forged, or cross-position decisions cannot create negative state."
+  [position decision]
+  (let [deltas (partial-fill-application-deltas decision)
+        violations (vec
+                    (for [[bucket delta] deltas
+                          :let [available (long (get position bucket 0))]
+                          :when (or (neg? delta) (> delta available))]
+                      {:bucket bucket :available available :debit delta}))]
+    (when (seq violations)
+      (throw (ex-info "partial-fill decision would underflow position"
+                      {:type :partial-fill-position-underflow
+                       :violations violations
+                       :decision decision})))
+    deltas))
+
+(defn filled-total
+  "Return the immediate custody outflow represented by a decision."
+  [decision]
+  (reduce + 0 (vals (:filled decision {}))))
+
 (defn post-partial-fill-position
   "Update a position after a partial-fill settlement decision has been applied.
 
@@ -1031,17 +1067,11 @@
         haircut (:haircut decision)
         policy (:policy decision)
         post-accrual (get policy :post-partial-fill-accrual :accrue-residual-as-unrealized)
-        ;; Subtract both filled and deferred/haircut from original buckets
-        ;; to ensure the bucket state correctly reflects the settlement.
-        p-delta (+ (long (get filled :principal 0))
-                   (long (get deferred :principal 0))
-                   (long (get haircut :principal 0)))
-        r-delta (+ (long (get filled :realized-yield 0))
-                   (long (get deferred :realized-yield 0))
-                   (long (get haircut :realized-yield 0)))
-        d-delta (+ (long (get filled :deferred-yield 0))
-                   (long (get deferred :deferred-yield 0))
-                   (long (get haircut :deferred-yield 0)))]
+        {:keys [principal realized-yield deferred-yield] :as deltas}
+        (validate-partial-fill-application! position decision)
+        p-delta principal
+        r-delta realized-yield
+        d-delta deferred-yield]
     (-> position
         (pos/normalize-position)
         (update :principal - p-delta)
@@ -1064,19 +1094,16 @@
           (update :haircut-yield + (reduce + 0 (vals haircut)))))))
 
 (defn apply-partial-fill
-  "Apply a partial-fill settlement to the world state, updating both the
-   position and any relevant world-level accounting.
+  "Apply only the validated position mutation for a partial-fill decision.
 
-   Returns updated world."
+   This generic yield-layer function intentionally does not mutate
+   :total-held. Protocol custody movement must be applied by the protocol's
+   settlement adapter (Sew uses lifecycle/apply-partial-fill-settlement), which
+   records a canonical held adjustment and enforces custody partition bounds."
   [world position decision]
   (let [owner-id (or (:owner/id position) (-> (pos/position-identity position) second))
-        updated-pos (post-partial-fill-position position decision)
-        filled-total (reduce + 0 (vals (:filled decision)))
-        raw-token (or (:token position) (get-in position [:position/id 3]))
-        tok (normalize-token raw-token)]
-    (-> world
-        (assoc-in [:yield/positions owner-id] updated-pos)
-        (update-in [:total-held tok] #(- (or % 0) filled-total)))))
+        updated-pos (post-partial-fill-position position decision)]
+    (assoc-in world [:yield/positions owner-id] updated-pos)))
 
 (defn apply-partial-fill-with-attribution
   "Apply a partial-fill settlement to world state, wrapping the mutation in
@@ -1094,7 +1121,7 @@
      :settlement/position-id — owner-id"
   [world position decision]
   (let [ctx {:settlement/mode (:settlement-mode decision)
-             :settlement/filled (reduce + 0 (vals (:filled decision)))
+             :settlement/filled (filled-total decision)
              :settlement/deferred (reduce + 0 (vals (:deferred decision)))
              :settlement/haircut (reduce + 0 (vals (:haircut decision)))
              :settlement/shortage (get-in decision [:evidence :shortage] 0)
@@ -1122,7 +1149,13 @@
                {:available-liquidity <long>
                 :position            <position map>
                 :policy              <optional policy>
-                :opts                <optional opts>}
+                :opts                <optional opts>
+                :liquidity-domain    <shared-liquidity identifier for batches>}
+
+   Every input in a multi-input batch must declare :liquidity-domain, and each
+   domain must occur only once. A shared domain requires a centralized allocator;
+   computing multiple fills from the same snapshot is not safe. A single-input
+   batch remains compatible with callers that do not need to name a domain.
 
    Returns updated world after all settlements applied.
 
@@ -1134,6 +1167,23 @@
    5. serial evidence capture (inside apply step)"
   [world inputs]
   (let [inputs (vec inputs)
+        missing-domain-inputs (when (> (count inputs) 1)
+                                (->> inputs
+                                     (map-indexed vector)
+                                     (keep (fn [[index input]]
+                                             (when (nil? (:liquidity-domain input)) index)))
+                                     vec))
+        _ (when (seq missing-domain-inputs)
+            (throw (ex-info "batch partial-fill requires liquidity domain"
+                            {:type :batch-partial-fill-missing-liquidity-domain
+                             :input-indexes missing-domain-inputs})))
+        declared-domains (keep :liquidity-domain inputs)
+        duplicate-domains (->> declared-domains frequencies (keep (fn [[domain n]]
+                                                                     (when (> n 1) domain))) vec)
+        _ (when (seq duplicate-domains)
+            (throw (ex-info "batch partial-fill has shared liquidity domain"
+                            {:type :batch-partial-fill-shared-liquidity
+                             :liquidity-domains duplicate-domains})))
         ;; 1: snapshot world (implicit — world is captured by closure)
         ;; 2: parallel pure compute — each fulfillment is independent
         decisions (util-evidence/contextual-pmap

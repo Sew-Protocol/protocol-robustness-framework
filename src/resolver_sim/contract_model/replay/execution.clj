@@ -1,5 +1,6 @@
 (ns resolver-sim.contract-model.replay.execution
   (:require [clojure.stacktrace :as st]
+            [clojure.string :as str]
             [resolver-sim.contract-model.replay.metrics :as metrics]
             [resolver-sim.contract-model.replay.analysis :as analysis]
             [resolver-sim.contract-model.replay.temporal :as temporal]
@@ -7,11 +8,60 @@
             [resolver-sim.contract-model.replay.checkpoints :as replay-checkpoints]
             [resolver-sim.protocols.protocol :as proto]
             [resolver-sim.evidence.chain :as chain]
+            [resolver-sim.evidence.node :as evidence-node]
             [resolver-sim.hash.canonical :as hc]
             [resolver-sim.util.evidence :as ev]
             [resolver-sim.util.attribution :as attr]
             [resolver-sim.time.context :as time-ctx]
             [resolver-sim.logging :as log]))
+
+(defn- yield-accounting-action?
+  [action]
+  (or (= action "trigger-accrue")
+      (= action "claim-deferred-yield")
+      (str/includes? (or action "") "yield")))
+
+(defn- numeric-map-delta [before after]
+  (into {}
+        (for [k (into (set (keys (or before {}))) (keys (or after {})))
+              :let [delta (- (long (get (or after {}) k 0))
+                             (long (get (or before {}) k 0)))]
+              :when (not (zero? delta))]
+          [k delta])))
+
+(defn- claimable-total [world]
+  (reduce + 0
+          (for [[_ domains] (:claimable-v2 world {})
+                [_ recipients] domains
+                [_ amount] recipients]
+            (long amount))))
+
+(defn- yield-accounting-delta [world-before world-after]
+  {:held-by-token (numeric-map-delta (:total-held world-before)
+                                     (:total-held world-after))
+   :fees-by-token (numeric-map-delta (:total-fees world-before)
+                                     (:total-fees world-after))
+   :claimable-delta (- (claimable-total world-after) (claimable-total world-before))
+   :held-adjustment-ids (mapv :held-adjustment/id
+                              (drop (count (:held-adjustments world-before))
+                                    (:held-adjustments world-after)))} )
+
+(defn- emit-yield-execution-node! [event accounting-delta]
+  (try
+    (evidence-node/emit-execution-node!
+     {:execution-id :execution/yield-accounting
+      :status :pass
+      :inputs {:event/seq (:seq event)
+               :event/action (:action event)
+               :event/params (:params event)}
+      :outputs accounting-delta
+      :extensions {:yield/accounting-delta accounting-delta}
+      :execution-kind :yield-accounting
+      :runner :replay-kernel})
+    (catch Exception e
+      (log/error! :yield-execution-node-failed
+                  {:seq (:seq event) :action (:action event) :error (.getMessage e)})
+      nil)))
 
 ;; ---------------------------------------------------------------------------
 ;; Action Dispatch with Evidence
@@ -334,7 +384,12 @@
                              [nil nil])
               metadata     (if (satisfies? proto/AnalysisModule protocol)
                              (proto/classify-transition protocol (:action event) result-kw)
-                             nil)]
+                             nil)
+              yield-delta  (when (and ok? (yield-accounting-action? (:action event)))
+                             (yield-accounting-delta world-t final-world))
+              yield-node   (when (and yield-delta
+                                      (evidence-mode-allows? flags :execution-node))
+                             (emit-yield-execution-node! event yield-delta))]
           ;; Emit projection evidence (best-effort, :all evidence-mode only)
           (when (and ph (evidence-mode-allows? flags :projection))
             (emit-projection-evidence! (:seq event)
@@ -363,6 +418,8 @@
                                true)
             :violations      all-violations
             :trace-metadata  metadata
+            :yield/accounting-delta yield-delta
+            :yield/execution-node-hash (:node-hash yield-node)
             :world           (proto/world-snapshot protocol final-world)
             :projection      proj
             :projection-hash ph

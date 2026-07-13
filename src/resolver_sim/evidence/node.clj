@@ -175,11 +175,38 @@
      :mtime-utc (str (java.time.Instant/ofEpochMilli (.lastModified f)))}))
 
 (defn- write-node-artifact!
+  "Atomically persist a node without replacing an existing content-addressed file.
+
+   Multiple emitters can produce the same node hash concurrently. The first
+   successful move claims the path; later writers discard their temporary file
+   and use the already-persisted equivalent node."
   [node]
   (let [path (node-artifact-path node)
-        f (io/file path)]
-    (.mkdirs (.getParentFile f))
-    (spit f (pr-str (canonical-disk-value node)))
+        f (io/file path)
+        parent (.getParentFile f)]
+    (.mkdirs parent)
+    (when-not (.exists f)
+      (let [tmp (java.nio.file.Files/createTempFile
+                 (.toPath parent)
+                 "node-"
+                 ".tmp"
+                 (make-array java.nio.file.attribute.FileAttribute 0))]
+        (try
+          (spit (.toFile tmp) (pr-str (canonical-disk-value node)))
+          (try
+            (try
+              (java.nio.file.Files/move
+               tmp (.toPath f)
+               (into-array java.nio.file.CopyOption
+                           [java.nio.file.StandardCopyOption/ATOMIC_MOVE]))
+              (catch java.nio.file.AtomicMoveNotSupportedException _
+                (java.nio.file.Files/move
+                 tmp (.toPath f)
+                 (make-array java.nio.file.CopyOption 0))))
+            (catch java.nio.file.FileAlreadyExistsException _
+              nil))
+          (finally
+            (java.nio.file.Files/deleteIfExists tmp)))))
     path))
 
 (defn read-persisted-node
@@ -385,17 +412,27 @@
                         :checks checks})))
      node)))
 
+(def ^:private node-persistence-lock
+  "Serializes validation, persistence, and chain registration for in-process
+   emitters sharing an artifact directory. Cross-process writers are protected
+   by write-node-artifact!'s atomic create-without-replace behavior."
+  (Object.))
+
 (defn persist-execution-node!
   ([node]
    (persist-execution-node! node (set (keys @*node-registry*))))
   ([node known-parent-hashes]
-   (validate-node-or-throw! node known-parent-hashes)
-   (let [path (write-node-artifact! node)
-         entry (node-artifact-entry node path)]
-     (chain/register-additional-artifact! entry)
-     {:node node
-      :artifact-entry entry
-      :path path})))
+   (locking node-persistence-lock
+     (validate-node-or-throw! node known-parent-hashes)
+     (let [path (write-node-artifact! node)
+           entry (node-artifact-entry node path)
+           already-registered? (some #(= path (or (:artifact/path %) (:path %)))
+                                     (:artifacts (chain/registry-snapshot)))]
+       (when-not already-registered?
+         (chain/register-additional-artifact! entry))
+       {:node node
+        :artifact-entry entry
+        :path path}))))
 
 (defn verify-persisted-node-artifact!
   ([path]

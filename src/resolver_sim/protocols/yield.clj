@@ -230,7 +230,35 @@
     [])
 
   (project-state [_ world query]
-    (get world query)))
+    (get world query))
+
+  proto/EconomicModel
+
+  (metric-vocabulary [_]
+    #{:yield/principal :yield/current-value :yield/realized :yield/unrealized
+      :yield/gross :yield/haircut :yield/deferred :yield/reclaimed
+      :yield/total-held :yield/total-principal :yield/total-realized
+      :yield/total-unrealized :yield/total-deferred :yield/total-haircut
+      :yield/total-reclaimed :yield/positions-count})
+
+  (adversarial-event? [_ _event _agent]
+    false)
+
+  (classify-event [_ _event _result-kw _error-kw]
+    #{})
+
+  (accum-protocol-metrics [_ metrics _ _ _ _ _ _]
+    metrics)
+
+  (summarise-batch [_ outcomes]
+    {:n (count outcomes)
+     :by-outcome (->> outcomes
+                      (group-by :trial/outcome)
+                      (map (fn [[k vs]] [k (count vs)]))
+                      (into {}))})
+
+  (advisory [_ _world _request-type _context]
+    {:not-supported true}))
 
 (def protocol
   "Singleton YieldProviderProtocol for replay and tests."

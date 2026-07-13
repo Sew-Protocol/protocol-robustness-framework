@@ -97,7 +97,7 @@ The telemetry notebook (`notebooks/telemetry.clj`) is intentionally treated as a
   not reconstructed from notebook UI state.
 - Notebook rendering is expected to align with these schema contracts:
   - `test-run.v1`
-  - `test-artifacts.v1`
+   - `test-artifacts.v1.2`
   - `trace-end-projection.v1`
   - `claimable-classification.v2` (v1 retained for historical artifacts)
     - `provenance` — `run_id`, `git_sha`, `produced_at`

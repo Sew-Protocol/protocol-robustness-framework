@@ -28,6 +28,31 @@
    :reproduce reproduce
    :invariant-summary inv-summary})
 
+(deftest build-report-adds-ecommerce-language-projection
+  (let [evidence (make-evidence
+                  "benchmarks/packs/sew/escrow-dispute-v1.edn"
+                  [{:scenario/id "release" :outcome :pass
+                    :metrics {:escrow/live-state "released"}}
+                   {:scenario/id "refund" :outcome :pass
+                    :metrics {:escrow/live-state "refunded"}}
+                   {:scenario/id "locked" :outcome :pass
+                    :metrics {:escrow/live-state "disputed"}}
+                   {:scenario/id "dispute-release" :outcome :pass
+                    :metrics {:escrow/live-state "released" :disputes-triggered 1}}]
+                  :metrics {:total 4 :passed 4})
+        report (rpt/build-report (temp-evidence-file evidence)
+                                 nil
+                                 "benchmarks/scoring/severity-weighted-robustness-v1.edn")
+        scenarios (get-in report [:stakeholder/use-case-results
+                                  :ecommerce/purchase
+                                  :stakeholder/scenarios])]
+    (is (= :merchant-paid (get-in scenarios [0 :stakeholder/outcome])))
+    (is (= "Merchant payment released" (get-in scenarios [0 :stakeholder/headline])))
+    (is (= :buyer-refunded (get-in scenarios [1 :stakeholder/outcome])))
+    (is (= :funds-locked (get-in scenarios [2 :stakeholder/outcome])))
+    (is (= "A buyer–merchant dispute was raised and the escrowed payment was released to the merchant."
+           (get-in scenarios [3 :stakeholder/summary])))))
+
 (deftest scenario-outcome-prefers-public-scenario-id
   (let [results [{:scenario/id "malicious-resolver-verdict-v1"
                   :file "scenarios/S25_profit-maximizer-slash-lifecycle.json"

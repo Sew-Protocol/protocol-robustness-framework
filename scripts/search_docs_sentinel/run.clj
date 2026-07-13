@@ -11,7 +11,7 @@
 
 (def scan-paths
   "Directories to scan for term occurrences."
-  ["docs" "notebooks" "src" "scenarios" "scripts" "schemas" "data" "suites"])
+  ["docs" "notebooks" "protocols_src" "src" "scenarios" "scripts" "schemas" "data" "suites"])
 
 (def queries-path
   "scripts/search_docs_sentinel/queries.edn")

@@ -271,8 +271,8 @@
                  :status :passed
                  :message "schema version matches"
                  :severity :info
-                 :expected "test-artifacts.v1.1"
-                 :actual "test-artifacts.v1.1"
+                 :expected "test-artifacts.v1.2"
+                 :actual "test-artifacts.v1.2"
                  :check-group :schema}
           result {:checks [check]
                   :metadata {:run-id "r1" :artifact-count 5}}

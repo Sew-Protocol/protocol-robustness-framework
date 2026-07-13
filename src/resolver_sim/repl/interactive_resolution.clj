@@ -302,20 +302,26 @@
                                 fa-reason (if is-release :force-authorised-release
                                               :force-authorised-refund)
                                 amount   (:amount-after-fee et)
-                                 ;; Build scope-map matching adjust-held in accounting.clj
-                                scope-map {:authorization/id nil
-                                           :authorization/type :force-authorisation
-                                           :held/direction direction
-                                           :token token
-                                           :amount amount
-                                           :held/account :escrow-principal
-                                           :owner/address recipient
-                                           :held/reason fa-reason
-                                           :held/workflow-id wf}
-                                scope-hash (hash/domain-hash ac/force-authorisation-scope-domain scope-map)
-                                auth-id   (str "fa-" wf "-"
-                                               (name (if is-release :release :refund)) "-"
-                                               (subs scope-hash 0 8))
+                                 scope-map {:authorization/id nil
+                                            :authorization/type :force-authorisation
+                                            :held/direction direction
+                                            :token token
+                                            :amount amount
+                                            :held/account :escrow-principal
+                                            :owner/address recipient
+                                            :held/reason fa-reason
+                                            :held/workflow-id wf}
+                                 scope-hash (hash/domain-hash ac/force-authorisation-scope-domain scope-map)
+                                 auth-id   (str "fa-" wf "-"
+                                                (name (if is-release :release :refund)) "-"
+                                                (subs scope-hash 0 8))
+                                 ;; Rebuild scope-map with real auth-id for
+                                 ;; ensure-force-authorisation-usable! verification.
+                                 ;; The scope-hash is computed without the id
+                                 ;; (matching how adjust-held builds its scope-map
+                                 ;; from position components — the id is added by
+                                 ;; ensure-force-authorisation-usable! during verification).
+                                 scope-map (assoc scope-map :authorization/id auth-id)
                                 force-auth-provenance
                                 (merge provenance
                                        {:authorization/type :force-authorisation
@@ -329,11 +335,25 @@
                                 result (if (and prev-decision
                                                 (= :force-authorised (:resolution-source prev-decision)))
                                          (t/fail :force-authorisation-already-executed)
-                                         (res/apply-resolution-transition
-                                          (:world session') wf (:address agent)
-                                          is-release resolution-hash nil
-                                          :resolution-source :force-authorised
-                                          :authorization-provenance force-auth-provenance))]
+                                         (let [world-with-grant (assoc-in (:world session')
+                                                              [:force-authorisations auth-id]
+                                                              {:authorization/id auth-id
+                                                               :authorization/type :force-authorisation
+                                                               :authorization/status :active
+                                                               :authorization/scope scope-map
+                                                               :authorization/scope-hash scope-hash
+                                                               :authorization/scope-kind :single-claim
+                                                               :authorization/workflow-id wf
+                                                               :authorization/allowed-action "execute-resolution"
+                                                               :consumed? false
+                                                               :starts-at (time-ctx/block-ts (:world session'))
+                                                               :expires-at nil
+                                                               :authorization/provenance provenance})]
+                                           (res/apply-resolution-transition
+                                            world-with-grant wf (:address agent)
+                                            is-release resolution-hash nil
+                                            :resolution-source :force-authorised
+                                            :authorization-provenance force-auth-provenance)))]
                             (if (:ok result)
                               (update result :extra merge
                                       {:authorization/id auth-id

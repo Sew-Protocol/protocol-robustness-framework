@@ -79,6 +79,8 @@
                             :scope-keys [:held/workflow-id]}
     :resolver-yield-accrued {:held/account :resolver-yield
                              :scope-keys [:held/owner-id :held/resolver]}
+    :resolver-yield-loss {:held/account :resolver-yield
+                          :scope-keys [:held/owner-id :held/resolver]}
     :resolver-yield-withdrawn {:held/account :resolver-yield
                                :scope-keys [:held/owner-id :held/resolver]}
    :resolver-slash-custody-debited {:held/account :resolver-slash-custody
@@ -136,10 +138,14 @@
                       {:type :authorization/not-found
                        :authorization/id auth-id})))
     (when-not (= :active (:authorization/status record))
-      (throw (ex-info (if (and (= :related-claims scope-kind)
-                               (= :consumed (:authorization/status record)))
-                        "force-authorisation related-claims members already consumed"
-                        "force-authorisation record is not active")
+      (throw (ex-info (let [s (:authorization/status record)]
+                        (cond
+                          (and (= :consumed s) (= :related-claims scope-kind))
+                          "force-authorisation related-claims members already consumed"
+                          (= :consumed s)
+                          "force-authorisation record already consumed"
+                          :else
+                          "force-authorisation record is not active"))
                       {:type (if (= :consumed (:authorization/status record))
                                :authorization/already-consumed
                                :authorization/not-active)
@@ -299,10 +305,13 @@
                            :authorization/status :consumed
                            :consumed? true))))
       ;; Single-claim: consume entire auth (current behavior)
-      (assoc-in world [:force-authorisations/consumed auth-id]
-                (merge base
-                       (when-let [d (:held/direction adjustment)]
-                         {:held/direction d}))))))
+      (let [consumed-entry (merge base
+                                  (when-let [d (:held/direction adjustment)]
+                                    {:held/direction d}))]
+        (-> world
+            (assoc-in [:force-authorisations/consumed auth-id] consumed-entry)
+            (assoc-in [:force-authorisations auth-id :consumed?] true)
+            (assoc-in [:force-authorisations auth-id :authorization/status] :consumed))))))
 
 (defn- next-held-adjustment-id
   [world]
@@ -579,7 +588,19 @@
 
 (defn replay-held-adjustment-state
   "Replay a held-adjustment ledger into replay-verified materialized custody
-   views. The ledger is canonical; returned indexes and balances are derived."
+   views. The ledger is canonical; returned indexes and balances are derived.
+
+   Index keys:
+   - :by-token     — total held per token (always >= 0 by invariant)
+   - :by-position  — total held per position-id (always >= 0 by invariant)
+   - :by-account   — total held per account type (always >= 0 by invariant)
+   - :by-owner     — net custody-flow attribution per owner address.
+                     This is NOT a custody balance: an owner may receive flow
+                     from multiple positions, and funds can move between owners
+                     via settlement. Negative values indicate net outflow from
+                     that address's custody flow, which is expected when
+                     escrows are released or refunded.
+   - :by-workflow  — total held per workflow-id (always >= 0 by invariant)"
   ([adjustments] (replay-held-adjustment-state {} adjustments))
   ([initial-held adjustments]
    (let [initial-state {:held-ledger/index {:by-token initial-held
@@ -837,6 +858,29 @@
                 :replayed-final-state replay-state}}]))
 
 ;; ---------------------------------------------------------------------------
+;; Fee-recipient configuration
+;; ---------------------------------------------------------------------------
+
+(defn resolve-fee-recipient
+  "Resolve the fee recipient address for a given token.
+   Returns per-token override when configured, falling back to :default,
+   which itself defaults to the zero-address sentinel."
+  [world token]
+  (get-in world [:fee-recipients :by-token token]
+          (get-in world [:fee-recipients :default]
+                  t/zero-address)))
+
+(defn set-fee-recipient
+  "Set the fee recipient for a token or the default recipient.
+   token-or-default may be a token keyword or :default.
+   Returns updated world."
+  [world token-or-default recipient]
+  (assert (and recipient (not= recipient "")) "recipient must be non-empty")
+  (if (= token-or-default :default)
+    (assoc-in world [:fee-recipients :default] recipient)
+    (assoc-in world [:fee-recipients :by-token token-or-default] recipient)))
+
+;; ---------------------------------------------------------------------------
 ;; total-fees tracking
 ;; ---------------------------------------------------------------------------
 
@@ -851,9 +895,12 @@
    Sets total-fees[token] = 0 and returns {:ok true :world world' :amount amount}.
    Mirrors EscrowVault.withdrawFees.
 
+   recipient — resolved fee recipient address (from policy, not caller-chosen).
+   authorized-by — governance actor address that authorized the withdrawal.
+
    Guard: amount must be > 0.
    Guard: token must not be in a liquidity-crunch."
-  [world token]
+  [world token recipient authorized-by]
   (let [amount (get-in world [:total-fees token] 0)]
     (cond
       (zero? amount)
@@ -865,7 +912,9 @@
       :else
       (let [world' (-> world
                        (assoc-in [:total-fees token] 0)
-                       (update-in [:total-withdrawn token] (fnil + 0) amount))]
+                       (update-in [:total-withdrawn token] (fnil + 0) amount)
+                       (update-in [:total-fees-withdrawn token] (fnil + 0) amount)
+                       (update-in [:fee-payouts token recipient] (fnil + 0) amount))]
         (attr/with-attribution {:subject/type :token
                                 :subject/id token
                                 :action/type :fees/withdraw
@@ -874,9 +923,13 @@
            :fees-withdrawn
            {:fee/before {:total-fees amount}}
            {:fee/after {:total-fees 0
-                        :total-withdrawn (get-in world' [:total-withdrawn token])}}
+                        :total-withdrawn (get-in world' [:total-withdrawn token])
+                        :fee-payouts (get-in world' [:fee-payouts token])}}
            {:fee/token token
-            :fee/amount amount}))
+            :fee/amount amount
+            :recipient/address recipient
+            :authorized-by authorized-by
+            :fee/bucket :protocol}))
         (assoc (t/ok world') :amount amount)))))
 
 ;; ---------------------------------------------------------------------------
@@ -1024,8 +1077,20 @@
    where the configured bond exceeds the escrow value, which would make
    challenge uneconomic even if the caller had the funds."
   [world workflow-id appellant snap token amount]
-  (let [fee-bps (or (:appeal-bond-protocol-fee-bps snap) 0)
-        {:keys [fee net]} (sew-econ/calculate-appeal-bond-fee amount fee-bps)
+  (let [et (t/get-transfer world workflow-id)
+        workflow-token (:token et)]
+    (when-not et
+      (throw (ex-info "appeal bond requires an existing workflow"
+                      {:type :invalid-bond-workflow
+                       :workflow-id workflow-id})))
+    (when-not (= token workflow-token)
+      (throw (ex-info "appeal bond token must match workflow escrow token"
+                      {:type :bond-token-mismatch
+                       :workflow-id workflow-id
+                       :expected workflow-token
+                       :actual token})))
+    (let [fee-bps (or (:appeal-bond-protocol-fee-bps snap) 0)
+          {:keys [fee net]} (sew-econ/calculate-appeal-bond-fee amount fee-bps)
         world' (-> world
                    (update-in [:bond-balances workflow-id appellant] (fnil + 0) net)
                    (update-in [:bond-fees token] (fnil + 0) fee)
@@ -1057,7 +1122,7 @@
        nil
        {:world-before world
         :world-after world'}))
-    world'))
+    world')))
 
 (defn distribute-slashed-funds
   "Internal: distribute slashed funds according to configurable split.
@@ -1226,6 +1291,68 @@
                            (assoc-in [:bond-balances workflow-id appellant] 0)
                             (record-claimable-v2 workflow-id :settlement/principal appellant amount))
                         w))
-                    world
-                    wf-bonds))
+      world
+      wf-bonds))
       world)))
+
+(defn final-held-summary
+  "Derived reporting summary of the held-adjustment ledger from the live world state.
+
+   Computed entirely from `:held-adjustments`, `:total-held`, and `:held-ledger/index`.
+   Never becomes a second source of truth — the ledger is canonical.
+
+   Returns:
+
+     {:by-token
+      {:USDC {:opening 0, :in 1000, :out 1000, :final 0}}
+      :by-workflow
+      {42 {:token :USDC
+           :principal-final 0
+           :yield-custody-final 0
+           :final-held 0}}
+      :ledger-adjustment-count 2
+      :reconstruction-valid? true}   ;; replay of all adjustments matches :total-held
+
+   Suitable for scenario reports, benchmark evidence packages, and review material."
+  [world]
+  (let [adjustments (get world :held-adjustments [])
+        index       (get world :held-ledger/index {})
+        total-held  (get world :total-held {})
+        position-index (get index :by-position {})
+        workflow-index (get index :by-workflow {})
+        ;; Per-token: compute total in/out from adjustments
+        token-flows (reduce (fn [acc adj]
+                              (let [t (:token adj)
+                                    amt (:amount adj 0)
+                                    dir (:held/direction adj)]
+                                (if (= :in dir)
+                                  (update-in acc [t :in] (fnil + 0) amt)
+                                  (update-in acc [t :out] (fnil + 0) amt))))
+                            {} adjustments)
+        token-rows (into {} (map (fn [[t current]]
+                                   [t {:opening 0
+                                       :in (get-in token-flows [t :in] 0)
+                                       :out (get-in token-flows [t :out] 0)
+                                       :final current}])
+                                 (sort-by key total-held)))
+        ;; Per-workflow: split by account type
+        wf-adjs (group-by :held/workflow-id adjustments)
+        wf-rows (into {} (map (fn [[wf-id adjs]]
+                                (let [token (some :token adjs)
+
+                                      principal-pos [:held/position token :escrow-principal wf-id]
+                                      yield-pos    [:held/position token :yield-custody wf-id]
+                                      principal-final (get position-index principal-pos 0)
+                                      yield-final    (get position-index yield-pos 0)]
+                                  [wf-id {:token token
+                                          :principal-final principal-final
+                                          :yield-custody-final yield-final
+                                          :final-held (get workflow-index wf-id 0)}]))
+                              (sort-by key wf-adjs)))
+        ;; Reconstruction validity: replay all adjustments and compare to :total-held
+        reconstructed (replay-held-adjustments adjustments)
+        reconstruction-valid? (= reconstructed total-held)]
+    {:by-token token-rows
+     :by-workflow wf-rows
+     :ledger-adjustment-count (count adjustments)
+     :reconstruction-valid? reconstruction-valid?}))

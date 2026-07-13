@@ -22,7 +22,8 @@
                  :event/seq        seq-val
                  :event/id         (:event/id event)
                  :world/hash       (hc/hash-with-intent {:hash/intent :world-structure} checkpoint-data)
-                 :checkpoint/type  :post-event})
+                 ;; Captured immediately before process-step dispatch.
+                 :checkpoint/type  :pre-event})
         (cond-> already-exists?
           (update-in [:diagnostics :checkpoint-collisions] (fnil conj [])
                      {:seq seq-val :target key-field})))))

@@ -43,6 +43,24 @@
 
 (def default-pro-rata-projection-definition-id :projection/pro-rata-slash-obligation)
 
+(defn make-pro-rata-progress-atom
+  "Create caller-owned progress state for one pro-rata allocation.
+
+   Pass the returned atom as `:progress-atom` to `allocate-pro-rata`. The
+   allocator updates it atomically through :preparing, :requesting,
+   :allocating, and :completed phases. It deliberately does not use a global
+   atom, so concurrent allocations remain isolated by default."
+  []
+  (atom {:status :pending
+         :phase :pending
+         :current 0
+         :total 0}))
+
+(defn- report-pro-rata-progress!
+  [progress-atom update]
+  (when progress-atom
+    (swap! progress-atom merge update)))
+
 (defn- registry-entry
   [entries id]
   (some #(when (= id (:id %)) %) entries))
@@ -250,7 +268,8 @@
    - :rounding :floor-with-largest-remainder distributes dust by Hare quota
    - :remainder-policy :unallocated reports capped/unallocated amounts; it does not redistribute
    - :ordering-policy :input-order breaks equal-remainder ties by input order"
-  [{:keys [amount items id-fn weight-fn cap-fn rounding remainder-policy ordering-policy]
+  [{:keys [amount items id-fn weight-fn cap-fn rounding remainder-policy ordering-policy
+           progress-atom]
     :or {id-fn :id
          weight-fn :weight
          cap-fn (constantly nil)
@@ -264,6 +283,13 @@
   (when-not (= :input-order ordering-policy)
     (throw (ex-info "Unsupported pro-rata ordering policy" {:ordering-policy ordering-policy})))
   (let [amount (non-negative-integer amount)
+        items (vec (or items []))
+        total-items (count items)
+        _ (report-pro-rata-progress! progress-atom
+                                     {:status :running
+                                      :phase :preparing
+                                      :current 0
+                                      :total total-items})
         prepared (mapv (fn [idx item]
                          (let [weight (non-negative-integer (weight-fn item))
                                cap-raw (cap-fn item)
@@ -274,14 +300,18 @@
                             :id (id-fn item)
                             :weight weight
                             :cap cap}))
-                       (range) (or items []))
+                       (range) items)
         total-weight (reduce +' 0 (map :weight prepared))
+        _ (report-pro-rata-progress! progress-atom {:phase :requesting})
         requests (if (zero? total-weight)
                    (repeat (count prepared) 0)
                    (pro-rata-requests amount prepared total-weight rounding))
+        _ (report-pro-rata-progress! progress-atom {:phase :allocating})
         allocations (mapv (fn [{:keys [id weight cap]} requested]
                             (let [allocated (min requested (or cap requested))
                                   unmet (- requested allocated)]
+                              (when progress-atom
+                                (swap! progress-atom update :current inc))
                               {:id id
                                :allocated allocated
                                :unmet unmet
@@ -290,16 +320,21 @@
                           prepared requests)
         total-allocated (reduce +' 0 (map :allocated allocations))
         total-unmet (reduce +' 0 (map :unmet allocations))
-        remainder (- amount total-allocated total-unmet)]
-    {:allocations allocations
-     :total-requested amount
-     :total-allocated total-allocated
-     :total-unmet total-unmet
-     :remainder remainder
-     :policy {:rounding rounding
-              :remainder-policy remainder-policy
-              :ordering-policy ordering-policy
-              :total-weight total-weight}}))
+        remainder (- amount total-allocated total-unmet)
+        result {:allocations allocations
+                :total-requested amount
+                :total-allocated total-allocated
+                :total-unmet total-unmet
+                :remainder remainder
+                :policy {:rounding rounding
+                         :remainder-policy remainder-policy
+                         :ordering-policy ordering-policy
+                         :total-weight total-weight}}]
+    (report-pro-rata-progress! progress-atom
+                               {:status :completed
+                                :phase :completed
+                                :current total-items})
+    result))
 
 (def ^:private max-redistribution-passes 10)
 

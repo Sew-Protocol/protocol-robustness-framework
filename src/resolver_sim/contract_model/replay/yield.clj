@@ -2,14 +2,11 @@
   "Sequential replay for yield-v1 — no batch/alias/temporal/theory branches.
 
    Validates that each `yield_accrue` event's `:dt` matches the `:time` delta
-   from the previous event. Provider scenarios should use `replay-yield-scenario`
-   (or `simple-replay` on yield-v1, which delegates here).
+   from the previous event. Provider scenarios should use `simple-replay`
+   (which routes yield-v1 through the canonical `replay-events` loop).
 
-   === Architecture ===
-   - `replay-yield-events` — pure computation, no side effects, no risk monitor.
-     Used by the simple-replay profile adapter.
-   - `replay-yield-scenario` — legacy wrapper adding risk monitor, logging.
-     Retained for existing callers that depend on risk/events side effects."
+   Legacy entry point: `replay-yield-scenario` for callers that need
+   risk-monitor side effects."
   (:require [resolver-sim.logging :as log]
             [resolver-sim.contract-model.replay.analysis :as analysis]
             [resolver-sim.contract-model.replay.execution :as execution]
@@ -29,7 +26,7 @@
 (defn- yield-accrue-event? [event]
   (= "yield_accrue" (action-name event)))
 
-(defn- validate-dt-time-alignment
+(defn validate-dt-time-alignment
   "For yield_accrue events, require params :dt to equal (:time - prev-time)."
   [events]
   (let [sorted (sort-by :seq events)
@@ -70,6 +67,9 @@
       :else {:ok true})))
 
 (defn- run-yield-loop
+  "INTERNAL — sequential loop for yield replay.
+   Used only by the legacy `replay-yield-scenario` wrapper. The profile-adapter
+   path (simple-replay) now uses `execution/run-simulation-loop` via replay-events."
   [protocol context scenario-id events world0]
   (loop [world world0
          events (sort-by :seq events)
@@ -103,54 +103,46 @@
            :world world}
           (recur world (rest events) trace' metrics'))))))
 
-(defn replay-yield-events
-  "Pure computation: replay a yield-provider scenario with the thin sequential runner.
+(defn replay-yield-scenario
+  "Legacy wrapper: replay a yield-provider scenario with risk-monitor instrumentation.
 
-   This is the side-effect-free core — no risk monitor, no logging, no evidence I/O.
-   Used by the simple-replay profile adapter.
+   Calls `run-yield-loop` (the thin sequential loop) and adds risk-monitor side
+   effects (`risk/clear!`, `risk/events`) around it.  `protocol` defaults to
+   `yield-v1`.
 
-   Accepts optional replay-opts map for compatibility; currently supports :run-id.
-   Unsupported opts are silently ignored (caller should validate via adapter)."
-  ([protocol scenario] (replay-yield-events protocol scenario nil))
-  ([protocol scenario replay-opts]
+   Result shape matches `replay-with-protocol` enough for `scenario.runner`
+   and expectation finalization.
+
+   NOTE: This is the legacy path. New callers should use `simple-replay` or
+   `replay-events` with `{:flags {:yield-dt-validation? true
+                                  :metrics-profile :yield-provider}}`."
+  ([scenario] (replay-yield-scenario yp/protocol scenario))
+  ([protocol scenario]
+   (risk/clear!)
+   (log/info! "yield-replay/start" {:id (:scenario-id scenario)})
    (let [validation (validate-yield-scenario scenario)]
      (if-not (:ok validation)
-       {:outcome :invalid
-        :scenario-id (:scenario-id scenario)
-        :events-processed 0
-        :trace []
-        :metrics (metrics/zero-metrics protocol)
-        :halt-reason (:error validation)
-        :detail (:detail validation)
-        :protocol protocol}
+       (let [result {:outcome :invalid
+                     :scenario-id (:scenario-id scenario)
+                     :events-processed 0
+                     :trace []
+                     :metrics (metrics/zero-metrics protocol)
+                     :halt-reason (:error validation)
+                     :detail (:detail validation)
+                     :protocol protocol}]
+         (log/info! "yield-replay/end" {:id (:scenario-id scenario) :outcome :invalid})
+         (assoc result :risk-events (risk/events)))
        (let [agents      (:agents scenario)
              p-params    (get scenario :protocol-params {})
              scenario-id (:scenario-id scenario)
-             run-id (or (:run-id replay-opts) (:run-id scenario) (str scenario-id "-run"))
+             run-id (or (:run-id scenario) (str scenario-id "-run"))
              context     (-> (proto/build-execution-context protocol agents p-params)
                              (assoc :replay-flags yield-replay-flags
                                     :run-id run-id))
              world0      (-> (proto/init-world protocol scenario)
                              (assoc-in [:params :scenario-id] scenario-id))
-             events      (:events scenario)]
-         (let [raw (run-yield-loop protocol context scenario-id events world0)]
-           (analysis/finalize-scenario-result scenario raw yield-replay-flags)))))))
-
-(defn replay-yield-scenario
-  "Legacy wrapper: replay a yield-provider scenario with risk-monitor instrumentation.
-
-   Adds risk-monitor side effects (`risk/clear!`, `risk/events`) around
-   `replay-yield-events`.  `protocol` defaults to `yield-v1`.
-
-   Result shape matches `replay-with-protocol` enough for `scenario.runner`
-   and expectation finalization.
-
-   NOTE: This wrapper exists for backward compatibility. New callers should
-   prefer `replay-yield-events` (pure) or the simple-replay profile adapter."
-  ([scenario] (replay-yield-scenario yp/protocol scenario))
-  ([protocol scenario]
-   (risk/clear!)
-   (log/info! "yield-replay/start" {:id (:scenario-id scenario)})
-   (let [result (replay-yield-events protocol scenario)]
-     (log/info! "yield-replay/end" {:id (:scenario-id scenario) :outcome (:outcome result)})
-     (assoc result :risk-events (risk/events)))))
+             events      (:events scenario)
+             raw (run-yield-loop protocol context scenario-id events world0)
+             result (analysis/finalize-scenario-result scenario raw yield-replay-flags)]
+         (log/info! "yield-replay/end" {:id scenario-id :outcome (:outcome result)})
+         (assoc result :risk-events (risk/events)))))))

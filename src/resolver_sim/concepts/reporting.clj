@@ -9,9 +9,21 @@
    are available alongside protocol-level results.
 
    Related: resolver-sim.concepts.registry provides the concept data
-   that this namespace formats into report sections.")
+   that this namespace formats into report sections."
+  (:require [resolver-sim.concepts.registry :as registry]))
 
 ;; ── Report enrichment shape ──────────────────────────────────────────────────
+
+(defn- not-claimed
+  [concept]
+  (cond-> ["This stakeholder-facing concept does not assert implementation, deployment, legal, economic-safety, or benchmark coverage."
+           "Protocol support must be established independently through adapter capabilities, executable scenarios, benchmark claims, and deployment configuration."]
+    (= :illustrative (:concept/maturity concept))
+    (conj "This mapping is illustrative; it is not a production-support claim.")
+
+    (and (map? (:concept/evidence concept))
+         (every? empty? (vals (:concept/evidence concept))))
+    (conj "No executable scenario, benchmark, or claim evidence is linked to this concept.")))
 
 (defn enrich-report
   "Given a raw simulation or benchmark result map and a vector of
@@ -23,12 +35,20 @@
   {:concept/section
    {:concept/summaries
     (mapv (fn [c]
-            {:concept/id (:concept/id c)
-             :concept/name (:concept/name c)
-             :concept/summary (:concept/summary c)
-             :concept/stakeholder-question (:concept/stakeholder-question c)
-             :concept/assumptions (:concept/assumptions c)
-             :concept/out-of-scope (:concept/out-of-scope c)})
+            (let [c (registry/normalize-concept c)]
+              {:concept/id (:concept/id c)
+               :concept/name (:concept/name c)
+               :concept/summary (:concept/summary c)
+               :concept/stakeholder-question (:concept/stakeholder-question c)
+               :concept/maturity (:concept/maturity c)
+               :concept/support-status (:concept/support-status c)
+               :concept/assumptions (:concept/assumptions c)
+               :concept/out-of-scope (:concept/out-of-scope c)
+               :concept/known-gaps (:concept/known-gaps c)
+               :concept/evidence (:concept/evidence c)
+                              :concept/not-claimed (not-claimed c)
+                              :concept/mappings (select-keys c [:concept/roles :concept/entities
+                                                :concept/actions :concept/outcomes])}))
           concepts)
     :risk-annotations
     (let [all-failure-modes (mapcat :concept/failure-modes concepts)]

@@ -44,11 +44,11 @@ This repository maintains two scenario suites:
 # Deterministic in-process suite (S01–S41)
 clojure -M:run -- --invariants
 
-# Adversarial gRPC suite (all 33 scenarios)
-cd test/integration/python && python invariant_suite.py
+# Adversarial agent suite (all scenarios)
+bb adv:broad
 
-# Adversarial gRPC suite (one F-class)
-python invariant_suite.py --scenario F3
+# Focused adversarial search or scenario replay
+bb run:scenario:search <text>
 ```
 
 ---
@@ -100,7 +100,7 @@ These scenarios verify that the protocol behaves correctly under normal and edge
 
 ### Same-block ordering contract (S51 family)
 
-`S51`, `S51b`, `S51c`, and `S51d` define the deterministic same-block ordering rules at the appeal-deadline boundary.
+`s51-same-block-challenge-finalize-race`, `s51-inverse-same-block-escalate-then-finalize`, `s51c-deadline-matrix-execute-then-escalate`, and `s51d-deadline-matrix-escalate-then-execute` define the deterministic same-block ordering rules at the appeal-deadline boundary. These are fixture-based scenarios (defined in `protocols_src/.../extended.clj`, no standalone JSON).
 
 - Same timestamp events are ordered by scenario `:seq` (engine preserves list order for equal `:time`).
 - Escalation/challenge eligibility is strict before deadline only (`now < deadline`).
@@ -116,7 +116,7 @@ These scenarios are regression guards for deadline interpretation, same-block de
 
 ---
 
-## S24–S33: Ethereum Failure Modes (F1–F10)
+## S24–S35: Ethereum Failure Modes (F1–F12)
 
 These scenarios model attack strategies that have been observed or theorised in deployed Ethereum protocols. Each encodes a concrete failure that would cause fund loss or liveness failure.
 
@@ -219,3 +219,19 @@ These scenarios model attack strategies that have been observed or theorised in 
 **Failure:** Escrows 2 and 3 permanently stuck in `disputed` state. `disputes_triggered=4`, `arbitrator.resolutions=2`, `still_disputed=2`.
 
 **Why audits miss it:** Static analysis confirms `resolve()` is callable. Capacity exhaustion failure only emerges under concurrent load.
+
+---
+
+### F11 — Pending Settlement Races + Fraud Slash (`S34`)
+
+**Attack:** Pending settlement window is raced by a fraudulent resolver attempting to execute a slashed settlement before the honest party can intervene.
+
+**Failure:** A slashed resolver's settlement executes if the honest party fails to claim within the same block. Tests the interaction between fraud proof timelines and settlement execution ordering.
+
+---
+
+### F12 — Profit Maximizer Governance Wins Appeal (`S35`)
+
+**Attack:** A profit-maximizing resolver, after being slashed by governance, appeals the decision and wins at a higher escalation level.
+
+**Failure:** Governance slashing is overturned on appeal. Tests the escalation layer's ability to correct governance-level decisions when the resolver's appeal is valid.

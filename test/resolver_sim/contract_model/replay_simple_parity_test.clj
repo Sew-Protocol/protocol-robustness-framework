@@ -13,7 +13,11 @@
   (:require [clojure.test :refer :all]
             [resolver-sim.contract-model.replay :as replay]
             [resolver-sim.contract-model.replay.flags :as flags]
+            [resolver-sim.contract-model.replay.profile-adapter :as adapter]
             [resolver-sim.protocols.dummy :as dummy]
+            [resolver-sim.protocols.registry :as preg]
+            [resolver-sim.evidence.chain :as chain]
+            [resolver-sim.hash.canonical :as hc]
             [resolver-sim.io.scenarios :as io-scenarios]))
 
 ;; ===========================================================================
@@ -25,8 +29,14 @@
   [path]
   (io-scenarios/load-scenario-file path))
 
+(defn- terminal-world-hash
+  "Canonical semantic hash of the terminal valid world, when replay produced one."
+  [result]
+  (when-let [world (:last-valid-world result)]
+    (hc/hash-with-intent {:hash/intent :world-structure} world)))
+
 (defn- compare-results
-  "Compare simple-replay and replay-events for equivalence on core fields.
+  "Compare simple-replay and replay-events for semantic equivalence.
    Returns nil when equivalent, or a description of the first difference."
   [simple-result events-result]
   (cond
@@ -42,6 +52,17 @@
     (not= (mapv (juxt :seq :result :error) (:trace simple-result))
           (mapv (juxt :seq :result :error) (:trace events-result)))
     (str "trace (seq/result/error) differs")
+
+    (not= (mapv :projection-hash (:trace simple-result))
+          (mapv :projection-hash (:trace events-result)))
+    (str "per-step projection hashes differ")
+
+    (not= (:metrics simple-result) (:metrics events-result))
+    (str "metrics differ")
+
+    (not= (terminal-world-hash simple-result)
+          (terminal-world-hash events-result))
+    (str "terminal world hash differs")
 
     :else nil))
 
@@ -187,3 +208,81 @@
     (is (= "1.0" (:context/version result)))
     (is (= {:scenario-id "test" :run-id "my-run"} (:context/source result)))
     (is (seq (:scenario-normalizations result)))))
+
+;; ===========================================================================
+;; 8. Evidence-invariant tests
+;; ===========================================================================
+
+(deftest simple-replay-leaves-no-evidence-artifacts
+  (let [scenario {:scenario-id "evidence-free-test" :schema-version "1.0"
+                  :initial-block-time 1000
+                  :agents [{:id "a" :address "0xA"}]
+                  :events [{:seq 0 :time 1000 :agent "a" :action "noop" :params {}}]}
+        result (replay/simple-replay dummy/protocol scenario)]
+    (is (= :pass (:outcome result)))
+    (is (zero? (get-in (chain/registry-snapshot) [:artifact-count] 0))
+        "Evidence registry artifact count is zero after simple-replay")))
+
+(deftest simple-replay-prohibited-flags-are-rejected
+  (is (thrown-with-msg? clojure.lang.ExceptionInfo
+        #"cannot override enforced profile flags"
+        (adapter/extract-simple-opts {:flags {:evidence-mode :all
+                                               :strict-validation? true}}
+                                     :test))))
+
+(deftest simple-replay-rejects-unknown-top-level-options
+  (is (thrown-with-msg? clojure.lang.ExceptionInfo
+        #"unsupported options"
+        (adapter/extract-simple-opts {:minimal false} :test))))
+
+(deftest simple-replay-rejects-top-level-evidence-mode
+  (is (thrown-with-msg? clojure.lang.ExceptionInfo
+        #"Simple replay does not support"
+        (adapter/extract-simple-opts {:evidence-mode :all} :test))))
+
+(deftest simple-replay-no-evidence-with-evidence-module
+  (let [scenario {:scenario-id "dummy-evidence-test" :schema-version "1.0"
+                  :initial-block-time 1000
+                  :agents [{:id "a" :address "0xA"}]
+                  :events [{:seq 0 :time 1000 :agent "a" :action "noop" :params {}}]}
+        result (replay/simple-replay dummy/protocol scenario)]
+    (is (= :pass (:outcome result)))
+    (is (zero? (get-in (chain/registry-snapshot) [:artifact-count] 0))
+        "Evidence registry is empty after simple-replay")))
+
+;; ===========================================================================
+;; 9. Real Sew scenario parity
+;; ===========================================================================
+
+(deftest parity-sew-basic-escrow-release
+  (let [scenario (io-scenarios/load-scenario-file "resource:scenarios/edn/S-DR-001-basic-release-ruling.edn")
+        protocol (preg/get-protocol "sew-v1")
+        simple-result (replay/simple-replay protocol scenario)
+        events-result (replay/replay-events protocol scenario {:minimal true})
+        diff (compare-results simple-result events-result)]
+    (if diff
+      (do (println "PARITY FAIL (sew-basic):" diff) (is false diff))
+      (is (= :pass (:outcome simple-result))
+          "S-DR-001 basic release passes under simple-replay"))))
+
+(deftest parity-sew-expected-error-scenario
+  (let [scenario (io-scenarios/load-scenario-file "resource:scenarios/edn/S-DR-003-duplicate-dispute-rejected.edn")
+        protocol (preg/get-protocol "sew-v1")
+        simple-result (replay/simple-replay protocol scenario)
+        events-result (replay/replay-events protocol scenario {:minimal true})
+        diff (compare-results simple-result events-result)]
+    (if diff
+      (do (println "PARITY FAIL (sew-expected-error):" diff) (is false diff))
+      (is (= :pass (:outcome simple-result))
+          "S-DR-003 passes (expected errors matched)"))))
+
+(deftest parity-sew-rich-scenario
+  (let [scenario (io-scenarios/load-scenario-file "resource:scenarios/edn/S-DR-030-biased-resolver-appealed.edn")
+        protocol (preg/get-protocol "sew-v1")
+        simple-result (replay/simple-replay protocol scenario)
+        events-result (replay/replay-events protocol scenario {:minimal true})
+        diff (compare-results simple-result events-result)]
+    (if diff
+      (do (println "PARITY FAIL (sew-rich):" diff) (is false diff))
+      (is (some? (:outcome simple-result))
+          "S-DR-030 runs under simple-replay"))))

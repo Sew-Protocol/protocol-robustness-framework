@@ -9,7 +9,7 @@ Produces into results/test-artifacts/:
   test-run.json                 schema: test-run.v1
   test-summary.json             schema: test-summary.v2
   claimable-classification.json schema: claimable-classification.v2
-  test-artifacts.json           schema: test-artifacts.v1.1
+  test-artifacts.json           schema: test-artifacts.v1.2
 
 Only artifacts produced by this invocation are registered.
 """
@@ -27,6 +27,7 @@ import sys
 import tempfile
 
 from evidence_config import EvidenceConfig
+from schema_validator import SchemaValidator
 
 SCENARIOS_DIR = pathlib.Path("scenarios")
 
@@ -234,10 +235,16 @@ def write_artifacts_to(
         "contract_version": cfg.contract_version,
         "run_id":           run_id,
         "generated_at":     created_at,
-        "generator":        {"name": "artifact-registry-emitter", "version": "v1.1"},
+        "generator":        {"name": "artifact-registry-emitter", "version": "v1.2"},
         "root_dir":         str(artifact_dir),
         "artifacts":        final_entries,
     }
+    struct_errors = SchemaValidator().validate(registry)
+    if struct_errors:
+        print(f"Error: Generated registry is structurally invalid ({len(struct_errors)} error(s))")
+        for e in struct_errors:
+            print(f"  {e.path}: {e.message}")
+        sys.exit(1)
     write_atomic_json(registry_file, registry)
 
 
@@ -286,7 +293,7 @@ def main() -> int:
                    pathlib.Path(cfg._data.get("runs_root", "results/runs")) / f"{make_scenario_slug(args.scenario, args.suite)}-{run_id}")
     write_artifacts_to(per_run_dir, cfg, args, run_id, created_at, git_info, summary, run_manifest, claimable)
 
-    print(f"[artifact-registry] Emitted v1.1 to {per_run_dir}")
+    print(f"[artifact-registry] Emitted v1.2 to {per_run_dir}")
     return 0
 
 

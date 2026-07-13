@@ -164,8 +164,21 @@ Concept layer `:maps-to` values use a consistent keyword taxonomy:
 | `:protocol.outcome/*` | `:concept/outcomes` | `:protocol.outcome/released`, `:protocol.outcome/stuck` |
 
 These keywords are ad-hoc stakeholder-facing labels, not internal protocol
-type definitions. They bridge between concept language and protocol
-mechanics without requiring exact correspondence to source types.
+ type definitions. They bridge between concept language and protocol
+ mechanics without requiring exact correspondence to source types.
+
+### Capability Validation Boundary
+
+A mapping label is not, by itself, an implementation-support claim. Protocol
+adapters expose capabilities in configuration- and state-dependent ways, so
+callers that need support verification must supply the exact capability labels
+for the selected adapter/version/configuration to
+`resolver-sim.concepts.registry/capability-validation-errors`. The function
+returns structured errors for mappings outside that declared surface.
+
+Reports therefore include `:concept/not-claimed`: use-case mappings are
+illustrative unless separate scenario, benchmark, capability, and deployment
+evidence establishes support.
 
 ## Validation
 

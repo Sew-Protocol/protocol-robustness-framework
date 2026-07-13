@@ -1,7 +1,8 @@
 (ns resolver-sim.concepts.benchmark-test
   (:require [clojure.test :refer [deftest is testing]]
-            [resolver-sim.concepts.benchmark :as benchmark-concepts]
-            [resolver-sim.concepts.registry :as concepts-registry]))
+              [resolver-sim.concepts.benchmark :as benchmark-concepts]
+              [resolver-sim.concepts.registry :as concepts-registry]
+              [resolver-sim.concepts.reporting :as reporting]))
 
 (deftest resolve-benchmark-concepts-prefers-local-shadow
   (testing "benchmark-local concepts override global concepts with the same id"
@@ -29,3 +30,49 @@
             [{:concept/id :concept/a
               :concept/related [:concept/b :concept/missing]}
              {:concept/id :concept/b}])))))
+
+(deftest normalize-concept-adds-mapping-statuses
+  (let [concept {:concept/roles {:native {:maps-to [:protocol.actor/sender]}
+                                 :approximate {:maps-to [:protocol.actor/resolver]
+                                               :mapping/confidence :approximate}}
+                 :concept/entities {:unsupported {:maps-to []}}
+                 :concept/actions {}
+                 :concept/outcomes {}}
+        normalized (concepts-registry/normalize-concept concept)]
+    (is (= :native (get-in normalized [:concept/roles :native :mapping/status])))
+    (is (= :approximate (get-in normalized [:concept/roles :approximate :mapping/status])))
+    (is (= :not-modelled (get-in normalized [:concept/entities :unsupported :mapping/status])))
+    (is (= [{:concept/id nil
+             :mapping/category :concept/roles
+             :mapping/id :native
+             :mapping/label :protocol.actor/sender
+             :error :unsupported-capability-label}]
+           (concepts-registry/capability-validation-errors
+            concept
+            #{:protocol.actor/resolver})))))
+
+(deftest enrich-report-surfaces-limitations-and-mapping-statuses
+  (let [report (reporting/enrich-report
+                {}
+                [{:concept/id :example/use-case
+                  :concept/name "Example"
+                  :concept/summary "Example summary"
+                  :concept/stakeholder-question "Example question"
+                  :concept/maturity :illustrative
+                  :concept/support-status :not-asserted
+                  :concept/assumptions []
+                  :concept/out-of-scope []
+                  :concept/known-gaps ["No runnable scenario"]
+                  :concept/evidence {:scenarios #{} :benchmarks #{} :claims #{}}
+                  :concept/roles {}
+                  :concept/entities {}
+                  :concept/actions {:create {:maps-to [:protocol.action/create-escrow]}}
+                  :concept/outcomes {}}])
+        summary (get-in report [:concept/section :concept/summaries 0])]
+    (is (= :not-asserted (:concept/support-status summary)))
+    (is (= ["No runnable scenario"] (:concept/known-gaps summary)))
+    (is (some #{"This mapping is illustrative; it is not a production-support claim."}
+              (:concept/not-claimed summary)))
+    (is (some #{"No executable scenario, benchmark, or claim evidence is linked to this concept."}
+              (:concept/not-claimed summary)))
+    (is (= :native (get-in summary [:concept/mappings :concept/actions :create :mapping/status])))))

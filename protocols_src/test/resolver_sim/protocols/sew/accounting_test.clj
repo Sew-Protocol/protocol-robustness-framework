@@ -11,6 +11,8 @@
 (def usdc :0xUSDC)
 (def alice "0xAlice")
 (def bob   "0xBob")
+(def gov   "0xGov")
+(def treasury "0xTreasury")
 
 (def snap (snap-fix/escrow-snapshot {:escrow-fee-bps 50}))
 
@@ -19,22 +21,68 @@
                             (t/make-escrow-settings {}) snap)]
     (:world r)))
 
+(defn- base-world-with-recipient []
+  (-> (base-world)
+      (assoc-in [:fee-recipients :default] treasury)))
+
+;; ---------------------------------------------------------------------------
+;; fee-recipient config
+;; ---------------------------------------------------------------------------
+
+(deftest resolve-fee-recipient-defaults-to-zero-address
+  (is (= t/zero-address (ac/resolve-fee-recipient (t/empty-world) usdc))))
+
+(deftest resolve-fee-recipient-uses-default
+  (let [w (assoc-in (t/empty-world) [:fee-recipients :default] treasury)]
+    (is (= treasury (ac/resolve-fee-recipient w usdc)))))
+
+(deftest resolve-fee-recipient-uses-token-override
+  (let [w (-> (t/empty-world)
+              (assoc-in [:fee-recipients :default] "0xDefault")
+              (assoc-in [:fee-recipients :by-token usdc] treasury))]
+    (is (= treasury (ac/resolve-fee-recipient w usdc)))))
+
+(deftest set-fee-recipient-sets-default
+  (let [w (ac/set-fee-recipient (t/empty-world) :default treasury)]
+    (is (= treasury (get-in w [:fee-recipients :default])))))
+
+(deftest set-fee-recipient-sets-token-override
+  (let [w (ac/set-fee-recipient (t/empty-world) usdc treasury)]
+    (is (= treasury (get-in w [:fee-recipients :by-token usdc])))))
+
 ;; ---------------------------------------------------------------------------
 ;; withdraw-fees
 ;; ---------------------------------------------------------------------------
 
 (deftest withdraw-fees-happy
-  (let [w  (base-world)
-        r  (ac/withdraw-fees w usdc)]
+  (let [w  (base-world-with-recipient)
+        r  (ac/withdraw-fees w usdc treasury gov)]
     (is (true? (:ok r)))
     (is (= 5 (:amount r)) "fee for 1000 @ 50bps = 5")
     (is (= 0 (get-in (:world r) [:total-fees usdc] 0))
-        "fees reset to 0 after withdrawal")))
+        "fees reset to 0 after withdrawal")
+    (is (= 5 (get-in (:world r) [:total-withdrawn usdc] 0))
+        "total-withdrawn incremented")
+    (is (= 5 (get-in (:world r) [:fee-payouts usdc treasury] 0))
+        "fee-payouts recorded per recipient")))
 
 (deftest withdraw-fees-nothing-to-withdraw
-  (let [r (ac/withdraw-fees (t/empty-world) usdc)]
+  (let [r (ac/withdraw-fees (t/empty-world) usdc treasury gov)]
     (is (false? (:ok r)))
     (is (= :no-fees-to-withdraw (:error r)))))
+
+;; ---------------------------------------------------------------------------
+;; Escrow creation bonding guard
+;; ---------------------------------------------------------------------------
+
+(deftest create-escrow-rejects-zero-stake-resolver-when-bonding-enabled
+  (let [resolver "0xUnstakedResolver"
+        snapshot (snap-fix/escrow-snapshot {:resolver-bond-bps 10000
+                                             :dispute-resolver resolver})
+        result (lc/create-escrow (t/empty-world 1000) alice usdc bob 1000
+                                 (t/make-escrow-settings {}) snapshot)]
+    (is (false? (:ok result)))
+    (is (= :insufficient-resolver-stake (:error result)))))
 
 ;; ---------------------------------------------------------------------------
 ;; Held adjustment ledger
@@ -818,6 +866,72 @@
     (is (:holds? result))))
 
 ;; ---------------------------------------------------------------------------
+;; Partial-fill settlement adapter
+;; ---------------------------------------------------------------------------
+
+(deftest partial-fill-settlement-updates-position-and-custody-ledger
+  (let [owner-id "yield-owner"
+        position {:owner/id owner-id
+                  :token usdc
+                  :principal 100
+                  :realized-yield 20
+                  :deferred-yield 0}
+        decision {:filled {:principal 40 :realized-yield 10 :deferred-yield 0}
+                  :deferred {:principal 60 :realized-yield 10 :deferred-yield 0}
+                  :haircut {}
+                  :policy {:post-partial-fill-accrual :accrue-residual-as-unrealized}}
+        world (-> (t/empty-world 1000)
+                  (ac/add-held usdc 100
+                               {:action "seed-principal"
+                                :reason :escrow-principal-deposited
+                                :extra {:held/workflow-id 42 :owner/address alice}})
+                  (ac/add-held usdc 20
+                               {:action "seed-yield"
+                                :reason :yield-accrued
+                                :extra {:held/workflow-id 42}})
+                  (assoc-in [:yield/positions owner-id] position))
+        settled (lc/apply-partial-fill-settlement
+                 world position decision {:workflow-id 42 :recipient bob})
+        principal-position [:held/position usdc :escrow-principal 42]
+        yield-position [:held/position usdc :yield-custody 42]]
+    (is (= 70 (get-in settled [:total-held usdc])))
+    (is (= 60 (get-in settled [:held/positions principal-position])))
+    (is (= 10 (get-in settled [:held/positions yield-position])))
+    (is (= 0 (get-in settled [:yield/positions owner-id :principal])))
+    (is (= 0 (get-in settled [:yield/positions owner-id :realized-yield])))
+    (is (= 70 (get-in settled [:yield/positions owner-id :unrealized-yield])))
+    (is (= 4 (count (:held-adjustments settled))))))
+
+(deftest partial-fill-settlement-rejects-position-bucket-underflow
+  (let [position {:owner/id "yield-owner" :token usdc :principal 10
+                  :realized-yield 0 :deferred-yield 0}
+        world (assoc-in (t/empty-world 1000) [:yield/positions "yield-owner"] position)
+        decision {:filled {:principal 11} :deferred {} :haircut {} :policy {}}
+        error (try
+                (lc/apply-partial-fill-settlement world position decision
+                                                   {:workflow-id 42 :recipient bob})
+                nil
+                (catch clojure.lang.ExceptionInfo e e))]
+    (is (= :partial-fill-position-underflow (:type (ex-data error))))))
+
+(deftest partial-fill-settlement-rejects-held-custody-shortfall
+  (let [position {:owner/id "yield-owner" :token usdc :principal 100
+                  :realized-yield 0 :deferred-yield 0}
+        world (-> (t/empty-world 1000)
+                  (ac/add-held usdc 50
+                               {:action "seed-principal"
+                                :reason :escrow-principal-deposited
+                                :extra {:held/workflow-id 42 :owner/address alice}})
+                  (assoc-in [:yield/positions "yield-owner"] position))
+        decision {:filled {:principal 100} :deferred {} :haircut {} :policy {}}
+        error (try
+                (lc/apply-partial-fill-settlement world position decision
+                                                   {:workflow-id 42 :recipient bob})
+                nil
+                (catch clojure.lang.ExceptionInfo e e))]
+    (is (= :sub-held-underflow (:type (ex-data error))))))
+
+;; ---------------------------------------------------------------------------
 ;; Partial-fill principal loss reason
 ;; ---------------------------------------------------------------------------
 
@@ -905,7 +1019,8 @@
 ;; ---------------------------------------------------------------------------
 
 (deftest post-appeal-bond-deducts-fee
-  (let [w    (t/empty-world)
+  (let [w    (assoc-in (t/empty-world) [:escrow-transfers 0]
+                       {:token usdc :escrow-state :disputed})
         snap (snap-fix/escrow-snapshot {:appeal-bond-protocol-fee-bps 200}) ; 2%
         w'   (ac/post-appeal-bond w 0 alice snap usdc 1000)
         adjustment (last (:held-adjustments w'))]
@@ -915,6 +1030,36 @@
     (is (= "post-appeal-bond" (:held/action adjustment)))
     (is (= 0 (:held/workflow-id adjustment)))
     (is (= alice (:held/actor adjustment)))))
+
+(deftest post-appeal-bond-rejects-workflow-token-mismatch
+  (let [world (assoc-in (t/empty-world) [:escrow-transfers 0]
+                        {:token usdc :escrow-state :disputed})
+        error (try
+                (ac/post-appeal-bond world 0 alice {} :DAI 100)
+                nil
+                (catch clojure.lang.ExceptionInfo e e))]
+    (is (= :bond-token-mismatch (:type (ex-data error))))
+    (is (= usdc (:expected (ex-data error))))))
+
+(deftest deferred-yield-claim-settlement-moves-custody-to-claimable
+  (let [owner-id [:sew/escrow 0]
+        world (-> (t/empty-world)
+                  (assoc-in [:escrow-transfers 0]
+                            {:token usdc :escrow-state :released :to bob :from alice})
+                  (assoc-in [:yield/positions owner-id]
+                            {:owner/id owner-id :token usdc :status :withdrawn
+                             :reclaimed-amount 40})
+                  (ac/add-held usdc 40
+                               {:action "reserve-deferred-yield"
+                                :reason :deferred-yield-reserved
+                                :extra {:held/workflow-id 0}}))
+        settled (lc/apply-deferred-yield-claim-settlement world 0 owner-id bob 40)
+        position-id [:held/position usdc :yield-custody 0]]
+    (is (= 0 (get-in settled [:total-held usdc])))
+    (is (= 0 (get-in settled [:held/positions position-id])))
+    (is (= 40 (get-in settled [:claimable-v2 0 :settlement/yield bob])))
+    (is (= :deferred-yield-claimed
+           (:held/reason (last (:held-adjustments settled)))))))
 
 (deftest slash-bond-happy
   (let [w  (-> (t/empty-world)
@@ -975,6 +1120,35 @@
         bad  (assoc-in w [:total-held usdc] -1)]
     ;; live sum = 995 (one pending escrow), held = -1 → violation
     (is (not (:holds? (inv/solvency-holds? bad nil))))))
+
+(deftest contract-payout-solvency-is-unverified-without-chain-balance-evidence
+  (let [result (inv/contract-payout-solvency? (base-world))]
+    (is (:holds? result))
+    (is (= :unverified (:coverage result)))))
+
+(deftest contract-payout-solvency-includes-held-claims-and-fees
+  (let [world (-> (t/empty-world)
+                  (assoc :total-held {usdc 100})
+                  (assoc :total-fees {usdc 20})
+                  (assoc-in [:escrow-transfers 7] {:token usdc})
+                  (assoc-in [:claimable-v2 7 :settlement/principal bob] 30)
+                  (assoc :solvency/contract-balances {[:escrow-vault usdc] 149}))
+        result (inv/contract-payout-solvency? world)
+        violation (first (:violations result))]
+    (is (false? (:holds? result)))
+    (is (= :external-balance-snapshot (:coverage result)))
+    (is (= :contract-payout-shortfall (:type violation)))
+    (is (= 150 (:liabilities violation)))
+    (is (= 1 (:shortfall violation)))))
+
+(deftest contract-payout-solvency-requires-every-observed-token-balance
+  (let [world (-> (t/empty-world)
+                  (assoc :total-held {usdc 100})
+                  (assoc :solvency/contract-balances {}))
+        result (inv/contract-payout-solvency? world)]
+    (is (false? (:holds? result)))
+    (is (= :missing-contract-balance
+           (get-in result [:violations 0 :type])))))
 
 (deftest fees-non-negative-holds
   (let [w (base-world)]

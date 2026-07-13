@@ -162,6 +162,10 @@
    "Governance role was removed because no governance-specific behaviour is modelled in this use-case."]
 
  :concept/evidence
- {:scenarios #{}
-  :benchmarks #{}
-  :claims #{}}}
+  {:scenarios #{}
+   :benchmarks #{:benchmark/sew-escrow-dispute-v1
+                 :benchmark/sew-dispute-liveness-v1}
+   :claims #{:claim/no-unauthorized-release
+             :claim/funds-conserved
+             :claim/dispute-liveness
+             :claim/bounded-resolution-time}}}

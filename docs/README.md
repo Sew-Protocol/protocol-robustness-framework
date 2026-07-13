@@ -118,6 +118,7 @@ Primary project framing and status live in the root `../README.md`.
 | `architecture/EVIDENCE_REGISTRY.md` | Evidence registry design |
 | `architecture/FORENSIC_EVIDENCE.md` | Forensic evidence pipeline |
 | `architecture/RESOLVER_OVERFLOW_AND_FORCE_AUTHORISATION.md` | Resolver overflow and force-authorisation lifecycle |
+| `architecture/HELD_CUSTODY_ACCOUNTING_AND_FORCE_AUTHORISATION.md` | Append-only held-custody ledger, final-held reporting, settlement, and force-authorisation consumption |
 | `architecture/YIELD_AND_SNAPSHOT_MODULES.md` | Yield and snapshot module architecture |
 | `architecture/YIELD_V1_VAULT_CENTRIC_TESTING.md` | Yield V1 vault-centric testing approach |
 | `architecture/GENERIC_ECONOMICS_LAYERING.md` | Generic economics layering model |

@@ -14,7 +14,7 @@
     (is (= 0 (:checkpoint/index (first (:checkpoint-log result)))))
     (is (= 0 (:event/seq (first (:checkpoint-log result)))))
     (is (= "evt-1" (:event/id (first (:checkpoint-log result)))))
-    (is (= :post-event (:checkpoint/type (first (:checkpoint-log result)))))
+    (is (= :pre-event (:checkpoint/type (first (:checkpoint-log result)))))
     (is (string? (:world/hash (first (:checkpoint-log result)))))))
 
 (deftest secure-checkpoint-update-overwrite-detection

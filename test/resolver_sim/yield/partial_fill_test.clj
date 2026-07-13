@@ -563,8 +563,19 @@
           world' (pf/apply-partial-fill world base-position decision)
           pos' (get-in world' [:yield/positions "user1"])]
       (is (:partial-fill-affected? pos'))
-      (is (< (get-in world' [:total-held :USDC] 0) 100000)
-          "Total held should decrease by filled amount"))))
+      (is (= 100000 (get-in world' [:total-held :USDC]))
+          "Generic yield application must not mutate protocol custody."))))
+
+(deftest test-batch-partial-fill-rejects-shared-liquidity-domain
+  (let [input {:available-liquidity 100
+               :position base-position
+               :liquidity-domain [:aave-v3 :USDC]}
+        error (try
+                (pf/batch-partial-fill {:yield/positions {"user1" base-position}}
+                                       [input input])
+                nil
+                (catch clojure.lang.ExceptionInfo e e))]
+    (is (= :batch-partial-fill-shared-liquidity (:type (ex-data error))))))
 
 (deftest test-empty-position-full-fill
   (testing "Empty position always full-fills"
@@ -1091,3 +1102,96 @@
                                 (:check/id %))
                             checks))]
       (is (= :pass (:status sc))))))
+
+;; ── Shared-pool batch tests (Phase 3) ──────────────────────────────────
+
+(deftest test-batch-partial-fill-different-domains-succeed
+  (testing "Inputs with different liquidity domains succeed independently"
+    (let [pos1 (assoc base-position :owner/id "user1")
+          pos2 (assoc base-position :owner/id "user2")
+          input1 {:available-liquidity 5350
+                  :position pos1
+                  :liquidity-domain [:pool-a :USDC]}
+          input2 {:available-liquidity 20000
+                  :position pos2
+                  :liquidity-domain [:pool-b :USDC]}
+          world (pf/batch-partial-fill
+                 {:yield/positions {"user1" pos1 "user2" pos2}}
+                 [input1 input2])]
+      (is (some? (get-in world [:yield/positions "user1"])))
+      (is (some? (get-in world [:yield/positions "user2"]))))))
+
+(deftest test-batch-partial-fill-missing-domain-rejected
+  (testing "Multi-input batches require an explicit liquidity domain"
+    (let [pos1 (assoc base-position :owner/id "user1")
+          pos2 (assoc base-position :owner/id "user2")
+          error (try
+                  (pf/batch-partial-fill
+                   {:yield/positions {"user1" pos1 "user2" pos2}}
+                   [{:available-liquidity 5000 :position pos1
+                     :liquidity-domain [:pool-a :USDC]}
+                    {:available-liquidity 5000 :position pos2}])
+                  nil
+                  (catch clojure.lang.ExceptionInfo e e))]
+      (is (= :batch-partial-fill-missing-liquidity-domain
+             (:type (ex-data error)))))))
+
+(deftest test-batch-partial-fill-same-domain-rejected
+  (testing "Two withdrawals declaring the same liquidity domain are rejected"
+    (let [pos1 (assoc base-position :owner/id "user1")
+          pos2 (assoc base-position :owner/id "user2")
+          input1 {:available-liquidity 5000 :position pos1
+                  :liquidity-domain [:same-pool :USDC]}
+          input2 {:available-liquidity 5000 :position pos2
+                  :liquidity-domain [:same-pool :USDC]}
+          error (try
+                  (pf/batch-partial-fill
+                   {:yield/positions {"user1" pos1 "user2" pos2}}
+                   [input1 input2])
+                  nil
+                  (catch clojure.lang.ExceptionInfo e e))]
+      (is (= :batch-partial-fill-shared-liquidity (:type (ex-data error)))))))
+
+(deftest test-batch-partial-fill-deterministic-ordering
+  (testing "Batch decisions applied in deterministic input order"
+    (let [pos1 (assoc base-position :owner/id "user1")
+          pos2 (assoc base-position :owner/id "user2")
+          input1 {:available-liquidity 20000 :position pos1
+                  :liquidity-domain [:pool-a :USDC]}
+          input2 {:available-liquidity 0 :position pos2
+                  :liquidity-domain [:pool-b :USDC]}
+          world (pf/batch-partial-fill
+                 {:yield/positions {"user1" pos1 "user2" pos2}}
+                 [input1 input2])
+          pos1' (get-in world [:yield/positions "user1"])
+          pos2' (get-in world [:yield/positions "user2"])]
+      (is (:partial-fill-affected? pos1')
+          "First input position marked as affected")
+      (is (:partial-fill-affected? pos2')
+          "Second input position marked as affected")
+      (is (= :unwinding (:status pos1'))
+          "First input (full liquidity) -> unwinding")
+      (is (= :unwinding (:status pos2'))
+          "Second input (zero liquidity) -> unwinding"))))
+
+(deftest test-batch-partial-fill-total-filled-never-exceeds-liquidity
+  (testing "Total filled across batch respects available liquidity per position"
+    (let [pos (assoc base-position :owner/id "user1")
+          d1 (pf/calculate-fulfillment 5000 pos)
+          d2 (pf/calculate-fulfillment 8000 pos)]
+      (is (<= (pf/filled-total d1) 5000)
+          "Decision with 5000 liquidity: filled <= 5000")
+      (is (<= (pf/filled-total d2) 8000)
+          "Decision with 8000 liquidity: filled <= 8000")
+      (is (zero? (pf/filled-total (pf/calculate-fulfillment 0 pos)))
+          "Zero liquidity produces zero fill"))))
+
+(deftest test-batch-partial-fill-held-ledger-not-modified
+  (testing "batch-partial-fill does not modify total-held"
+    (let [pos (assoc base-position :owner/id "user1")
+          world-before {:yield/positions {"user1" pos}
+                        :total-held {:USDC 100000}}
+          input {:available-liquidity 20000 :position pos}
+          world-after (pf/batch-partial-fill world-before [input])]
+      (is (= 100000 (get-in world-after [:total-held :USDC]))
+          "total-held unchanged by generic partial-fill batch"))))

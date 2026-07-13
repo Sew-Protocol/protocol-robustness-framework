@@ -1,6 +1,6 @@
 # Usage Reference
 
-This is the supported command reference for the current repository. Earlier documentation describing `python/`, `test/integration/python`, or a gRPC server on port 7070 is obsolete; those paths are not part of this checkout.
+This is the supported command reference for the current repository. The preferred entry points are the Babashka tasks (`bb ...`) and the canonical test runner (`./scripts/test.sh ...`). Direct invocation of Python scripts under `integration/python/` or `test/integration/python/` remains supported for advanced use but is not the recommended workflow.
 
 ## Command surfaces
 
@@ -35,7 +35,7 @@ bb run:scenario <scenario-id>
 bb sim:run -p data/params/baseline.edn
 ```
 
-`bb run:scenario` accepts `--result-display-level summary|failures|standard|verbose|audit` and `--save-output <dir>`.
+`bb run:scenario` accepts `--result-display-level summary|failures|standard|verbose|audit` and `--output-dir <dir>`.
 
 ## Canonical test-runner targets
 
@@ -49,9 +49,10 @@ bb sim:run -p data/params/baseline.edn
 | `fast` | Edit-loop gate: unit, generators, contracts, invariants, suites, and reference validation. |
 | `unit` | Framework and Sew unit tests. |
 | `framework` | Framework-only unit tests. |
+| `sew` | Sew-specific unit tests. |
 | `generators` | Deterministic generator and equilibrium regression checks. |
 | `contracts` | Cross-layer contract checks. |
-| `invariants` | Deterministic invariant scenarios. |
+| `invariants` | Deterministic invariant scenarios (S01–S100). |
 | `suites` | Registered fixture suites. |
 | `reference-validation` | Public reference-evidence harness. |
 | `coverage` | Coverage gates. |
@@ -59,6 +60,12 @@ bb sim:run -p data/params/baseline.edn
 | `equivalence-new` | Model-side trace-equivalence comparison. |
 | `monte-carlo` | Representative Monte Carlo sweep. |
 | `long-horizon` | Extended multi-epoch scenarios. |
+| `dispute-resolution` | Dispute resolution coverage (S-DR-* scenarios). |
+| `yield` | Yield protocol unit tests. |
+| `yield-provider-scenarios` | Standalone yield-v1 JSON scenarios. |
+| `sew-yield-scenarios` | Sew escrow + yield integration JSON scenarios. |
+| `adversarial-sweep` | Adversarial profitability sweep. |
+| `adversarial-gates` | Adversarial release gates. |
 
 The runner records a machine-readable summary at `results/test-artifacts/test-summary.json`. Individual tasks may emit additional files under `results/`.
 
@@ -103,7 +110,7 @@ Babashka tasks are the recommended local interface. Run `bb tasks` for the compl
 | Group | Examples | Notes |
 |---|---|---|
 | Simulation and scenarios | `bb sim:run`, `bb run:scenario`, `bb run:scenario:suite`, `bb run:scenario:search` | Search is explicitly ad hoc and not canonical CI evidence. |
-| Tests | `bb test`, `bb test:framework`, `bb test:unit`, `bb test:evidence`, `bb test:sew`, `bb test:yield` | Prefer focused tasks during development. |
+| Tests | `bb test`, `bb test:fast`, `bb test:framework`, `bb test:unit`, `bb test:slow`, `bb test:ci`, `bb test:evidence`, `bb test:sew`, `bb test:yield` | Prefer focused tasks during development. `bb test:ci` is CI-optimized (fast + monte-carlo, < 2 min). |
 | Evidence | `bb evidence:build`, `bb evidence:sign <key>`, `bb evidence:bundle [out-dir]` | Signing requires a user-provided private key; never store it in the repository. |
 | Fixtures and docs | `bb fixtures:sync`, `bb fixtures:generate-traces`, `bb regenerate-goldens`, `bb docs:scenarios` | These may update generated files. Review diffs before committing. |
 | Registry and parity | `bb scenario-registry:validate`, `bb shadow:check`, `bb shadow:report` | Verify scenario registration and simulation-to-Solidity mapping. |

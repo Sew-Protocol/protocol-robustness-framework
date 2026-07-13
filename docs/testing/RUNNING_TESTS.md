@@ -22,10 +22,8 @@ For a focused edit-loop gate, run:
 `reference-validation`. Use individual targets below when narrowing a failure.
 
 ### Run comprehensive suite with full reporting
-```bash
-./run.sh all
-```
-Use this for report generation workflows; use `scripts/test.sh` as the canonical validation gate.
+
+Use `bb test` or `./scripts/test.sh all` as the canonical validation gate.
 
 ### Run specific canonical targets
 ```bash
@@ -72,8 +70,9 @@ Run **both** layers:
 
 2) **On-chain trace replay + projection comparison (Forge Solidity)**
 
+Requires a local checkout of the Sew Solidity contracts. Set `SEW_SOLIDITY_PATH` to the checkout root and run:
+
 ```bash
-cd resources/symlink_to_smart_contracts/sew-protocol-smart-contracts-solidity
 forge test --match-contract TraceEquivalenceTest -vvv
 ```
 
@@ -180,9 +179,9 @@ bb adv:sweep:promote
 
 ### Run specific phase
 ```bash
-./run.sh phase-i      # Phase I only (1D + 2D sweeps)
-./run.sh phase-j      # Phase J only (4 scenarios)
-./run.sh baseline     # Baseline scenario only
+clojure -M:run -- -p data/params/phase-i-all-mechanisms.edn    # Phase I (1D sweeps)
+clojure -M:run -- -p data/params/phase-j-baseline-stable.edn -m  # Phase J (multi-epoch)
+clojure -M:run -- -p data/params/baseline.edn                  # Baseline scenario
 ```
 
 ---
@@ -301,14 +300,11 @@ results/
 
 ## Troubleshooting
 
-### Current baseline (2026-05-29)
+### Current baseline
 
-Canonical invariant suite (`--invariants`): **82/99 pass** (S01–S100).
+Canonical invariant suite (`bb test:invariants`): **82/99 pass** (S01–S100) at baseline date 2026-05-29.
 
-The 14 remaining failures are known behavioural gaps (not parser or compile errors):
-- Scenarios requiring yield-module integration paths not yet fully wired
-- Edge-case temporal scenarios pending deadline arithmetic alignment
-- See `docs/scenarios.md` for per-scenario status
+Remaining failures are known behavioural gaps; see `docs/scenarios.md` for per-scenario status.
 
 Unit tests (`./scripts/test.sh unit`): 25 known failures + 2 errors in stochastic
 model tests — pre-existing, do not block invariant or integration work.
@@ -363,7 +359,7 @@ Options:
 
 **Important**: Use `--` before arguments when using wrapper scripts:
 ```bash
-clojure -M:run -- -p data/params/phase-i.edn -s
+clojure -M:run -- -p data/params/phase-i-all-mechanisms.edn -s
 #                 ^^^ Required separator
 ```
 
@@ -469,8 +465,8 @@ set -e  # Exit on error
 echo "Running canonical validation gate..."
 ./scripts/test.sh all || exit 1
 
-echo "Running comprehensive suite..."
-./run.sh all
+echo "Running canonical validation gate..."
+bb test
 
 echo "Generating report..."
 # Report automatically created in results/*/COMPREHENSIVE_REPORT.md
@@ -481,4 +477,4 @@ echo "Generating report..."
 
 ---
 
-See `PHASE_J_INTEGRATION_COMPLETE.md` for detailed findings and bug analysis.
+See Phase J parameter files under `data/params/phase-j-*.edn` for scenario configuration details.

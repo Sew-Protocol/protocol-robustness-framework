@@ -61,6 +61,8 @@ import pathlib
 import sys
 import copy
 
+from schema_validator import SchemaValidator
+
 
 # ── Bundle root normalization ─────────────────────────────────────────────────
 
@@ -394,6 +396,14 @@ def update_artifact_registry(run_dir: pathlib.Path, new_entries: list[dict]):
         return
     with registry_path.open("r", encoding="utf-8") as f:
         registry = json.load(f)
+
+    # Structural validation before modification
+    struct_errors = SchemaValidator().validate(registry)
+    if struct_errors:
+        print(f"Error: Existing registry is structurally invalid ({len(struct_errors)} error(s))")
+        for e in struct_errors:
+            print(f"  {e.path}: {e.message}")
+        return
     existing_ids = {a["id"] for a in registry.get("artifacts", [])}
     added = 0
     for entry in new_entries:

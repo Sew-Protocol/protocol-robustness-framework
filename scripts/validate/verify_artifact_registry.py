@@ -11,6 +11,7 @@ import pathlib
 import sys
 
 from evidence_config import EvidenceConfig
+from schema_validator import SchemaValidator
 _cfg = EvidenceConfig()
 
 def sha256_file(path: pathlib.Path) -> str | None:
@@ -31,6 +32,14 @@ def verify_registry(registry_path: pathlib.Path) -> bool:
         registry = json.loads(registry_path.read_text())
     except json.JSONDecodeError as e:
         print(f"Error: Failed to parse registry JSON: {e}")
+        return False
+
+    # Structural validation first
+    struct_errors = SchemaValidator().validate(registry)
+    if struct_errors:
+        print(f"Error: Registry is structurally invalid ({len(struct_errors)} error(s))")
+        for e in struct_errors:
+            print(f"  {e.path}: {e.message}")
         return False
 
     artifacts = registry.get("artifacts", [])

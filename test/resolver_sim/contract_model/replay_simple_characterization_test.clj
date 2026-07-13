@@ -2,6 +2,7 @@
   (:require [clojure.test :refer :all]
             [resolver-sim.contract-model.replay :as replay]
             [resolver-sim.contract-model.replay.flags :as flags]
+            [resolver-sim.contract-model.replay.profile-adapter :as adapter]
             [resolver-sim.contract-model.replay.yield :as yield-replay]
             [resolver-sim.protocols.dummy :as dummy]
             [resolver-sim.protocols.yield :as yp]))
@@ -46,11 +47,12 @@
         result (replay/simple-replay dummy/protocol scenario)]
     (is (= :pass (:outcome result)))))
 
-(deftest simple-replay-expectations-disabled-by-default
+(deftest simple-replay-preserves-expected-error-processing
   (let [scenario (assoc minimal-scenario :expected-errors [{:seq 0 :action "noop" :error "some-error"}])
         result (replay/simple-replay dummy/protocol scenario)]
     (is (= :pass (:outcome result)))
-    (is (pos? (:events-processed result)))))
+    (is (pos? (:events-processed result)))
+    (is (map? (:expected-error-analysis result)))))
 
 (deftest simple-replay-dispatch-and-invariants-run
   (let [result (replay/simple-replay dummy/protocol minimal-scenario)]
@@ -85,21 +87,78 @@
             {:seq 1 :time 2000 :agent "vault" :action "yield_accrue"
              :params {:token "USDC" :dt 1000}}]})
 
-(deftest yield-replay-opts-are-ignored
-  (let [result (replay/simple-replay yp/protocol yield-scenario {:run-id "ignored" :minimal false})]
-    (is (= :pass (:outcome result)))
-    (is (= :yield-thin-loop (get-in result [:execution :engine])))))
+(deftest simple-replay-rejects-malformed-input-shapes
+  (doseq [[label replay-opts expected-field]
+          [["options-not-map" [] nil]
+           ["flags-not-map" {:flags []} :flags]
+           ["blank-run-id" {:run-id "  "} :run-id]]]
+    (let [error (try
+                  (replay/simple-replay dummy/protocol minimal-scenario replay-opts)
+                  nil
+                  (catch clojure.lang.ExceptionInfo e e))]
+      (is (= :invalid-simple-replay-options (:type (ex-data error))) label)
+      (when expected-field
+        (is (= expected-field (:field (ex-data error))) label))))
+  (let [error (try
+                (replay/simple-replay dummy/protocol [])
+                nil
+                (catch clojure.lang.ExceptionInfo e e))]
+    (is (= :invalid-simple-replay-scenario (:type (ex-data error))))))
+
+(deftest simple-replay-rejects-malformed-adapter-result
+  (with-redefs [adapter/simple-execution-plan
+                (fn [_ _]
+                  {:execution {:profile :simple :adapter/id :broken-test-adapter}
+                   :run (fn [_ _ _]
+                          {:outcome :unknown
+                           :trace :not-sequential
+                           :metrics []
+                           :events-processed -1})})]
+    (let [error (try
+                  (replay/simple-replay dummy/protocol minimal-scenario)
+                  nil
+                  (catch clojure.lang.ExceptionInfo e e))]
+      (is (= :simple-replay-invalid-adapter-result (:type (ex-data error))))
+      (is (= :broken-test-adapter (:adapter (ex-data error))))
+      (is (seq (:violations (ex-data error)))))))
+
+(deftest yield-replay-rejects-unknown-top-level-options
+  (is (thrown-with-msg? clojure.lang.ExceptionInfo
+        #"unsupported options"
+        (replay/simple-replay yp/protocol yield-scenario {:minimal false}))))
 
 (deftest yield-replay-run-id-ignored
   (let [result (replay/simple-replay yp/protocol yield-scenario {:run-id "custom-run-id"})]
     (is (= :pass (:outcome result)))
-    (is (= "yield-char-test" (:scenario-id result))
-        "scenario-id unchanged; run-id affects context metadata not scenario-id")))
+    (is (= "yield-char-test" (or (:scenario-id result)
+                                 (get-in result [:context/source :scenario-id])))
+        "scenario-id in :context/source or top-level")))
 
 (deftest yield-replay-flag-overrides-ignored
   (let [result (replay/simple-replay yp/protocol yield-scenario {:flags {:strict-validation? true}})]
     (is (= :pass (:outcome result)))
-    (is (= :yield-thin-loop (get-in result [:execution :engine])))))
+    (is (= :canonical-loop (get-in result [:execution :engine])))))
+
+(deftest yield-replay-preserves-required-flags-with-caller-overrides
+  (let [seen-opts (atom nil)
+        plan (adapter/simple-execution-plan :simple yp/protocol)]
+    (with-redefs [replay/replay-events
+                  (fn [_ scenario opts]
+                    (reset! seen-opts opts)
+                    {:outcome :pass
+                     :scenario-id (:scenario-id scenario)
+                     :trace []
+                     :metrics {}
+                     :events-processed 0})]
+      (replay/simple-replay yp/protocol yield-scenario
+                            {:flags {:strict-validation? true
+                                     :yield-dt-validation? false
+                                     :metrics-profile :sew-integrated}}))
+    (is (= true (get-in @seen-opts [:flags :yield-dt-validation?])))
+    (is (= :yield-provider (get-in @seen-opts [:flags :metrics-profile])))
+    (is (= true (get-in @seen-opts [:flags :strict-validation?])))
+    (is (= (:execution plan)
+           (adapter/simple-execution-descriptor :simple yp/protocol)))))
 
 (deftest yield-replay-result-shape-differs-from-generic
   (let [simple-result (replay/simple-replay yp/protocol yield-scenario)]
@@ -110,10 +169,10 @@
         "Yield path includes :protocol-id")
     (is (contains? simple-result :execution)
         "Yield path includes :execution")
-    (is (= :yield-thin-loop (get-in simple-result [:execution :engine]))
-        "Yield path uses :yield-thin-loop engine")
-    (is (true? (get-in simple-result [:execution :adapter?]))
-        "Yield path marks adapter? true")))
+    (is (= :canonical-loop (get-in simple-result [:execution :engine]))
+        "Yield path uses canonical-loop now that yield routes through replay-events")
+    (is (= :simple (get-in simple-result [:execution :profile]))
+        "Yield path uses :simple profile")))
 
 (deftest yield-replay-metrics-use-yield-provider-profile
   (let [generic-result (replay/simple-replay dummy/protocol minimal-scenario)
@@ -131,6 +190,12 @@
           #"Simple replay does not support"
           (replay/simple-replay yp/protocol yield-scenario {opt "some-value"}))
         (str "Option " opt " rejected on yield path"))))
+
+(deftest generic-replay-rejects-prohibited-nested-flags
+  (is (thrown-with-msg? clojure.lang.ExceptionInfo
+        #"cannot override enforced profile flags"
+        (replay/simple-replay dummy/protocol minimal-scenario
+                              {:flags {:evidence-mode :all :strict-validation? true}}))))
 
 (deftest simple-replay-generic-result-includes-execution
   (let [result (replay/simple-replay dummy/protocol minimal-scenario)]
@@ -167,3 +232,68 @@
         p1 (replay/prepare-simple-scenario no-version)
         p2 (replay/prepare-simple-scenario no-version)]
     (is (= p1 p2))))
+
+;; ===========================================================================
+;; Flag resolution tests
+;; ===========================================================================
+
+(deftest single-flag-override-leaves-other-minimal-defaults
+  (let [scenario (assoc minimal-scenario :temporal-evidence {:enabled? true}
+                        :theory {:expectations []})
+        ;; Override only :evaluate-theory? to true; everything else stays minimal
+        result (replay/simple-replay dummy/protocol scenario {:flags {:evaluate-theory? true}})]
+    (is (= :pass (:outcome result)))
+    ;; temporal should still be disabled (minimal default) — scenario still passes
+    (is (not (contains? result :evidence/hash))
+        "no evidence chain written")))
+
+(deftest scenario-level-flags-overridden-by-caller-opts
+  (let [scenario (assoc minimal-scenario :options {:flags {:evaluate-expectations? false}})
+        ;; Caller re-enables expectations
+        result (replay/simple-replay dummy/protocol scenario {:flags {:evaluate-expectations? true}})
+        simple-without (replay/simple-replay dummy/protocol scenario)]
+    (is (= :pass (:outcome result)))
+    (is (= :pass (:outcome simple-without)))
+    ;; Both pass — minimal defaults allow expectations (evaluate-expectations? defaults to true)
+    (is (pos? (:events-processed result)))))
+
+(deftest minimal-defaults-cover-all-flag-keys
+  (let [result (replay/simple-replay dummy/protocol minimal-scenario)]
+    (is (= :none (:evidence-mode flags/minimal-replay-flags))
+        "evidence-mode defaults to :none")
+    (is (false? (:temporal-enabled? flags/minimal-replay-flags))
+        "temporal disabled by default")
+    (is (false? (:strict-validation? flags/minimal-replay-flags))
+        "strict validation disabled by default")
+    (is (= :omit (:world-checkpoint-policy flags/minimal-replay-flags))
+        "world checkpoints omitted")))
+
+(deftest scenario-flags-cannot-escape-simple-profile
+  (let [scenario (assoc-in minimal-scenario [:options :flags]
+                           {:evidence-mode :all
+                            :include-telemetry-evidence? true
+                            :world-checkpoint-policy :retain-all
+                            :projection-mode :full})
+        effective (flags/resolve-replay-flags scenario {:profile :replay/simple
+                                                         :minimal true})
+        result (replay/simple-replay dummy/protocol scenario)]
+    (is (= :none (:evidence-mode effective)))
+    (is (false? (:include-telemetry-evidence? effective)))
+    (is (= :omit (:world-checkpoint-policy effective)))
+    (is (= :finalize-only (:projection-mode effective)))
+    (is (= :pass (:outcome result)))))
+
+(deftest unsupported-flags-rejected-on-generic-path
+  (doseq [opt [:signing-key :signing-password :tsa-url :evidence-mode]]
+    (is (thrown-with-msg? clojure.lang.ExceptionInfo
+          #"Simple replay does not support"
+          (replay/simple-replay dummy/protocol minimal-scenario {opt "some-value"}))
+        (str "Option " opt " rejected"))))
+
+(deftest allowed-flags-pass-through-on-generic-path
+  (let [r1 (replay/simple-replay dummy/protocol minimal-scenario {:run-id "a"})
+        r2 (replay/simple-replay dummy/protocol minimal-scenario {:run-id "b"})]
+    (is (= :pass (:outcome r1)))
+    (is (= :pass (:outcome r2)))
+    (is (= "a" (get-in r1 [:context/source :run-id])))
+    (is (= "b" (get-in r2 [:context/source :run-id])))))

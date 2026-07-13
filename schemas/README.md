@@ -8,8 +8,9 @@ This directory contains versioned JSON Schemas for interchange artifacts. Schema
 |---|---|---|---|
 | `scenario-v1.json` | Deterministic adversarial scenario | Scenario generation and replay tooling | Requires `schema_version: "1.0"`; describes the legacy JSON scenario interchange shape. |
 | `test-run-v1.json` | Test-run manifest | Test/evidence artifact pipeline | Requires `schema_version: "test-run.v1"`. |
-| `test-artifacts-v1.json` | Artifact registry | Test/evidence artifact pipeline | Use with generated `results/test-artifacts/` output. |
-| `test-artifacts-v1.1.json` | Artifact registry revision | Test/evidence artifact pipeline | Additive revision of the artifact-registry contract. |
+| `test-artifacts-v1.json` | Artifact registry [DEPRECATED] | Test/evidence artifact pipeline | Legacy v1. Retained for historical validation only. |
+| `test-artifacts-v1.1.json` | Artifact registry [DEPRECATED] | Test/evidence artifact pipeline | Legacy v1.1. Retained for historical validation only. |
+| `test-artifacts-v1.2.json` | Artifact registry (current) | Test/evidence artifact pipeline | Current enforced contract. Schema_validator requires this version. |
 | `claim.v1.json` | Claim record | Claims and evidence tooling | Pair with claim definition and evidence specifications in `docs/specs/`. |
 | `claimable-classification-v1.json` | Claimability classification | Classification reporting | Earlier version of the classification record. |
 | `claimable-classification-v2.json` | Claimability classification | Classification reporting | Current revision where selected by the producing tool. |

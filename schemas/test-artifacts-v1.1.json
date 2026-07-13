@@ -1,6 +1,7 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "title": "Test Artifacts Registry v1.1",
+  "title": "Test Artifacts Registry v1.1 [DEPRECATED — use test-artifacts-v1.2.json]",
+  "description": "Legacy v1.1 schema retained for historical validation. Use test-artifacts-v1.2.json for new registries.",
   "type": "object",
   "required": ["schema_version", "artifacts"],
   "properties": {

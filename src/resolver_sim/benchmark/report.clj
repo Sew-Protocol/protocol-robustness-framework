@@ -8,6 +8,7 @@
   (:require [clojure.java.io :as io]
             [clojure.string :as str]
             [resolver-sim.concepts.benchmark :as benchmark-concepts]
+            [resolver-sim.concepts.ecommerce-reporting :as ecommerce-reporting]
             [resolver-sim.benchmark.claims :refer [normalize-claim-refs]]
             [resolver-sim.io.resource-path :as rp]))
 
@@ -382,7 +383,9 @@
         metrics (:metrics evidence)
         results (:results evidence)
         inv-summary (:invariant-summary evidence)
-        dimensions (build-dimension-results results (:claim-results evidence) manifest concepts scoring)]
+        dimensions (build-dimension-results results (:claim-results evidence) manifest concepts scoring)
+        ecommerce-section (when (some #{:ecommerce/purchase} (:benchmark/concepts manifest))
+                            (ecommerce-reporting/ecommerce-results results))]
     {:benchmark/id (:benchmark/id manifest)
      :benchmark/domain (:benchmark/domain manifest)
      :benchmark/domain-description (:domain/description domain-entry)
@@ -424,7 +427,9 @@
      :claim-results (:claim-results evidence)
      :dimensions dimensions
      :invariant-summary inv-summary
-     :concept/section (:concept/section evidence)}))
+     :concept/section (:concept/section evidence)
+     :stakeholder/use-case-results (cond-> {}
+                                      ecommerce-section (assoc :ecommerce/purchase ecommerce-section))}))
 
 ;; ── Auto-resolution ───────────────────────────────────────────────────────────
 

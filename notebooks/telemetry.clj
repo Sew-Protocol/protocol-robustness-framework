@@ -59,7 +59,7 @@
 (def ^:private telemetry-contract
   {:datasource "resolver-sim.db.xtdb/->datasource"
    :schemas {:test-run "test-run.v1"
-             :test-artifacts "test-artifacts.v1"
+             :test-artifacts "test-artifacts.v1.2"
              :trace-end-projection "trace-end-projection.v1"
              :claimable-classification "claimable-classification.v2"}})
 

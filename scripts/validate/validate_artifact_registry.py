@@ -13,6 +13,7 @@ import sys
 from pathlib import Path
 
 from evidence_config import EvidenceConfig
+from schema_validator import SchemaValidator, SchemaValidationError
 
 
 def sha256_file(path: Path) -> str:
@@ -114,6 +115,14 @@ def main() -> int:
     summary = load_json(summary_p)
     claim_raw = claim_p.read_text()
     claim = json.loads(claim_raw)
+
+    # Phase 1: structural validation (schema conformance)
+    struct_errors = SchemaValidator().validate(registry)
+    if struct_errors:
+        print(f"[artifact-registry] STRUCTURAL FAILURE: {len(struct_errors)} error(s)")
+        for e in struct_errors:
+            print(f"  {e.path}: {e.message}")
+        fail("structural validation failed — fix registry shape before semantic checks")
 
     validate_schema_const(registry, cfg.schema("test-artifacts"), "test-artifacts")
     validate_schema_const(run, cfg.schema("test-run"), "test-run")

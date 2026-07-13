@@ -46,9 +46,17 @@
    Returns updated world.
    Updates total-resolvers count for circuit breaker tracking.
 
-   If yield-profile-id is provided, the stake will be managed by that yield module."
+   If yield-profile-id is provided, the stake will be managed by that yield module.
+
+   Guards:
+     - amount must be positive"
   ([world resolver-addr amount] (register-stake world resolver-addr amount nil))
   ([world resolver-addr amount yield-profile-id]
+   (when (or (nil? amount) (not (number? amount)) (<= amount 0))
+     (throw (ex-info "register-stake amount must be positive"
+                     {:type :invalid-stake-amount
+                      :amount amount
+                      :resolver resolver-addr})))
    (let [prev-stake (get-stake world resolver-addr)
          was-zero?  (zero? prev-stake)
          world' (-> world
@@ -175,22 +183,27 @@
          token   (if workflow-id
                    (keyword (or (:token (t/get-transfer world workflow-id)) "USDC"))
                    :USDC)
-         held-available (get-in world [:total-held token] 0)
-          ;; Consume from senior coverage first (if resolver has delegated to a senior).
-         senior-addr (get-in world [:resolver-senior resolver-addr])
-         coverage-remaining (when senior-addr
-                              (get-in world [:senior-bonds senior-addr :reserved-coverage] 0))
-         from-coverage (if coverage-remaining
-                         (min actual (long coverage-remaining))
-                         0)
-         from-stake (- actual from-coverage)
-          ;; Reduce held only when slash amount is backed by on-hand custody (avoids underflow
-          ;; after settlement has already drained :total-held for this token).
-          ;; Reversal slashes (skip-sub-held?=true) bypass sub-held because the penalty
-          ;; comes from resolver stakes, not from escrow total-held.
-         sub-held?      (and (not skip-sub-held?)
-                             (pos? actual)
-                             (>= held-available actual))
+          ;; Check position-level held balance for this resolver's slash-custody
+          ;; (not token-level total-held, which includes other positions like escrow principal).
+          ;; The position is keyed by [:held/position token :resolver-slash-custody resolver-addr workflow-id].
+          slash-custody-pos-id [:held/position token :resolver-slash-custody resolver-addr (or workflow-id 0)]
+          position-held (or (get-in world [:held-ledger/index :by-position slash-custody-pos-id])
+                            (get-in world [:held/positions slash-custody-pos-id])
+                            0)
+           ;; Consume from senior coverage first (if resolver has delegated to a senior).
+          senior-addr (get-in world [:resolver-senior resolver-addr])
+          coverage-remaining (when senior-addr
+                               (get-in world [:senior-bonds senior-addr :reserved-coverage] 0))
+          from-coverage (if coverage-remaining
+                          (min actual (long coverage-remaining))
+                          0)
+          from-stake (- actual from-coverage)
+           ;; Reduce held only when the specific resolver-slash-custody position has balance
+           ;; (avoids position-level underflow).  Reversal slashes (skip-sub-held?=true)
+           ;; bypass sub-held because the penalty comes from resolver stakes, not held custody.
+          sub-held?      (and (not skip-sub-held?)
+                              (pos? actual)
+                              (>= position-held actual))
          world'  (-> world
                      (cond-> (and senior-addr (pos? from-coverage))
                        (update-in [:senior-bonds senior-addr :reserved-coverage]

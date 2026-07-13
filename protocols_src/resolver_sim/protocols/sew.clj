@@ -233,6 +233,7 @@
     "withdraw-fees"
     "governance-update-fee"
     "set-token-liquidity-crunch"
+    "set-fee-recipient"
     "set-paused"
     "delegate-to-senior"
     "propose-fraud-slash"
@@ -789,13 +790,15 @@
                         :authorization-provenance execution-prov)]
             (if (:ok result)
               (let [world' (-> (:world result)
-                               (assoc-in [:force-authorisations auth-id :consumed?] true)
-                               (assoc-in [:force-authorisations auth-id :authorization/status] :consumed)
-                               (assoc-in [:force-authorisations auth-id :executed-by] addr)
-                               (assoc-in [:force-authorisations auth-id :executed-at] now)
-                               (assoc-in [:force-authorisations auth-id :execution/is-release] is-release)
-                               (assoc-in [:force-authorisations auth-id :execution/provenance] execution-prov)
-                               (assoc-in [:force-authorisations auth-id :execution/last-provenance] execution-prov)
+                                ;; Record execution provenance but do NOT mark consumed.
+                                ;; Consumption happens at sub-held during finalization,
+                                ;; where mark-force-authorisation-consumed binds the grant
+                                ;; to the actual token, amount, recipient, and held-adjustment.
+                                (assoc-in [:force-authorisations auth-id :executed-by] addr)
+                                (assoc-in [:force-authorisations auth-id :executed-at] now)
+                                (assoc-in [:force-authorisations auth-id :execution/is-release] is-release)
+                                (assoc-in [:force-authorisations auth-id :execution/provenance] execution-prov)
+                                (assoc-in [:force-authorisations auth-id :execution/last-provenance] execution-prov)
                                 (assoc-in [:force-authorisations auth-id :execution/last-action] "execute-force-authorised-action")
                                 (update-in [:force-authorisations auth-id :execution/history]
                                            (fnil conj [])
@@ -809,11 +812,12 @@
                    :force-authorisation-executed
                    {:force-auth/before {:status (:authorization/status record)
                                         :consumed? (:consumed? record)}}
-                   {:force-auth/after {:status :consumed
-                                       :consumed? true
-                                       :executed-by addr
-                                       :executed-at now
-                                       :is-release is-release}}
+                    {:force-auth/after {:status (:authorization/status record)
+                                        :consumed? (:consumed? record)
+                                        :execution-recorded? true
+                                        :executed-by addr
+                                        :executed-at now
+                                        :is-release is-release}}
                    {:force-auth/auth-id auth-id
                     :force-auth/workflow-id workflow-id
                     :force-auth/executed-by addr
@@ -1020,21 +1024,11 @@
         (if (pos? reclaimed)
           (let [escrow-id (when (vector? owner-id) (second owner-id))
                 world''   (if escrow-id
-                            ;; For escrow yield: recover principal and credit recipient
                             (let [et        (t/get-transfer world' escrow-id)
                                   state     (t/escrow-state world' escrow-id)
-                                  token     (:token et)
                                   recipient (if (#{:released :resolved-release} state) (:to et) (:from et))]
-                              (-> world'
-                                  (acct/sub-held token
-                                                 reclaimed
-                                                 {:action "claim-deferred-yield"
-                                                  :reason :deferred-yield-claimed
-                                                  :extra {:held/action "claim-deferred-yield"
-                                                          :held/workflow-id escrow-id
-                                                          :held/owner-id owner-id
-                                                          :held/recipient recipient}})
-                                  (acct/record-claimable-v2 escrow-id :settlement/yield recipient reclaimed)))
+                              (lc/apply-deferred-yield-claim-settlement
+                               world' escrow-id owner-id recipient reclaimed))
                             ;; Resolver stake: reclaimed deferred was already in :total-held via
                             ;; register-stake; closing the yield position is sufficient (no stake bump).
                             world')]
@@ -1061,13 +1055,14 @@
 (defmethod apply-action "withdraw-fees"
   [{:keys [agent-index] :as context} world event]
   (run-governance-action context world event
-    (fn [_addr _agent _provenance]
+    (fn [addr _agent _provenance]
       (if (:paused? world)
         (t/fail :protocol-paused)
-        (let [p     (:params event)
-              token (:token p)
-              token (when token (keyword token))]
-          (acct/withdraw-fees world token))))))
+        (let [p         (:params event)
+              token     (:token p)
+              token     (when token (keyword token))
+              recipient (acct/resolve-fee-recipient world token)]
+          (acct/withdraw-fees world token recipient addr))))))
 
 (defmethod apply-action "governance-update-fee"
   [{:keys [agent-index] :as context} world event]
@@ -1090,6 +1085,27 @@
                       (if active?
                         #(conj (or % #{}) token)
                         #(disj % token))))))))
+
+(defmethod apply-action "set-fee-recipient"
+  [{:keys [agent-index] :as context} world event]
+  (run-governance-action context world event
+    (fn [addr _agent _provenance]
+      (let [p         (:params event)
+            id        (or (:token p) :default)
+            recipient (:recipient p)]
+        (if (or (nil? recipient) (= recipient ""))
+          (t/fail :missing-fee-recipient)
+          (let [world' (acct/set-fee-recipient world id recipient)]
+            (cap/capture-event-evidence!
+             :fee-recipient-updated
+             {:fee-recipient/before {:default (get-in world [:fee-recipients :default])
+                                     :by-token (get-in world [:fee-recipients :by-token])}}
+             {:fee-recipient/after {:default (get-in world' [:fee-recipients :default])
+                                    :by-token (get-in world' [:fee-recipients :by-token])}}
+             {:fee-recipient/token id
+              :fee-recipient/address recipient
+              :authorized-by addr})
+            (t/ok world')))))))
 
 (defmethod apply-action "set-paused"
   [{:keys [agent-index] :as context} world event]
@@ -1636,7 +1652,8 @@
       :invalid-guard-conditions
       :expected-reverts
       :unexpected-reverts
-      :negative-payoff-count
+      ;; Negative payoff count is terminal-payoff-ledger derived by projection;
+      ;; it must not be initialized as a replay accumulator.
       :coalition-net-profit
       :funds-lost
       ;; Cancellation-specific metrics

@@ -381,6 +381,20 @@
                           (let [resolver (:resolver slash-entry)
                                 amount   (:amount slash-entry)
                                 now      (time-ctx/block-ts w)]
+                            (when-not (pos? amount)
+                              (throw (ex-info "reverse-reversal-slash amount must be positive"
+                                              {:type :invalid-slash-reversal
+                                               :slash-id slash-id
+                                               :amount amount
+                                               :resolver resolver})))
+                            (let [current-slash-total (get-in w [:resolver-slash-total resolver] 0)]
+                              (when (< current-slash-total amount)
+                                (throw (ex-info "reverse-reversal-slash would underflow resolver-slash-total"
+                                                {:type :slash-reversal-underflow
+                                                 :slash-id slash-id
+                                                 :resolver resolver
+                                                 :amount amount
+                                                 :current current-slash-total}))))
                             (-> w
                                 (update-in [:resolver-stakes resolver] (fnil + 0) amount)
                                 (update-in [:resolver-slash-total resolver] (fnil - 0) amount)
@@ -1367,7 +1381,7 @@
               custody     (get-in world [:appeal-bond-custody slash-id])
               resolver    (or (:resolver custody) (:resolver pending))
               wf-id       (or (:workflow-id custody) (:workflow-id pending) _workflow-id)
-               bond-token  (or (:token custody) (:token pending) "USDC")
+               bond-token  (or (:token custody) (:token pending))
               world-base  (-> world
                               (assoc-in [:pending-fraud-slashes slash-id :appeal-bond-held] 0)
                               (update :appeal-bond-custody dissoc slash-id))
@@ -1409,6 +1423,13 @@
                      {:world-before world
                       :world-after world'}))
                   (t/ok world')))]
+          (when-not bond-token
+            (throw (ex-info "slash appeal bond lacks token provenance"
+                            {:type :missing-bond-token
+                             :slash-id slash-id
+                             :workflow-id wf-id
+                             :custody custody
+                             :pending pending})))
           (cond
             appeal-upheld?
             (let [world' (cond-> world-base
@@ -1419,10 +1440,10 @@
                                                :reason :appeal-bond-returned
                                                :authorization-provenance authorization-provenance
                                                :extra {:held/action "resolve-appeal"
-                                                       :held/workflow-id wf-id
-                                                       :held/slash-id slash-id
-                                                       :held/actor caller
-                                                       :held/appeal-outcome :upheld}})
+                                                        :held/workflow-id wf-id
+                                                        :held/slash-id slash-id
+                                                        :held/actor resolver
+                                                        :held/appeal-outcome :upheld}})
                                (acct/record-claimable-v2 wf-id :bond/refund resolver bond-held))
                            :always
                            (update-in [:pending-fraud-slashes slash-id]
@@ -1448,11 +1469,11 @@
                                             {:action "resolve-appeal"
                                              :reason :appeal-bond-forfeited
                                              :authorization-provenance authorization-provenance
-                                             :extra {:held/action "resolve-appeal"
-                                                     :held/workflow-id wf-id
-                                                     :held/slash-id slash-id
-                                                     :held/actor caller
-                                                     :held/appeal-outcome :rejected}})
+                                              :extra {:held/action "resolve-appeal"
+                                                      :held/workflow-id wf-id
+                                                      :held/slash-id slash-id
+                                                      :held/actor resolver
+                                                      :held/appeal-outcome :rejected}})
                              (update-in [:pending-fraud-slashes slash-id]
                                         append-authorization-provenance
                                         "resolve-appeal"

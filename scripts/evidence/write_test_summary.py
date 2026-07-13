@@ -438,7 +438,7 @@
       return iv                                                               
                                                                               
   artifact_registry = {                                                       
-    "schema_version": "test-artifacts.v1",                                    
+    "schema_version": "test-artifacts.v1.2",                                  
     "contract_version": _cfg.contract_version,                                
     "run_id": "$RUN_ID",                                                      
     "generated_at": datetime.datetime.now(datetime.timezone.utc).isoformat(), 

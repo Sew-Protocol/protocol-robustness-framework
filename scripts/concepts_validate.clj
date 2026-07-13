@@ -54,6 +54,55 @@
     (sequential? obj)
     (doseq [v obj] (check-value-maps-to path v errors))))
 
+(def evidence-keys #{:scenarios :benchmarks :claims})
+(def use-case-required-keys
+  #{:concept/maturity :concept/support-status :concept/known-gaps :concept/evidence})
+(def conceptual-maturities #{:illustrative :mapping-reviewed :scenario-backed :benchmark-backed})
+(def support-statuses #{:not-asserted})
+(def mapping-statuses #{:native :derived :approximate :not-modelled})
+
+(defn check-use-case-contract [path concept errors]
+  (when (= :use-case (:concept/type concept))
+    (let [missing (set/difference use-case-required-keys (set (keys concept)))]
+      (when (seq missing)
+        (swap! errors conj (str path " :use-case missing required keys " (pr-str missing))))
+      (when-not (contains? conceptual-maturities (:concept/maturity concept))
+        (swap! errors conj (str path " has invalid :concept/maturity " (:concept/maturity concept))))
+      (when-not (contains? support-statuses (:concept/support-status concept))
+        (swap! errors conj (str path " has invalid :concept/support-status " (:concept/support-status concept))))
+      (when-not (vector? (:concept/known-gaps concept))
+        (swap! errors conj (str path " :concept/known-gaps must be a vector"))))))
+
+(defn check-mapping-statuses [path obj errors]
+  (cond
+    (map? obj)
+    (do
+      (when (and (contains? obj :mapping/status)
+                 (not (contains? mapping-statuses (:mapping/status obj))))
+        (swap! errors conj (str path " has invalid :mapping/status " (:mapping/status obj))))
+      (doseq [[k v] obj]
+        (check-mapping-statuses (str path "/" k) v errors)))
+    (sequential? obj)
+    (doseq [v obj] (check-mapping-statuses path v errors))))
+
+(defn check-evidence [path concept errors]
+  (when (= :use-case (:concept/type concept))
+    (let [evidence (:concept/evidence concept)]
+      (cond
+        (nil? evidence)
+        (swap! errors conj (str path " :use-case requires :concept/evidence"))
+
+        (not (map? evidence))
+        (swap! errors conj (str path " :concept/evidence must be a map"))
+
+        :else
+        (do
+          (when-not (= evidence-keys (set (keys evidence)))
+            (swap! errors conj (str path " :concept/evidence must contain exactly " evidence-keys)))
+          (doseq [key evidence-keys]
+            (when-not (set? (get evidence key))
+              (swap! errors conj (str path " :concept/evidence " key " must be a set")))))))))
+
 (defn run-validation []
   (println "▶ concepts:validate\n")
   (println "  Parsing registry...")
@@ -129,7 +178,10 @@
                         (when-not (known-protocols p)
                           (swap! errors conj (str rel ": unknown protocol " p))
                           (println "    FAIL" rel "unknown protocol" p))))
-                    (check-value-maps-to rel data errors))))))))
+                    (check-value-maps-to rel data errors)
+                    (check-use-case-contract rel data errors)
+                    (check-evidence rel data errors)
+                    (check-mapping-statuses rel data errors))))))))
       (println "  Checking related concept references...")
       (doseq [{:keys [from to]} (concepts-registry/missing-related-concepts @loaded-concepts)]
         (swap! errors conj (str "concept " from " references missing related concept " to))

@@ -12,6 +12,7 @@
   (:require [clojure.data.json                 :as json]
             [clojure.java.io                   :as io]
             [resolver-sim.evidence.config      :as evcfg]
+            [resolver-sim.evidence.capture    :as evcapture]
             [resolver-sim.contract-model.replay.metrics :as metrics]
             [resolver-sim.contract-model.replay.validation :as validation]
             [resolver-sim.contract-model.replay.analysis :as analysis]
@@ -143,18 +144,20 @@
   (execution/trace-entry->replay-event entry))
 
 (defn replay-events
-  "Pure canonical scenario computation.
+  "Replay a scenario and return trace + metrics.
 
-   Returns trace + metrics without evidence chain, I/O, signing, or risk monitoring.
-   Callers (e.g. `replay-with-protocol`) add those layers externally.
+   Returns trace + metrics without evidence chain I/O or signing.
+   Under default flags (:evidence-mode :all), protocol-level evidence
+   capture still runs in memory; set :evidence-mode :none to suppress
+   all evidence capture including protocol-level calls.
 
    Accepts optional opts map — passed through to `resolve-replay-flags`:
    - :flags   — replay flag overrides (see `replay.flags`)
    - :minimal — use minimal replay flags
    - :run-id  — identifier for the replay run
 
-   Returns the full simulation result including :trace, :metrics, :outcome,
-   and (when `:evaluate-expectations?` is true) expectation and theory analysis."
+   Callers (e.g. `replay-with-protocol`) add evidence chain I/O, signing,
+   and risk monitoring layers externally."
   [protocol scenario & [opts]]
   (let [flags              (replay-flags/resolve-replay-flags scenario opts)
         vocab              (if (satisfies? proto/EconomicModel protocol)
@@ -165,10 +168,18 @@
         validation         (validate-scenario scenario effective-metrics
                                               {:strict-validation? (:strict-validation? flags)})
         temporal-cfg       (:temporal-evidence scenario)
-        temporal-enabled?  (:temporal-enabled? flags)]
+        temporal-enabled?  (:temporal-enabled? flags)
+        validation         (if (and (:ok validation) (:yield-dt-validation? flags))
+                             (let [yield-val (requiring-resolve 'resolver-sim.contract-model.replay.yield/validate-dt-time-alignment)
+                                   dt-check (yield-val (:events scenario []))]
+                               (if (:ok dt-check) validation dt-check))
+                             validation)]
     (if-not (:ok validation)
       {:outcome :invalid :scenario-id (:scenario-id scenario) :events-processed 0 :trace [] :metrics (metrics/zero-metrics protocol (:metrics-profile flags)) :halt-reason (:error validation) :protocol protocol}
-      (let [agents   (:agents scenario)
+      (binding [evcapture/*capture-event-evidence!* (if (= :none (:evidence-mode flags))
+                                                       evcapture/noop-capture
+                                                       evcapture/*capture-event-evidence!*)]
+        (let [agents   (:agents scenario)
             p-params (get scenario :protocol-params {})
             context  (-> (proto/build-execution-context protocol agents p-params)
                          (assoc :replay-flags flags))
@@ -196,7 +207,7 @@
                             raw-result)]
         (if (:evaluate-expectations? flags true)
           (finalize-scenario-result scenario trimmed-result flags)
-          trimmed-result)))))
+          trimmed-result))))))
 
 (defn replay-with-protocol
   "Full replay plus evidence-chain, persistence, signing, timestamping and
@@ -252,10 +263,11 @@
 (defn replay-yield-scenario
   "INTERNAL COMPATIBILITY ADAPTER — delegates to replay.yield/replay-yield-scenario.
 
-   This is a thin bridge for existing callers that imported replay-yield-scenario
-   from this namespace. Prefer `simple-replay` or `replay-yield-events` instead.
+   This is a thin bridge for existing callers that imported
+   `resolver-sim.contract-model.replay/replay-yield-scenario`.
+   Prefer `simple-replay` for new code.
 
-   Removal condition: all callers migrated to simple-replay or replay-yield-events."
+   Removal condition: all callers migrated to simple-replay."
   ([scenario] ((requiring-resolve 'resolver-sim.contract-model.replay.yield/replay-yield-scenario) scenario))
   ([protocol scenario] ((requiring-resolve 'resolver-sim.contract-model.replay.yield/replay-yield-scenario) protocol scenario)))
 
@@ -270,6 +282,12 @@
 
    This is a pure, deterministic function. The input is not mutated."
   [scenario]
+  (when-not (map? scenario)
+    (throw (ex-info "Simple replay scenario must be a map"
+                    {:type :invalid-simple-replay-scenario
+                     :replay-profile :simple
+                     :expected :map
+                     :actual-type (str (class scenario))})))
   (let [has-version? (contains? scenario :schema-version)]
     (if has-version?
       {:scenario scenario
@@ -318,14 +336,19 @@
      (simple-replay protocol scenario replay-opts)
 
    The simple profile:
-   - Disables temporal enforcement
-   - Disables theory DSL evaluation
-   - Uses relaxed validation
-   - Skips evidence, persistence, signing, timestamping
+   - Disables temporal enforcement and theory DSL evaluation by default
+   - Uses relaxed structural validation by default
+   - Keeps invariant checks and expected-error / scenario-expectation processing
+     enabled unless a safe caller flag changes them
+   - Skips evidence, persistence, signing, timestamping, and checkpoints
+   - Suppresses protocol-level capture-event-evidence! calls via the no-op
+     capture binding
    - Skips risk-monitor side effects
 
-   Dispatches protocol-specific execution via profile-adapter multimethod.
-   Default uses replay-events; yield-v1 uses replay-yield-events.
+   Dispatches protocol-specific execution through a single execution plan that
+   supplies both the runner and its published execution descriptor. The default
+   plan uses replay-events; protocol-specific plans (such as yield-v1) may
+   enforce additional safe execution flags.
 
    Replay-opts currently supports:
    - :run-id — identifier for the replay run
@@ -335,17 +358,18 @@
    :signing-password, :tsa-url, :skip-finalize, :allow-dirty?"
   ([protocol scenario]
    (simple-replay protocol scenario nil))
-  ([protocol scenario replay-opts]
+   ([protocol scenario replay-opts]
    (let [prep         (prepare-simple-scenario scenario)
          prepared     (:scenario prep)
          normalizations (:normalizations prep)
          simple-opts  (profile-adapter/extract-simple-opts replay-opts :simple-replay)
-         raw-result   (profile-adapter/run-simple-profile :simple protocol prepared simple-opts)
-         execution-descriptor
-         (if (= "yield-v1" (proto/protocol-id protocol))
-           {:profile :simple :engine :yield-thin-loop :adapter? true}
-           {:profile :simple :engine :canonical-loop})]
-     (normalize-simple-result raw-result protocol normalizations execution-descriptor (:run-id simple-opts)))))
+         execution-plan (profile-adapter/simple-execution-plan :simple protocol)
+         raw-result   ((:run execution-plan) protocol prepared simple-opts)
+         validated-result (profile-adapter/validate-simple-adapter-result!
+                           raw-result
+                           (get-in execution-plan [:execution :adapter/id] :canonical))
+         execution-descriptor (:execution execution-plan)]
+     (normalize-simple-result validated-result protocol normalizations execution-descriptor (:run-id simple-opts)))))
 (defn resume-from-snapshot
   "Resume a simulation from a world snapshot and a sequence of events.
    Useful for exploring counterfactual subgames."

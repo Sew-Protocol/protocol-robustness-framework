@@ -14,7 +14,7 @@
   "schemas": {
     "test-summary": "test-summary.v2",
     "test-run": "test-run.v1",
-    "test-artifacts": "test-artifacts.v1.1",
+    "test-artifacts": "test-artifacts.v1.2",
     "claimable-classification": "claimable-classification.v2",
     "scenario-result": "scenario-result.v1",
     "coverage": "coverage.v1",

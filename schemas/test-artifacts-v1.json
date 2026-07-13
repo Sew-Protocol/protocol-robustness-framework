@@ -1,7 +1,8 @@
 {
   "$schema" : "https://json-schema.org/draft/2020-12/schema",
   "$id" : "https://sew-protocol/schemas/test-artifacts-v1.json",
-  "title" : "Test Artifacts Registry",
+  "title" : "Test Artifacts Registry [DEPRECATED — use test-artifacts-v1.2.json]",
+  "description" : "Legacy v1 schema retained for historical validation. Use test-artifacts-v1.2.json for new registries.",
   "type" : "object",
   "required" : [ "schema_version", "run_id", "run_manifest", "artifacts" ],
   "properties" : {

@@ -13,6 +13,7 @@
             [resolver-sim.contract-model.replay :as replay]
             [resolver-sim.protocols.sew :as sew]
             [resolver-sim.protocols.sew.invariants :as sew-inv]
+            [resolver-sim.protocols.yield :as yp]
             [resolver-sim.scenario.suites :as suites]
             [clojure.edn :as edn]
             [clojure.java.io :as io]
@@ -153,10 +154,12 @@
         protocol (:protocol scenario)
         output-dir (execution-output-dir scenario-output-dir scenario-file run-index)
         run-replay (fn []
-                     (if (= "yield-v1" protocol)
-                       (replay/replay-yield-scenario scenario)
-                       (sew/replay-with-sew-protocol scenario
-                                                     {:allow-dirty? (or chain/*allow-dirty* false)})))
+                      (if (= "yield-v1" protocol)
+                        (replay/replay-events (yp/protocol) scenario
+                                              {:flags {:yield-dt-validation? true
+                                                       :metrics-profile :yield-provider}})
+                        (sew/replay-with-sew-protocol scenario
+                                                      {:allow-dirty? (or chain/*allow-dirty* false)})))
         result (if output-dir
                  (binding [evidence-config/*artifact-dir* output-dir]
                    (run-replay))

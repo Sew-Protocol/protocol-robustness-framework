@@ -201,8 +201,8 @@
       (is (= (get-in p [:payoff-ledger-summary :negative-payoff-count])
              (get-in p [:metrics :negative-payoff-count]))))))
 
-(deftest test-negative-payoff-count-prefers-replay-metric-when-present
-  (testing "projection prefers replay-provided :metrics value over derived payoff-ledger count"
+(deftest test-negative-payoff-count-ignores-replay-metric-override
+  (testing "projection always uses the derived terminal payoff-ledger count"
     (let [trace [{:seq 0 :time 1000 :agent "buyer" :action "create_escrow"
                   :world {:live-states {0 :disputed}
                           :pending-count 0
@@ -228,13 +228,13 @@
                              ;; Deliberately set to a sentinel value different from
                              ;; the derived ledger count to verify preference ordering.
                              :metrics {:negative-payoff-count 7}}))]
-      (is (= 7 (get-in p [:metrics :negative-payoff-count]))
-          "projection should preserve replay-provided metric when non-nil")
-      (is (not= 7 (get-in p [:payoff-ledger-summary :negative-payoff-count]))
-          "derived payoff-ledger count remains independently computed"))))
+      (is (= (get-in p [:payoff-ledger-summary :negative-payoff-count])
+             (get-in p [:metrics :negative-payoff-count]))
+          "sentinel replay metric must not override the derived count")
+      (is (not= 7 (get-in p [:metrics :negative-payoff-count]))))))
 
-(deftest test-negative-payoff-count-falls-back-when-replay-metric-nil
-  (testing "projection falls back to derived payoff-ledger count when replay metric is nil"
+(deftest test-negative-payoff-count-ignores-nil-replay-metric
+  (testing "projection uses the derived payoff-ledger count when replay metric is nil"
     (let [trace [{:seq 0 :time 1000 :agent "buyer" :action "create_escrow"
                   :world {:live-states {0 :disputed}
                           :pending-count 0

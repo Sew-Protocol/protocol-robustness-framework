@@ -200,12 +200,15 @@ escape hatch with cryptographic evidence at every step.
    `:held/reason`, `:held/workflow-id`) before delegating to
    `apply-resolution-transition` with `:resolution-source :force-authorised`.
 
-   The accounting layer independently reloads the live authorization record and
-   verifies that it exists, is active and in-window, has not been consumed, and
-   commits to the exact actual held adjustment. It then atomically records the
-   adjustment and consumption (dual guard: record flag `:consumed?` and
-   accounting-level `:force-authorisations/consumed` map), and execution emits
-   `:force-authorisation-executed` evidence capturing the consumed post-state.
+   Execution records provenance but leaves the grant active while the resolution
+   awaits settlement. At finalization, the accounting layer independently reloads
+   the live authorization record and verifies that it exists, is active and
+   in-window, has not been consumed, and commits to the exact actual held
+   adjustment. It then atomically records the adjustment and consumption (dual
+   guard: record flag `:consumed?` and accounting-level
+   `:force-authorisations/consumed` map). `:force-authorisation-executed`
+   evidence records the execution event; the linked held adjustment is the
+   authoritative consumption record.
 
 ### Authorization scope (scope-hash)
 

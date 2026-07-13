@@ -27,7 +27,7 @@
   (testing "replay-opts override :minimal true defaults in simple-replay path"
     (let [scenario (assoc minimal-scenario :theory {:falsifies-if []})
           ;; Force evaluate-theory? to true even if :minimal true would disable it
-          result (replay/simple-replay dummy/protocol scenario {:evaluate-theory? true})]
+          result (replay/simple-replay dummy/protocol scenario {:flags {:evaluate-theory? true}})]
       ;; If evaluate-theory? was true, theory evaluation should have produced output
       (is (= :not-falsified (:status result))))))
 

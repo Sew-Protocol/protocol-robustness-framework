@@ -18,6 +18,21 @@
       (is (= 0 (:total-unmet result)))
       (is (= 0 (:remainder result))))))
 
+(deftest allocate-pro-rata-reports-caller-owned-progress
+  (let [progress (payoffs/make-pro-rata-progress-atom)
+        result (payoffs/allocate-pro-rata
+                {:amount 10
+                 :items [{:id :a :weight 1}
+                         {:id :b :weight 1}
+                         {:id :c :weight 1}]
+                 :progress-atom progress})]
+    (is (= [3 3 3] (mapv :allocated (:allocations result))))
+    (is (= {:status :completed
+            :phase :completed
+            :current 3
+            :total 3}
+           @progress))))
+
 (deftest allocate-pro-rata-unequal-weights
   (testing "unequal weights allocate proportionally"
     (let [result (payoffs/allocate-pro-rata

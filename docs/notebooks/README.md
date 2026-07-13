@@ -90,7 +90,7 @@ confidence levels:
 All scenarios backed by artifact files:
 
 - Deterministic invariant scenarios: `data/fixtures/` (EDN fixture files)
-- Adversarial gRPC scenarios: `python/scenarios/` (Python agent scripts)
+- Adversarial agent scenarios: `test/integration/python/` (Python agent scripts)
 - Golden replay reports: `data/fixtures/traces/` (expected trace outputs)
 - Evidence pack: `docs/evidence/` (reproducibility artifacts for external review)
 

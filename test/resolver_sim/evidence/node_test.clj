@@ -129,6 +129,29 @@
           (is (:valid? verification))
           (is (= (:node-hash built) (get-in verification [:node :node-hash]))))))))
 
+(deftest concurrent-persistence-atomically-claims-content-addressed-node-path
+  (node/with-fresh-registry
+    (chain/reset-registry!)
+    (let [artifact-dir (temp-artifact-dir)
+          built (node/build-execution-node (base-node-spec))
+          start (promise)
+          writers (mapv (fn [_]
+                          (future
+                            @start
+                            (binding [evcfg/*artifact-dir* artifact-dir]
+                              (node/persist-execution-node! built))))
+                        (range 16))]
+      (deliver start true)
+      (let [results (mapv deref writers)
+            paths (mapv :path results)
+            path (first paths)
+            artifacts (:artifacts (chain/build-registry))]
+        (is (apply = paths))
+        (is (= (:node-hash built)
+               (:node-hash (node/read-persisted-node path))))
+        (is (:valid? (node/verify-persisted-node-artifact! path)))
+        (is (= 1 (count (filter #(= path (:artifact/path %)) artifacts))))))))
+
 (deftest persisted-node-dag-validation-spans-parent-and-child
   (node/with-fresh-registry
     (chain/reset-registry!)

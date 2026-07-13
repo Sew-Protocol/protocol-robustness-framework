@@ -155,9 +155,11 @@
    :claimable-classification          :accounting
    :single-resolution-payout-consistent :accounting
    :held-delta-accounted              :accounting
-   :withdrawn-monotonic               :accounting
-   :released-monotonic                :accounting
-   :all-status-combinations-valid     :state-machine
+    :withdrawn-monotonic               :accounting
+    :released-monotonic                :accounting
+    :fee-payouts-sum-equals-total-fees-withdrawn :accounting
+    :fee-payouts-monotonic             :accounting
+    :all-status-combinations-valid     :state-machine
    :persisted-escrow-state-valid      :state-machine
    :escrow-state-in-graph             :state-machine
    :escrow-dispute-metadata-consistent :state-machine

@@ -90,12 +90,10 @@ The problem cannot be solved by the protocol alone: the resolver's economic thre
 
 ```bash
 # Start gRPC server
-nohup clojure -M:run -- -S --port 7070 > grpc-server.log 2>&1 &
-sleep 8
+bb adv:server
 
 # Run scenario F7
-cd test/integration/python
-python invariant_suite.py --scenario F7 --json ../results/evidence/f7-run.json
+bb adv:broad
 ```
 
 Expected output:

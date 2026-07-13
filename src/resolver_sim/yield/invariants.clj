@@ -228,6 +228,28 @@
   (let [oid (:owner/id pos)]
     (and (vector? oid) (= (first oid) :sew/resolver))))
 
+(defn check-token-key-consistency
+  "Reject simultaneous string and keyword keys for one normalized token in
+   accounting maps. Mixed representations split balances across independent
+   map entries and make custody reconciliation ambiguous."
+  [world]
+  (let [paths [[:total-held]
+               [:total-yield-generated]
+               [:yield/held-balances]
+               [:token/decimals]
+               [:yield/token-decimals]]
+        violations
+        (vec
+         (mapcat
+          (fn [path]
+            (let [m (get-in world path {})
+                  grouped (group-by token-name (keys (if (map? m) m {})))]
+              (for [[normalized keys] grouped
+                    :when (> (count keys) 1)]
+                {:path path :token normalized :keys (vec (sort-by str keys))})))
+          paths))]
+    {:holds? (empty? violations) :violations violations}))
+
 (defn check-provider-exposure
   "Yield exposure invariant: total-held must cover active yield positions.
    Excludes resolver-owned positions since those are backed by resolver-stakes
@@ -241,6 +263,7 @@
 (def ^:private check-fns
   {:yield/position-consistency check-position-consistency
    :yield/exposure             check-provider-exposure
+   :yield/token-key-consistency check-token-key-consistency
    :yield/shortfall-splits     check-shortfall-splits
    :yield/shortfall-detected   check-shortfall-detected
    :yield/status-fsm           check-status-fsm

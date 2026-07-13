@@ -23,6 +23,59 @@
     :concept/metrics :concept/assumptions
     :concept/out-of-scope})
 
+(def mapping-statuses
+  #{:native :derived :approximate :not-modelled})
+
+(def use-case-required-keys
+  #{:concept/maturity :concept/support-status :concept/known-gaps :concept/evidence})
+
+(defn mapping-status
+  "Return the declared mapping status, or derive a conservative status for
+   legacy concept metadata. Empty mappings are not modelled; approximate
+   mappings retain their existing confidence marker; all other direct mappings
+   are native."
+  [mapping]
+  (or (:mapping/status mapping)
+      (cond
+        (empty? (:maps-to mapping)) :not-modelled
+        (= :approximate (:mapping/confidence mapping)) :approximate
+        :else :native)))
+
+(defn normalize-concept
+  "Add a machine-readable :mapping/status to every role, entity, action, and
+   outcome mapping without changing the source concept's stakeholder wording."
+  [concept]
+  (reduce (fn [normalized category]
+            (update normalized category
+                    (fn [mappings]
+                      (into {}
+                            (map (fn [[id mapping]]
+                                   [id (assoc mapping :mapping/status
+                                              (mapping-status mapping))]))
+                            mappings))))
+          concept
+          [:concept/roles :concept/entities :concept/actions :concept/outcomes]))
+
+(defn capability-validation-errors
+  "Validate concept mapping labels against an adapter-supplied capability set.
+
+   Concept :protocol.* labels are stakeholder vocabulary, so this function does
+   not invent a static Sew capability catalogue. Callers provide the exact set
+   supported by a protocol/version/configuration and receive structured errors
+   for labels that are not available in that declared capability surface."
+  [concept capability-labels]
+  (->> [:concept/roles :concept/entities :concept/actions :concept/outcomes]
+       (mapcat (fn [category]
+                 (for [[mapping-id mapping] (get concept category)
+                       label (:maps-to mapping)
+                       :when (not (contains? capability-labels label))]
+                   {:concept/id (:concept/id concept)
+                    :mapping/category category
+                    :mapping/id mapping-id
+                    :mapping/label label
+                    :error :unsupported-capability-label})))
+       vec))
+
 (defn- load-edn
   [path]
   (rp/edn-read path))
@@ -49,13 +102,25 @@
                                 (set (keys concept)))]
     (when (seq missing)
       (log/warn! "concept/missing-keys" {:concept-id id :missing missing}))
-    ;; Validate role maps-to references
-    (doseq [[role-key role] (:concept/roles concept)]
-      (when-not (vector? (:maps-to role))
+    (when (= :use-case (:concept/type concept))
+      (let [missing-use-case (set/difference use-case-required-keys
+                                             (set (keys concept)))]
+        (when (seq missing-use-case)
+          (log/warn! "concept/missing-use-case-contract"
+                     {:concept-id id :missing missing-use-case}))))
+    ;; Validate mapping references and any explicitly declared status.
+    (doseq [category [:concept/roles :concept/entities :concept/actions :concept/outcomes]
+            [mapping-key mapping] (get concept category)]
+      (when-not (vector? (:maps-to mapping))
         (log/warn! "concept/invalid-maps-to"
-                   {:concept-id id :role role-key
-                    :maps-to (:maps-to role)})))
-    concept))
+                   {:concept-id id :category category :mapping mapping-key
+                    :maps-to (:maps-to mapping)}))
+      (when (and (:mapping/status mapping)
+                 (not (contains? mapping-statuses (:mapping/status mapping))))
+        (log/warn! "concept/invalid-mapping-status"
+                   {:concept-id id :category category :mapping mapping-key
+                    :mapping/status (:mapping/status mapping)})))
+    (normalize-concept concept)))
 
 ;; ── Public API ───────────────────────────────────────────────────────────────
 

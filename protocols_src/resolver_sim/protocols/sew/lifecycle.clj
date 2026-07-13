@@ -19,6 +19,7 @@
             [resolver-sim.protocols.sew.registry      :as reg]
             [resolver-sim.protocols.sew.economics     :as sew-econ]
             [resolver-sim.yield.ops                    :as yield-ops]
+            [resolver-sim.yield.partial-fill            :as partial-fill]
             [resolver-sim.yield.module                 :as yield-module]
             [resolver-sim.yield.accounting             :as yield-acct]
             [resolver-sim.yield.expectations           :as yield-exp]
@@ -121,7 +122,7 @@
                                                             :held/owner-id owner-id}})
                     (neg? yield-delta)
                     (acct/sub-held tok (- yield-delta) {:action "accrue-resolver-yield"
-                                                        :reason :resolver-yield-accrued
+                                                        :reason :resolver-yield-loss
                                                         :extra {:held/resolver resolver-addr
                                                                 :held/owner-id owner-id}}))
                   (assoc-in [:resolver-yield-accrual-times resolver-addr] now)))
@@ -287,12 +288,159 @@
 
 (defn finalize-escrow-accounting
   "Shared finalize accounting for release/refund and resolution paths.
-   Optional opts:
-   - authorization-provenance — forwarded to finalize for force-authorised
-     escrow settlement."
+  Optional opts:
+  - authorization-provenance — forwarded to finalize for force-authorised
+    escrow settlement."
   [world workflow-id direction & {:keys [authorization-provenance]}]
   (finalize world workflow-id direction
             :authorization-provenance authorization-provenance))
+
+(defn apply-partial-fill-settlement
+  "Apply a validated partial-fill decision and its corresponding Sew custody
+   movements atomically. The generic yield helper only changes the position;
+   this protocol boundary records canonical, partition-bounded held adjustments.
+
+   `opts` must explicitly bind the payout to an escrow workflow and recipient:
+   {:workflow-id id :recipient address}. A decision may pay principal and yield;
+   those amounts are debited from their respective custody partitions."
+  [world position decision {:keys [workflow-id recipient action]
+                            :or {action "partial-fill-settlement"}}]
+  (when (nil? workflow-id)
+    (throw (ex-info "partial-fill settlement requires workflow id"
+                    {:type :invalid-partial-fill-settlement
+                     :reason :missing-workflow-id})))
+  (when (nil? recipient)
+    (throw (ex-info "partial-fill settlement requires recipient"
+                    {:type :invalid-partial-fill-settlement
+                     :reason :missing-recipient
+                     :workflow-id workflow-id})))
+  (let [owner-id (or (:owner/id position)
+                     (-> (resolver-sim.yield.position/position-identity position) second))
+        current-position (get-in world [:yield/positions owner-id])
+        token (:token position)
+        filled (:filled decision {})
+        principal (long (get filled :principal 0))
+        yield-amount (+ (long (get filled :realized-yield 0))
+                        (long (get filled :deferred-yield 0)))]
+    (when-not current-position
+      (throw (ex-info "partial-fill position not found in world"
+                      {:type :invalid-partial-fill-settlement
+                       :reason :position-not-found
+                       :owner-id owner-id})))
+    (when-not (= position current-position)
+      (throw (ex-info "partial-fill position is stale"
+                      {:type :invalid-partial-fill-settlement
+                       :reason :stale-position
+                       :owner-id owner-id})))
+    (when (not= (partial-fill/filled-total decision) (+ principal yield-amount))
+      (throw (ex-info "partial-fill decision contains unsupported payout buckets"
+                      {:type :invalid-partial-fill-settlement
+                       :reason :unsupported-filled-bucket
+                       :filled filled})))
+    (partial-fill/validate-partial-fill-application! current-position decision)
+    (let [world' (partial-fill/apply-partial-fill world current-position decision)
+          settled (cond-> world'
+                    (pos? principal)
+                    (acct/sub-held token principal
+                                   {:action action
+                                    :reason :escrow-settlement-released
+                                    :extra {:held/workflow-id workflow-id
+                                            :owner/address recipient
+                                            :held/recipient recipient
+                                            :held/partial-fill-owner-id owner-id}})
+                    (pos? yield-amount)
+                    (acct/sub-held token yield-amount
+                                   {:action action
+                                    :reason :yield-distributed
+                                    :extra {:held/workflow-id workflow-id
+                                            :owner/address recipient
+                                            :held/recipient recipient
+                                            :held/partial-fill-owner-id owner-id}}))]
+      (attr/with-attribution {:subject/type :escrow
+                              :subject/id workflow-id
+                              :action/type :yield/partial-fill-settlement
+                              :evidence/reason :partial-fill-settled}
+        (cap/capture-event-evidence!
+         :partial-fill-settled
+         {:settlement/before {:total-held (get-in world [:total-held token] 0)
+                              :position current-position}}
+         {:settlement/after {:total-held (get-in settled [:total-held token] 0)
+                             :position (get-in settled [:yield/positions owner-id])}}
+         {:settlement/workflow-id workflow-id
+          :settlement/recipient recipient
+          :settlement/token token
+          :settlement/filled (partial-fill/filled-total decision)
+          :settlement/decision decision}
+         nil
+         {:world-before world :world-after settled}))
+      settled)))
+
+(defn apply-deferred-yield-claim-settlement
+  "Settle recovered deferred yield for one escrow position.
+
+   Generic yield recovery only updates position state. This Sew boundary binds
+   the recovered amount to a terminal workflow, removes it from the canonical
+   yield-custody partition, creates the recipient's yield claimable, and emits
+   settlement evidence."
+  [world workflow-id owner-id recipient reclaimed]
+  (when-not (t/valid-workflow-id? world workflow-id)
+    (throw (ex-info "deferred yield claim requires an existing workflow"
+                    {:type :invalid-deferred-yield-claim
+                     :reason :invalid-workflow-id
+                     :workflow-id workflow-id})))
+  (when-not (and (string? recipient) (not (clojure.string/blank? recipient)))
+    (throw (ex-info "deferred yield claim requires recipient"
+                    {:type :invalid-deferred-yield-claim
+                     :reason :missing-recipient
+                     :workflow-id workflow-id})))
+  (when-not (and (integer? reclaimed) (pos? reclaimed))
+    (throw (ex-info "deferred yield claim requires positive recovered amount"
+                    {:type :invalid-deferred-yield-claim
+                     :reason :invalid-reclaimed-amount
+                     :amount reclaimed})))
+  (let [et (t/get-transfer world workflow-id)
+        token (:token et)
+        position (get-in world [:yield/positions owner-id])]
+    (when-not position
+      (throw (ex-info "deferred yield position not found"
+                      {:type :invalid-deferred-yield-claim
+                       :reason :position-not-found
+                       :owner-id owner-id})))
+    (when-not (= token (:token position))
+      (throw (ex-info "deferred yield position token differs from workflow"
+                      {:type :invalid-deferred-yield-claim
+                       :reason :token-mismatch
+                       :workflow-id workflow-id
+                       :workflow-token token
+                       :position-token (:token position)})))
+    (let [settled (-> world
+                      (acct/sub-held token reclaimed
+                                     {:action "claim-deferred-yield"
+                                      :reason :deferred-yield-claimed
+                                      :extra {:held/action "claim-deferred-yield"
+                                              :held/workflow-id workflow-id
+                                              :held/owner-id owner-id
+                                              :owner/address recipient
+                                              :held/recipient recipient}})
+                      (acct/record-claimable-v2 workflow-id :settlement/yield recipient reclaimed))]
+      (attr/with-attribution {:subject/type :escrow
+                              :subject/id workflow-id
+                              :action/type :yield/deferred-claim-settlement
+                              :evidence/reason :deferred-yield-claimed}
+        (cap/capture-event-evidence!
+         :deferred-yield-claimed
+         {:claim/before {:total-held (get-in world [:total-held token] 0)
+                         :position position}}
+         {:claim/after {:total-held (get-in settled [:total-held token] 0)
+                        :claimable (get-in settled [:claimable-v2 workflow-id :settlement/yield recipient] 0)}}
+         {:claim/workflow-id workflow-id
+          :claim/owner-id owner-id
+          :claim/recipient recipient
+          :claim/token token
+          :claim/reclaimed reclaimed}
+         nil
+         {:world-before world :world-after settled}))
+      settled)))
 
 ;;
 ;; Mirrors: BaseEscrow.createEscrow
@@ -387,7 +535,7 @@
             (and resolver (> (get-in world [:resolver-frozen-until resolver] 0) (time-ctx/block-ts world)))
             (t/fail :resolver-frozen)
 
-            (and resolver (pos? bond-bps) (pos? stake)
+            (and resolver (pos? bond-bps)
                  (not (reg/can-handle-escrow? world resolver afa)))
             (t/fail :insufficient-resolver-stake)
 
@@ -630,7 +778,12 @@
                   ;; Fully released — transition to :released
                   (t/ok (-> world
                             (assoc-in [:amount-released wf-id] new-released)
-                            (acct/sub-held (:token et) amount)
+                            (acct/sub-held (:token et) amount
+                                           {:action "partial-release"
+                                            :reason :escrow-settlement-released
+                                            :extra {:held/workflow-id wf-id
+                                                    :owner/address (:to et)
+                                                    :held/recipient (:to et)}})
                             (acct/record-claimable-v2 wf-id :settlement/principal (:to et) amount)
                             (acct/record-released (:token et) amount)
                             (sm/apply-transition! wf-id :released)
@@ -640,7 +793,12 @@
                   ;; Partial — stay :pending
                   (t/ok (-> world
                             (assoc-in [:amount-released wf-id] new-released)
-                            (acct/sub-held (:token et) amount)
+                            (acct/sub-held (:token et) amount
+                                           {:action "partial-release"
+                                            :reason :escrow-settlement-released
+                                            :extra {:held/workflow-id wf-id
+                                                    :owner/address (:to et)
+                                                    :held/recipient (:to et)}})
                             (acct/record-claimable-v2 wf-id :settlement/principal (:to et) amount)
                             (acct/record-released (:token et) amount))))))))))))
 

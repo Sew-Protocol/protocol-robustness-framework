@@ -422,8 +422,7 @@
            :funds-lost                  (get metrics :funds-lost 0)
            :coalition-net-profit        (let [mval (get metrics :coalition-net-profit)]
                                           (if (some? mval) mval coalition-net-profit))
-           :negative-payoff-count       (let [mval (get metrics :negative-payoff-count)]
-                                          (if (some? mval) mval negative-payoff-count))}
+           :negative-payoff-count       negative-payoff-count}
 
           :trace-summary
           {:events-count      (count trace)
@@ -446,8 +445,7 @@
            :funds-drift-total (get-in funds-ledger [:conservation :drift-total])
            :coalition-net-profit (let [mval (get metrics :coalition-net-profit)]
                                    (if (some? mval) mval coalition-net-profit))
-           :negative-payoff-count (let [mval (get metrics :negative-payoff-count)]
-                                    (if (some? mval) mval negative-payoff-count))
+           :negative-payoff-count negative-payoff-count
            :terminal-state-counts (frequencies (vals escrows))
            :terminal-time (time-ctx/block-ts world)}
 

@@ -979,7 +979,7 @@
                  :appeal-window-duration 3600 :challenge-window-duration 3600
                  :max-dispute-level 2 :resolver-bond-bps 0 :escrow-fee-bps 0})
           world0 (-> (t/empty-world 1000)
-                     (reg/register-stake res 0)        ;; zero stake
+                     ;; res omitted — unregistered resolvers default to zero stake
                      (reg/register-stake l1 10000))
           {:keys [world workflow-id]}
           (lc/create-escrow world0 buyer "USDC" seller 5000 {} snap)
@@ -1016,6 +1016,24 @@
       (is (= 500 (:amount slash)) "slash amount equals full stake at 10000 bps")
       (is (= 0 (reg/get-stake after-l1 res)) "stake consumed to zero")
       (is (not (neg? (reg/get-stake after-l1 res))) "stake never goes negative"))))
+
+(deftest reversal-slash-credit-rejects-slash-total-underflow
+  (let [workflow-id 42
+        slash-id "42-reversal-0"
+        world {:dispute-levels {workflow-id 2}
+               :escrow-transfers {workflow-id {:token :USDC}}
+               :previous-decisions {workflow-id {0 {:is-release true}
+                                                  1 {:is-release false}}}
+               :pending-fraud-slashes {slash-id {:status :executed
+                                                 :reason :reversal
+                                                 :resolver "0xRes"
+                                                 :amount 10}}
+               :resolver-slash-total {"0xRes" 5}}
+        error (try
+                (#'res/reverse-reversal-slash-on-vindication world workflow-id true)
+                nil
+                (catch clojure.lang.ExceptionInfo e e))]
+    (is (= :slash-reversal-underflow (:type (ex-data error))))))
 
 (deftest execute-fraud-slash-on-appealed-slash
   (testing "executing a slash while appeal is in progress returns :appeal-in-progress"

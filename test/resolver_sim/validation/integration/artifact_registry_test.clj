@@ -32,12 +32,12 @@
 (def realistic-registry
   "A fixture matching the actual emitted test-artifacts.json shape with full
    artifact fields: id, kind, path, schema_version, contract_version, producer,
-   verifies_against, input_versions, sha256, bytes, mtime_utc."
-  {:schema_version "test-artifacts.v1"
+   verifies_against, dependencies, input_versions, sha256, bytes, mtime_utc."
+  {:schema_version "test-artifacts.v1.2"
    :contract_version "evidence-contract.v1"
    :run_id "20260614-172333"
    :generated_at "2026-06-14T16:26:22.707809+00:00"
-   :generator {:name "artifact-registry-emitter" :version "v1"}
+   :generator {:name "artifact-registry-emitter" :version "v1.2"}
    :root_dir "results/test-artifacts"
    :run_manifest {:path "results/test-artifacts/test-run.json"
                   :schema_version "test-run.v1"
@@ -51,6 +51,7 @@
                 :contract_version "evidence-contract.v1"
                 :producer "test-run-emitter.v1"
                 :verifies_against []
+                :dependencies []
                 :input_versions {}
                 :sha256 "ce747ce13bc217af7f1953104b4f0a828f815f8a3fc91bab42e6f0ff27fd0b44"
                 :bytes 1873
@@ -62,6 +63,7 @@
                 :contract_version "evidence-contract.v1"
                 :producer "summary-emitter.v1"
                 :verifies_against ["test-run.v1"]
+                :dependencies [{:id "test-run" :sha256 "ce747ce13bc217af7f1953104b4f0a828f815f8a3fc91bab42e6f0ff27fd0b44"}]
                 :input_versions {"test_run" "test-run.v1"}
                 :sha256 "13d785b5cb2ca9394307b5ae6b436990345bba634b4dbb02ae1b8483e24249a2"
                 :bytes 3852
@@ -73,6 +75,7 @@
                 :contract_version "evidence-contract.v1"
                 :producer "claimable-classification-emitter.v2"
                 :verifies_against ["test-run.v1"]
+                :dependencies [{:id "test-run" :sha256 "ce747ce13bc217af7f1953104b4f0a828f815f8a3fc91bab42e6f0ff27fd0b44"}]
                 :input_versions {"test_run" "test-run.v1"}
                 :sha256 "d50c81fa1842b6a581d347b9b039246a0798ab467c8ac6e8a725a32abba48bf1"
                 :bytes 50298
@@ -84,6 +87,7 @@
                 :contract_version "evidence-contract.v1"
                 :producer "validation-root-emitter.v1"
                 :verifies_against ["test-summary.v2"]
+                :dependencies [{:id "test-summary" :sha256 "13d785b5cb2ca9394307b5ae6b436990345bba634b4dbb02ae1b8483e24249a2"}]
                 :input_versions {"test_summary" "test-summary.v2"}
                 :sha256 "f7d7e967d2b07f203af5b61c5d668da35f59d2657ae86efae87b5db1b2b4ac7a"
                 :bytes 233
@@ -95,6 +99,7 @@
                 :contract_version "evidence-contract.v1"
                 :producer "coverage-emitter.v1"
                 :verifies_against ["scenario.v1"]
+                :dependencies []
                 :input_versions {"test_summary" "test-summary.v2"}
                 :sha256 "04e5a4fa26899914762fff27a1480490089402bb5897508b853c89a260756e98"
                 :bytes 131108
@@ -126,9 +131,12 @@
       (is (= :passed (:status root))))))
 
 (deftest test-dependency-resolution-mode
-  (testing "validation root records :dependency-resolution :schema-version"
+  (testing "validation root records :dependency-resolution :dependencies-field when :dependencies used"
+    (let [root (integ/validate-artifact-registry realistic-registry)]
+      (is (= :dependencies-field (get-in root [:extra :dependency-resolution])))))
+  (testing "validation root records :verifies-against-field when only legacy field used"
     (let [root (integ/validate-artifact-registry all-pass-registry)]
-      (is (= :schema-version (get-in root [:extra :dependency-resolution]))))))
+      (is (= :verifies-against-field (get-in root [:extra :dependency-resolution]))))))
 
 (deftest test-all-pass-registry-remains-passed
   (testing "existing all-pass registry produces :passed validation root"

@@ -87,12 +87,10 @@ This is a governance privilege escalation that is structurally indistinguishable
 
 ```bash
 # Start gRPC server
-nohup clojure -M:run -- -S --port 7070 > grpc-server.log 2>&1 &
-sleep 8
+bb adv:server
 
 # Run scenario F3
-cd test/integration/python
-python invariant_suite.py --scenario F3 --json ../results/evidence/f3-run.json
+bb adv:broad
 ```
 
 Expected output:

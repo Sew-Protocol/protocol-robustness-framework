@@ -11,9 +11,9 @@
    2. Honour the common result contract (:replay-profile, :protocol-id, etc.)
    3. Explicitly reject unsupported options via structured ex-info
    4. Perform no persistent evidence or diagnostic I/O"
-  (:require [resolver-sim.contract-model.replay.flags :as replay-flags]
-            [resolver-sim.protocols.protocol :as proto]
-            [resolver-sim.contract-model.replay.yield :as yield-replay]))
+  (:require [clojure.string :as str]
+            [resolver-sim.contract-model.replay.flags :as replay-flags]
+            [resolver-sim.protocols.protocol :as proto]))
 
 ;; ---------------------------------------------------------------------------
 ;; Unsupported/prohibited option validation
@@ -57,54 +57,178 @@
                          :adapter adapter-origin
                          :n-unsupported (count violations)}))))))
 
+(def prohibited-simple-flags
+  "Flag keys that the simple replay profile must not allow callers to override.
+   These would re-enable evidence, persistence, telemetry, or checkpoint I/O."
+  #{:evidence-mode :include-telemetry-evidence? :world-checkpoint-policy
+    :projection-mode})
+
+(def allowed-simple-option-keys
+  "Top-level options accepted by simple replay. All replay behavior options
+   must be nested under :flags so the profile boundary is explicit."
+  #{:run-id :flags})
+
 ;; ---------------------------------------------------------------------------
 ;; Simple replay options that are allowed
 ;; ---------------------------------------------------------------------------
 
 (defn extract-simple-opts
-  "Extract allowed options from `replay-opts`, rejecting prohibited ones.
-   Returns {:run-id <id or nil> :flags <map or nil>}."
+  "Validate and extract simple replay options.
+   Returns {:run-id <nonblank string or nil> :flags <map or nil>}. Unknown
+   top-level options, malformed values, and profile-escaping nested flags are
+   rejected at the public profile boundary rather than ignored downstream."
   [replay-opts adapter-origin]
+  (when (and (some? replay-opts) (not (map? replay-opts)))
+    (throw (ex-info "Simple replay options must be a map"
+                    {:type :invalid-simple-replay-options
+                     :replay-profile :simple
+                     :adapter adapter-origin
+                     :expected :map
+                     :actual-type (str (class replay-opts))})))
   (reject-unsupported! replay-opts adapter-origin)
-  {:run-id (:run-id replay-opts)
-   :flags  (:flags replay-opts)})
+  (let [opts (or replay-opts {})
+        raw-flags (:flags opts)
+        run-id (:run-id opts)
+        unknown-options (seq (remove allowed-simple-option-keys (keys opts)))
+        prohibited-flags (when (map? raw-flags)
+                           (seq (select-keys raw-flags prohibited-simple-flags)))]
+    (when (and (some? raw-flags) (not (map? raw-flags)))
+      (throw (ex-info "Simple replay :flags must be a map"
+                      {:type :invalid-simple-replay-options
+                       :replay-profile :simple
+                       :adapter adapter-origin
+                       :field :flags
+                       :expected :map
+                       :actual-type (str (class raw-flags))})))
+    (when (and (some? run-id)
+               (or (not (string? run-id)) (str/blank? run-id)))
+      (throw (ex-info "Simple replay :run-id must be a nonblank string"
+                      {:type :invalid-simple-replay-options
+                       :replay-profile :simple
+                       :adapter adapter-origin
+                       :field :run-id
+                       :expected :nonblank-string
+                       :actual run-id})))
+    (when unknown-options
+      (throw (ex-info "Simple replay received unsupported options"
+                      {:replay-profile :simple
+                       :adapter adapter-origin
+                       :unknown-options (vec (sort unknown-options))
+                       :allowed-options (vec (sort allowed-simple-option-keys))})))
+    (when prohibited-flags
+      (throw (ex-info "Simple replay cannot override enforced profile flags"
+                      {:replay-profile :simple
+                       :adapter adapter-origin
+                       :prohibited-flags (vec (sort (keys prohibited-flags)))})))
+    {:run-id run-id :flags raw-flags}))
 
 ;; ---------------------------------------------------------------------------
-;; Adapter multimethod — dispatch on [profile protocol-id]
+;; Execution plan dispatch — one source of truth for execution and provenance.
 ;; ---------------------------------------------------------------------------
 
-(defmulti run-simple-profile
-  "Dispatch a simple-profile replay for the given protocol.
+(defn- canonical-simple-run
+  [protocol scenario replay-opts forced-flags]
+  (let [replay-events (requiring-resolve 'resolver-sim.contract-model.replay/replay-events)
+        opts (-> (or replay-opts {})
+                 (update :flags #(merge (or % {}) forced-flags))
+                 (merge {:profile :replay/simple :minimal true}))]
+    (replay-events protocol scenario opts)))
 
-   profile    — keyword, currently always :simple
-   protocol   — protocol instance (satisfies? SimulationAdapter)
-   scenario   — prepared scenario map
-   replay-opts — caller-provided options (already validated by extract-simple-opts)
+(defmulti simple-execution-plan
+  "Return the complete simple-profile execution plan for a protocol.
 
-   Default implementation calls replay-events with {:minimal true}.
-   Protocol-specific adapters override for non-standard execution paths."
-  (fn [profile protocol scenario replay-opts] [profile (proto/protocol-id protocol)]))
+   A plan contains:
+   - :execution — reviewer-facing provenance descriptor
+   - :run       — (fn [protocol scenario replay-opts] result)
 
-(defmethod run-simple-profile :default
+   Keeping these together prevents an adapter implementation from drifting from
+   the execution descriptor published by `simple-replay`."
+  (fn [profile protocol] [profile (proto/protocol-id protocol)]))
+
+(defmethod simple-execution-plan :default
+  [profile protocol]
+  {:execution {:profile :simple :engine :canonical-loop}
+   :run (fn [protocol scenario replay-opts]
+          (canonical-simple-run protocol scenario replay-opts {}))})
+
+(def ^:private required-simple-result-keys
+  #{:outcome :trace :metrics :events-processed})
+
+(def ^:private simple-outcomes #{:pass :fail :invalid})
+
+(defn validate-simple-adapter-result!
+  "Validate the stable result contract required from a simple execution plan.
+   Throws structured ex-info rather than allowing malformed adapter output to be
+   partially normalized into a misleading public replay result."
+  [result adapter-id]
+  (let [violations
+        (if-not (map? result)
+          [{:field :result :expected :map :actual-type (str (class result))}]
+          (let [missing (vec (sort (remove #(contains? result %)
+                                           required-simple-result-keys)))]
+            (vec
+             (concat
+              (when (seq missing)
+                [{:field :required-keys
+                  :expected required-simple-result-keys
+                  :missing missing}])
+              (when (and (contains? result :outcome)
+                         (not (contains? simple-outcomes (:outcome result))))
+                [{:field :outcome :expected simple-outcomes :actual (:outcome result)}])
+              (when (and (contains? result :trace) (not (sequential? (:trace result))))
+                [{:field :trace :expected :sequential :actual-type (str (class (:trace result)))}])
+              (when (and (contains? result :metrics) (not (map? (:metrics result))))
+                [{:field :metrics :expected :map :actual-type (str (class (:metrics result)))}])
+              (when (and (contains? result :events-processed)
+                         (or (not (integer? (:events-processed result)))
+                             (neg? (:events-processed result))))
+                [{:field :events-processed
+                  :expected :nonnegative-integer
+                  :actual (:events-processed result)}])))))]
+    (when (seq violations)
+      (throw (ex-info "Simple replay adapter returned an invalid result"
+                      {:type :simple-replay-invalid-adapter-result
+                       :replay-profile :simple
+                       :adapter adapter-id
+                       :violations violations})))
+    result))
+
+(defn run-simple-profile
+  "Compatibility wrapper that executes the selected simple-profile plan."
   [profile protocol scenario replay-opts]
-  (let [replay-events (requiring-resolve 'resolver-sim.contract-model.replay/replay-events)]
-    (replay-events protocol scenario
-                   (merge {:minimal true} replay-opts))))
+  (let [{:keys [run]} (simple-execution-plan profile protocol)]
+    (run protocol scenario replay-opts)))
+
+(defn simple-execution-descriptor
+  "Compatibility wrapper returning the descriptor from the selected plan."
+  [profile protocol]
+  (:execution (simple-execution-plan profile protocol)))
 
 ;; ---------------------------------------------------------------------------
-;; Yield adapter — temporary thin-runner path
+;; Yield adapter — canonical-loop path (replay-events + yield-dt-validation flag)
 ;;
-;; REMOVAL CONDITION: This adapter exists because yield-v1 has not yet achieved
-;; canonical-loop parity. Remove when:
-;;   1. All yield actions dispatch through the protocol interface
-;;   2. World initialization is equivalent
-;;   3. Existing yield invariants are preserved
-;;   4. Trace information is not materially lost
-;;   5. Core metrics remain available
-;;   6. Caller options are honored consistently
-;;   7. Parity tests pass
+;; Yield-v1 now routes through replay-events (the canonical loop) with the
+;; :yield-dt-validation? flag enabled. The temporary thin-runner path has been
+;; replaced.
+;;
+;; REMOVAL CONDITION (for this method definition): when yield achieves full
+;; EconomicModel/AnalysisModule parity and no longer needs the
+;; :yield-dt-validation? flag or :yield-provider metrics-profile,
+;; this method can be removed and the default will handle yield-v1.
 ;; ---------------------------------------------------------------------------
 
-(defmethod run-simple-profile [:simple "yield-v1"]
-  [profile protocol scenario replay-opts]
-  (yield-replay/replay-yield-events protocol scenario replay-opts))
+(defmethod simple-execution-plan [:simple "yield-v1"]
+  [profile protocol]
+  {:execution {:profile :simple
+               :engine :canonical-loop
+               :adapter/id :yield-v1-canonical
+               :required-flags {:yield-dt-validation? true
+                                :metrics-profile :yield-provider}}
+   :run (fn [protocol scenario replay-opts]
+          ;; Required yield flags merge after caller flags and therefore cannot
+          ;; be removed by an otherwise safe simple-profile override.
+          (canonical-simple-run protocol scenario replay-opts
+                                {:yield-dt-validation? true
+                                 :metrics-profile :yield-provider}))})
+
+

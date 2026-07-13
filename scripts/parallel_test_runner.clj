@@ -22,6 +22,7 @@
             [clojure.test :as t]
             [resolver-sim.evidence.capture :as cap]
             [resolver-sim.evidence.chain :as chain]
+            [resolver-sim.evidence.node :as node]
             [resolver-sim.evidence.attestation-registry :as ar]
             [resolver-sim.evidence.config :as evcfg]))
 
@@ -65,21 +66,22 @@
                             (try
                               (chain/with-fresh-evidence-context*
                                (fn []
-                                 (ar/with-fresh-registry*
-                                  (fn []
-                                    (binding [evcfg/*artifact-dir* ns-artifact-dir
-                                              chain/*allow-dirty* true
-                                              cap/*capture-event-evidence!* (if noop-capture?
-                                                                              noop-capture
-                                                                              cap/*capture-event-evidence!*)]
-                                      (let [r (try (t/run-tests sym)
-                                                   (catch Throwable t
-                                                     (when (instance? InterruptedException t)
-                                                       (.interrupt (Thread/currentThread)))
-                                                     (println "ERROR in" sym ":" (.getMessage t))
-                                                     (.printStackTrace t)
-                                                     {:test 0 :pass 0 :fail 0 :error 1}))]
-                                        {:sym sym :result r}))))))
+                                 (node/with-fresh-registry
+                                   (ar/with-fresh-registry*
+                                    (fn []
+                                      (binding [evcfg/*artifact-dir* ns-artifact-dir
+                                                chain/*allow-dirty* true
+                                                cap/*capture-event-evidence!* (if noop-capture?
+                                                                                noop-capture
+                                                                                cap/*capture-event-evidence!*)]
+                                        (let [r (try (t/run-tests sym)
+                                                     (catch Throwable t
+                                                       (when (instance? InterruptedException t)
+                                                         (.interrupt (Thread/currentThread)))
+                                                       (println "ERROR in" sym ":" (.getMessage t))
+                                                       (.printStackTrace t)
+                                                       {:test 0 :pass 0 :fail 0 :error 1}))]
+                                          {:sym sym :result r})))))))
                               (finally
                                 (.release sem))))))
                       (range)

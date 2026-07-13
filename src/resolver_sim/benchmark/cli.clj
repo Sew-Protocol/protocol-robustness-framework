@@ -88,6 +88,7 @@
    [nil "--share-summary PATH" "Generate share summary for an evidence bundle"]
    [nil "--export PATH" "Export portable bundle (tar.gz) from evidence bundle"]
    [nil "--publish-ipfs PATH" "Publish exported bundle to IPFS"]
+   [nil "--menu PATH" "Open the interactive post-run menu for an existing evidence bundle"]
    [nil "--attest PATH" "Generate an independent attestation for an evidence bundle"]
    [nil "--verify-attestation PATH" "Verify an independent attestation"]
    [nil "--tsa-url URL" "RFC 3161 Time-Stamp Authority URL for timestamping evidence artifacts"]
@@ -126,37 +127,37 @@
       {:hash-ok? false :scheme nil :computed-hash current-hash})))
 
 (defn- interactive-ux [evidence output-path options]
-  (println "\n" (apply str (repeat 40 "─")))
-  (println "Benchmark completed successfully.")
-  (println "\nEvidence Hash:\n" (:evidence/hash evidence))
-  (println "\nSigned:\n" (if (:evidence/signature evidence) "yes" "no"))
-  (println "\nNext Actions:")
-  (println "[1] Export portable bundle (.tar.gz)")
-  (println "[2] Generate share summary")
-  (println "[3] Generate attestation")
-  (println "[4] Publish to IPFS")
-  (println "[5] Reproduce locally")
-  (println "[q] Quit")
-  (print "\nChoice > ")
-  (flush)
-  (let [choice (read-line)]
-    (case choice
-      "1" (sharing/export output-path (str output-path ".tar.gz"))
-      "2" (println "\n" (sharing/share-summary evidence))
-      "3" (if-let [key-path (:key options)]
-            (let [att (sharing/attest output-path key-path (:password options))
-                  att-path (str output-path ".attestation.edn")]
-              (spit att-path (pr-str att))
-              (println "Attestation written to:" att-path))
-            (println "Private key path (-k) required for attestation."))
-      "4" (let [tar-path (str output-path ".tar.gz")]
-            (if (.exists (io/file tar-path))
-              (sharing/publish-ipfs tar-path)
-              (do (sharing/export output-path tar-path)
-                  (sharing/publish-ipfs tar-path))))
-      "5" (sharing/reproduce output-path)
-      "q" (System/exit 0)
-      (println "Invalid choice"))))
+  (loop []
+    (println "\n" (apply str (repeat 40 "─")))
+    (println "Next Actions:")
+    (println "[1] Export portable bundle (.tar.gz)")
+    (println "[2] Generate share summary")
+    (println "[3] Generate attestation")
+    (println "[4] Publish to IPFS")
+    (println "[5] Reproduce locally")
+    (println "[q] Quit")
+    (print "\nChoice > ")
+    (flush)
+    (let [choice (read-line)]
+      (case choice
+        "1" (sharing/export output-path (str output-path ".tar.gz"))
+        "2" (println "\n" (sharing/share-summary evidence))
+        "3" (if-let [key-path (:key options)]
+              (let [att (sharing/attest output-path key-path (:password options))
+                    att-path (str output-path ".attestation.edn")]
+                (spit att-path (pr-str att))
+                (println "Attestation written to:" att-path))
+              (println "Private key path (-k) required for attestation."))
+        "4" (let [tar-path (str output-path ".tar.gz")]
+              (if (.exists (io/file tar-path))
+                (sharing/publish-ipfs tar-path)
+                (do (sharing/export output-path tar-path)
+                    (sharing/publish-ipfs tar-path))))
+        "5" (sharing/reproduce output-path)
+        "q" (System/exit 0)
+        (println "Invalid choice"))
+      (when-not (= choice "q")
+        (recur)))))
 
 (defn- record-history-best-effort!
   [entry]
@@ -498,6 +499,11 @@
 
       (:reproduce options)
       (System/exit (if (sharing/reproduce (:reproduce options)) 0 1))
+
+      (:menu options)
+      (let [bundle (rp/edn-read (:menu options))]
+        (interactive-ux bundle (:menu options) options)
+        (System/exit 0))
 
       (:share-summary options)
       (let [bundle (rp/edn-read (:share-summary options))]

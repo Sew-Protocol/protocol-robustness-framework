@@ -283,9 +283,13 @@
      :token-liquidity-crunch #{} ; #{token-addr} — currently insolvent yield pools
      :last-escalation-block-time-per-addr {} ; {addr block-time} — Sybil mitigation Layer A
      :escalation-counts-per-addr          {} ; {addr count} — Sybil mitigation Layer B
-     :yield-rates            {} ; {token-addr rate-bps} — Current annualized yield rate
-     :total-yield-generated  {} ; {token-addr nat-int} — All-time yield accrued
-      :next-workflow-id       0
+      :yield-rates            {} ; {token-addr rate-bps} — Current annualized yield rate
+      :total-yield-generated  {} ; {token-addr nat-int} — All-time yield accrued
+      :fee-recipients         {:default "0x0000000000000000000000000000000000000000"
+                               :by-token {}} ; default + per-token override
+      :fee-payouts            {} ; {token {recipient-addr nat-int}} — cumulative per-recipient payouts
+      :total-fees-withdrawn   {} ; {token-addr nat-int} — cumulative fees withdrawn (parallel to fee-payouts)
+       :next-workflow-id       0
       :related-claims        {}   ; {relationship-id -> relationship-record}
       :next-related-claim-id 0
       :paused?                false

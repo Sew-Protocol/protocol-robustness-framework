@@ -10,7 +10,8 @@
    `emit-evidence!` for the primary emission API."
   (:require [resolver-sim.evidence.config :as evcfg])
   (:require [resolver-sim.hash.canonical :as hc])
-  (:require [resolver-sim.util.attribution :as attr]))
+  (:require [resolver-sim.util.attribution :as attr])
+  (:require [resolver-sim.evidence.capture :as evcapture]))
 
 ;; ── Attribution Context ──────────────────────────────────────────────────────
 
@@ -153,7 +154,9 @@
    Prefer this over raw pmap in simulation and evidence-producing code."
   [f coll]
   (let [attr (attr/current-attribution)
+        capture evcapture/*capture-event-evidence!*
         wrapper (fn [x]
-                  (binding [attr/*attribution* attr]
+                  (binding [attr/*attribution* attr
+                            evcapture/*capture-event-evidence!* capture]
                     (f x)))]
     (pmap wrapper coll)))

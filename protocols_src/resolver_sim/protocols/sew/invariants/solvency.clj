@@ -50,6 +50,90 @@
           0
           (:yield/positions world {})))
 
+(defn- claimable-v2-by-token
+  "Sum every outstanding v2 claimable by the token of its workflow. The legacy
+   :claimable map is deliberately excluded because settlement principal/yield
+   are dual-written there and including it would double-count liabilities."
+  [world]
+  (reduce-kv
+   (fn [totals workflow-id domains]
+     (let [token (get-in world [:escrow-transfers workflow-id :token])]
+       (if token
+         (assoc totals token
+                (+ (get totals token 0)
+                   (reduce + 0
+                           (for [[_domain recipients] domains
+                                 [_recipient amount] recipients]
+                             amount))))
+         totals)))
+   {}
+   (:claimable-v2 world {})))
+
+(defn- contract-balance
+  "Read a contract/token balance from the external snapshot. The canonical
+   shape is {[:contract-id token] amount}; nested {contract-id {token amount}}
+   is accepted for convenient RPC adapters."
+  [balances contract-id token]
+  (or (get balances [contract-id token])
+      (get-in balances [contract-id token])))
+
+(defn contract-payout-solvency?
+  "Check whether each Solidity custody contract has enough observed ERC-20
+   balance to pay modeled outstanding obligations.
+
+   External balance evidence is read from :solvency/contract-balances using
+   {[:contract-id token] amount}, or its nested equivalent. Token routing is
+   read from [:params :solvency/token-custody-contracts token], defaulting to
+   :escrow-vault.
+
+   Liability calculation is deliberately conservative:
+   :total-held + all :claimable-v2 entries + unwithdrawn :total-fees +
+   unwithdrawn :bond-fees. The legacy :claimable map is excluded because it
+   dual-writes settlement claims. A missing external snapshot is :unverified,
+   not evidence that the Solidity contract is solvent."
+  [world]
+  (let [balances (:solvency/contract-balances world)
+        claimables (claimable-v2-by-token world)
+        tokens (-> (set (keys (:total-held world)))
+                   (into (keys claimables))
+                   (into (keys (:total-fees world)))
+                   (into (keys (:bond-fees world))))]
+    (if-not balances
+      {:holds? true
+       :coverage :unverified
+       :violations []
+       :note "No external Solidity custody balance snapshot supplied"}
+      (let [violations
+            (vec
+             (keep (fn [token]
+                     (let [contract-id (get-in world [:params :solvency/token-custody-contracts token]
+                                               :escrow-vault)
+                           assets (contract-balance balances contract-id token)
+                           held (get-in world [:total-held token] 0)
+                           claimable (get claimables token 0)
+                           fees (get-in world [:total-fees token] 0)
+                           bond-fees (get-in world [:bond-fees token] 0)
+                           liabilities (+ held claimable fees bond-fees)]
+                       (cond
+                         (nil? assets)
+                         {:type :missing-contract-balance
+                          :contract contract-id :token token
+                          :liabilities liabilities}
+
+                         (< assets liabilities)
+                         {:type :contract-payout-shortfall
+                          :contract contract-id :token token
+                          :assets assets :liabilities liabilities
+                          :shortfall (- liabilities assets)
+                          :held-custody held
+                          :claimable claimable
+                          :fees fees
+                          :bond-fees bond-fees})))
+                   tokens))]
+        {:holds? (empty? violations)
+         :coverage :external-balance-snapshot
+         :violations violations}))))
+
 (defn solvency-holds?
   "True when total-held[token] exactly equals the sum of all internal liabilities.
    Liabilities = [Live Escrow AFAs] + [Active Bonds] + [Slash Appeal Bonds]
