@@ -2,7 +2,8 @@
   (:require [clojure.edn :as edn]
             [resolver-sim.scenario.outcome-semantics :as ose]
             [resolver-sim.scenario.theory-result :as theory-result]
-            [resolver-sim.sim.fixtures :as f]))
+            [resolver-sim.sim.fixtures :as f]
+            [resolver-sim.io.fixtures :as io-fix]))
 
 (def suite-ids
   [:suites/all-invariants
@@ -52,7 +53,7 @@
         failures   (atom [])]
     (doseq [suite-id all-suites]
       (try
-        (let [{:keys [ok? results]} (f/run-suite suite-id :save)]
+        (let [{:keys [ok? results]} (io-fix/run-suite-from-key suite-id :save nil {})]
           (swap! saved + (count results))
           (when-not ok?
             (doseq [r results]

@@ -535,7 +535,7 @@
             (and resolver (> (get-in world [:resolver-frozen-until resolver] 0) (time-ctx/block-ts world)))
             (t/fail :resolver-frozen)
 
-            (and resolver (pos? bond-bps)
+            (and resolver (pos? bond-bps) (pos? stake)
                  (not (reg/can-handle-escrow? world resolver afa)))
             (t/fail :insufficient-resolver-stake)
 

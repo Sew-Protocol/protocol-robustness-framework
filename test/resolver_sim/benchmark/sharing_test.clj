@@ -19,9 +19,9 @@
       (is (true? (sharing/export evidence-path export-path)))
       (let [{:keys [exit out]} (shell/sh "tar" "-tzf" export-path)]
         (is (zero? exit))
-        (is (= #{"./" "./evidence.edn" "./manifest.edn" "./metrics.edn"
-                 "./repo.edn" "./results.edn"}
-               (set (str/split-lines out)))))
+        (let [entries (set (str/split-lines out))]
+          (is (every? entries #{"./" "./evidence.edn" "./manifest.edn" "./metrics.edn"
+                                "./repo.edn" "./results.edn" "./evidence.edn.graph/evidence-graph.svg"}))))
       (finally
         (shell/sh "rm" "-rf" (.getPath dir))))))
 

@@ -49,6 +49,8 @@
         replayed (payoffs/evaluate-pro-rata-allocation (dissoc request :on-progress))]
     (is (= [40 60] (mapv :allocated (get-in evaluated [:allocation :allocations]))))
     (is (= :passed (get-in evaluated [:validation :status])))
+    (is (= :partial (get-in evaluated [:validation :coverage-status])))
+    (is (= 1 (get-in evaluated [:validation :not-evaluated-check-count])))
     (is (= (:result evaluated) (:result replayed))
         "runtime observer identity and events do not change canonical output")
     (is (string? (get-in evaluated [:projection :artifact/hash])))
@@ -314,6 +316,23 @@
       (is (every? :claim-definition-hash claims) "still has :claim-definition-hash")
       (is (every? #(not= (:claim-definition-concept-hash %) (:claim-definition-hash %)) claims)
           "concept-hash differs from canonical claim-definition-hash in each claim"))))
+
+(deftest execution-artifact-binds-a-validated-evaluation-package
+  (let [evaluation (payoffs/evaluate-pro-rata-allocation
+                    {:amount 10
+                     :unit :abstract-claim
+                     :participants [{:id :a :weight 1}]
+                     :policy {}})
+        artifact (payoffs/build-pro-rata-allocation-result-artifact
+                  {:projection-artifact (get-in evaluation [:projection :artifact/value])
+                   :evaluation evaluation
+                   :world-before-hash "before"
+                   :world-after-hash "after"
+                   :action-hash "action"
+                   :action-hash-at "action-at"})]
+    (is (= (get-in evaluation [:result :artifact/hash])
+           (:evaluation-result-hash artifact)))
+    (is (= (:allocation evaluation) (:allocation-result artifact)))))
 
 (deftest allocation-result-hash-changes-with-allocation-input
   (testing "changing allocation-input changes the allocation result hash"

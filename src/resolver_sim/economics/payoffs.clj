@@ -222,27 +222,43 @@
       (throw (ex-info "Projection artifact hash mismatch"
                       {:expected expected-hash
                        :actual (:projection-hash artifact)})))
-  (require-registered :intent-id
-                      (get-in artifact [:intent :id])
-                      (registered-intent (get-in artifact [:intent :id])))
-  (require-registered :projection-definition-id
-                      (:projection-definition-id artifact)
-                      (registered-projection-definition (:projection-definition-id artifact)))
-  artifact))
+  (let [intent (require-registered :intent-id
+                                   (get-in artifact [:intent :id])
+                                   (registered-intent (get-in artifact [:intent :id])))
+        projection-definition (require-registered :projection-definition-id
+                                                   (:projection-definition-id artifact)
+                                                   (registered-projection-definition (:projection-definition-id artifact)))]
+    (when-not (= (:canonical-hash intent) (get-in artifact [:intent :intent-hash]))
+      (throw (ex-info "Projection artifact intent hash mismatch" {})))
+    (when-not (= (:canonical-hash projection-definition) (:projection-definition-hash artifact))
+      (throw (ex-info "Projection artifact definition hash mismatch" {})))
+    (when-not (= (:concept-hash projection-definition) (:projection-concept-hash artifact))
+      (throw (ex-info "Projection artifact definition concept hash mismatch" {})))
+    (doseq [claim-ref (:claims artifact)]
+      (let [claim (require-registered :claim-id (:claim-id claim-ref)
+                                      (registered-claim (:claim-id claim-ref)))]
+        (when-not (= (:canonical-hash claim) (:claim-definition-hash claim-ref))
+          (throw (ex-info "Projection artifact claim hash mismatch" {:claim-id (:claim-id claim-ref)})))
+        (when-not (= (:concept-hash claim) (:claim-definition-concept-hash claim-ref))
+          (throw (ex-info "Projection artifact claim concept hash mismatch" {:claim-id (:claim-id claim-ref)})))))
+    artifact)))
 
 (defn allocate-from-projection
-  "Allocate only from a validated projection artifact and its committed policy."
-  [artifact]
-  (validate-projection-artifact! artifact)
-  (let [{:keys [total-obligation items constraints]} (:projection artifact)
-        {:keys [rounding remainder-policy ordering-policy cap-treatment]} constraints
-        request {:amount total-obligation :items items :id-fn :id :weight-fn :weight
-                 :cap-fn :cap :rounding rounding :remainder-policy remainder-policy
-                 :ordering-policy ordering-policy}]
-    (case cap-treatment
-      :unallocated (allocate-pro-rata request)
-      :redistribute (allocate-pro-rata-with-redistribution request)
-      (throw (ex-info "Unsupported projected cap treatment" {:cap-treatment cap-treatment})))))
+  "Allocate only from a validated projection artifact and its committed policy.
+   Optional runtime observer options do not affect projection-derived semantics."
+  ([artifact] (allocate-from-projection artifact {}))
+  ([artifact {:keys [on-progress progress-atom]}]
+   (validate-projection-artifact! artifact)
+   (let [{:keys [total-obligation items constraints]} (:projection artifact)
+         {:keys [rounding remainder-policy ordering-policy cap-treatment]} constraints
+         request {:amount total-obligation :items items :id-fn :id :weight-fn :weight
+                  :cap-fn :cap :rounding rounding :remainder-policy remainder-policy
+                  :ordering-policy ordering-policy
+                  :on-progress on-progress :progress-atom progress-atom}]
+     (case cap-treatment
+       :unallocated (allocate-pro-rata request)
+       :redistribute (allocate-pro-rata-with-redistribution request)
+       (throw (ex-info "Unsupported projected cap treatment" {:cap-treatment cap-treatment}))))))
 
 (defn calculate-prorata-from-projection
   "Compatibility alias for allocate-from-projection."
@@ -619,15 +635,9 @@
         projection-source (merge source {:allocation/id id :use-case use-case :unit unit :policy policy})
         projection (build-projection-artifact allocation-request
                                              {:source projection-source :metadata metadata})
-        allocation (allocate-from-projection projection)
-        ;; Observers apply only to the operational evaluation run; replay is pure.
-        _ (when (or on-progress progress-atom)
-            (let [run-allocation (if (= :redistribute (:cap-treatment policy))
-                                   allocate-pro-rata-with-redistribution
-                                   allocate-pro-rata)]
-              (run-allocation (assoc allocation-request
-                                     :progress-atom progress-atom
-                                     :on-progress on-progress))))
+        allocation (allocate-from-projection projection
+                                            {:progress-atom progress-atom
+                                             :on-progress on-progress})
         replay (allocate-from-projection projection)
         checks (conj (allocation-validation-checks participants allocation)
                      {:check :deterministic-replay
@@ -636,7 +646,12 @@
                      {:check :weight-proportionality
                       :status :not-evaluated
                       :details {:reason "exact quota validation is not implemented"}})
+        evaluated-checks (filter #(not= :not-evaluated (:status %)) checks)
+        not-evaluated-checks (filter #(= :not-evaluated (:status %)) checks)
         validation {:status (if (every? #(not= :failed (:status %)) checks) :passed :failed)
+                    :coverage-status (if (seq not-evaluated-checks) :partial :complete)
+                    :evaluated-check-count (count evaluated-checks)
+                    :not-evaluated-check-count (count not-evaluated-checks)
                     :checks checks}
         result-value {:schema-version 1
                       :allocation/id id
@@ -654,6 +669,17 @@
      :result {:artifact/type :pro-rata/allocation-result
               :artifact/hash result-hash
               :artifact/value result-value}}))
+
+(defn validate-pro-rata-evaluation-package!
+  "Verify the content-addressed result package produced by evaluate-pro-rata-allocation."
+  [evaluation]
+  (let [value (get-in evaluation [:result :artifact/value])
+        recorded (get-in evaluation [:result :artifact/hash])
+        computed (hc/domain-hash "PRO_RATA_EVALUATION_V1" value)]
+    (when-not (and value (= recorded computed))
+      (throw (ex-info "Invalid pro-rata evaluation package hash"
+                      {:recorded recorded :computed computed})))
+    evaluation))
 
 (def default-pro-rata-allocation-result-kind :pro-rata-allocation)
 (def default-pro-rata-allocation-result-version 1)
@@ -684,6 +710,7 @@
          :allocation-input           — raw input map (obligation, parties, basis, cap-field, etc.)
         :metadata                   — additional metadata"
   [{:keys [projection-artifact
+           evaluation
            allocation-result
            world-before-hash
            world-after-hash
@@ -697,7 +724,14 @@
            evidence-group-id
            attribution
            metadata]}]
-  (let [projection-artifact-hash (:projection-hash projection-artifact)
+  (let [evaluation (when evaluation (validate-pro-rata-evaluation-package! evaluation))
+        allocation-result (or allocation-result (:allocation evaluation))
+        evaluation-result-hash (get-in evaluation [:result :artifact/hash])
+        projection-artifact-hash (:projection-hash projection-artifact)
+        _ (when (and evaluation
+                     (not= projection-artifact-hash
+                           (get-in evaluation [:projection :artifact/hash])))
+            (throw (ex-info "Execution artifact projection does not match evaluation" {})))
         projection-definition-id (:projection-definition-id projection-artifact)
         projection-definition-hash (:projection-definition-hash projection-artifact)
         projection-concept-hash (:projection-concept-hash projection-artifact)
@@ -733,6 +767,7 @@
                        :projection-definition-id projection-definition-id
                        :projection-definition-hash projection-definition-hash
                        :projection-concept-hash projection-concept-hash
+                       :evaluation-result-hash evaluation-result-hash
                        :source source
                        :provenance provenance
                        :allocation-input allocation-input

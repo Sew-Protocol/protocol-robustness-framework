@@ -596,9 +596,10 @@ run_routed_suites() {
 
   clojure -M:test:with-sew -e "
 (require '[resolver-sim.sim.fixtures :as f])
+(require '[resolver-sim.io.fixtures :as io-fix])
 (let [suites $suite_filter
       verify-opts {:golden-verify-mode :replay-and-theory}
-      results (map (fn [id] [id (f/run-suite id :verify nil verify-opts)]) suites)
+      results (map (fn [id] [id (io-fix/run-suite-from-key id :verify nil verify-opts)]) suites)
       any-fail (some (fn [[_ r]] (not (:ok? r))) results)]
   (doseq [[suite-id result] results]
     (f/emit-suite-result suite-id result)
@@ -627,7 +628,8 @@ run_dr3_coverage() {
   # 1) Run the dedicated DR3-critical suite.
   clojure -M:test:with-sew -e "
 (require '[resolver-sim.sim.fixtures :as f])
-(let [r (f/run-suite :suites/dr3-critical)]
+(require '[resolver-sim.io.fixtures :as io-fix])
+(let [r (io-fix/run-suite-from-key :suites/dr3-critical nil nil {})]
   (f/emit-suite-result :suites/dr3-critical r)
   (println (str :suites/dr3-critical " → " (if (:ok? r) "PASS" "FAIL")))
   (when-not (:ok? r)
@@ -672,12 +674,13 @@ run_equivalence_new() {
   echo "Running new equivalence comparison suites (auth/race/escalation/accounting + money-path)..."
   clojure -M:test:with-sew -e "
 (require '[resolver-sim.sim.fixtures :as f])
+(require '[resolver-sim.io.fixtures :as io-fix])
 (let [suites [:suites/equivalence-auth-paths
           :suites/equivalence-race-pairs
           :suites/equivalence-escalation-boundaries
           :suites/equivalence-accounting-min
           :suites/equivalence-money-path-integrity]
-      results (map (fn [id] [id (f/run-suite id)]) suites)
+      results (map (fn [id] [id (io-fix/run-suite-from-key id nil nil {})]) suites)
       any-fail (some (fn [[_ r]] (not (:ok? r))) results)]
   (doseq [[suite-id result] results]
     (f/emit-suite-result suite-id result)

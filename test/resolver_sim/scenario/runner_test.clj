@@ -2,9 +2,11 @@
   (:require [clojure.data.json :as json]
             [clojure.java.io :as io]
             [clojure.string :as str]
-            [clojure.test :refer [deftest is testing]]
+            [clojure.test :refer [deftest is testing use-fixtures]]
+            [resolver-sim.evidence.chain :as chain]
             [resolver-sim.evidence.node :as ev-node]
             [resolver-sim.forensic.provenance :as prov]
+            [resolver-sim.io.fixtures :as io-fixtures]
             [resolver-sim.io.scenario-runner :as scenario-runner]
             [resolver-sim.io.scenarios :as sc]
             [resolver-sim.protocols.sew :as sew]
@@ -13,6 +15,11 @@
             [resolver-sim.scenario.runner :as runner]
             [resolver-sim.scenario.suites :as suites]
             [resolver-sim.sim.fixtures :as fixtures]))
+
+(use-fixtures :each
+  (fn [test-fn]
+    (binding [chain/*allow-dirty* true]
+      (test-fn))))
 
 (deftest scenario-pass-respects-fixture-checks
   (testing "threshold and golden failures fail the entry"
@@ -396,7 +403,9 @@
         "suppress via runner-opts must skip theory check")))
 
 (deftest theory-check-present-when-scenario-declares-theory
-  (let [scenario (fixtures/compose-suite :traces/spe-reg-v4-fail-slashed-resolver-bounded)
+  (let [scenario (fixtures/compose-suite
+                  :traces/spe-reg-v4-fail-slashed-resolver-bounded
+                  io-fixtures/load-fixture)
         replay   (sew/replay-with-sew-protocol scenario)
         opts     (runner/runner-opts-for-scenario scenario)
         entry    (runner/build-entry-result

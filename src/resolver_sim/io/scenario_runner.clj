@@ -246,6 +246,32 @@
    :runner-id :runner/local-bb
    :description "Default pinned local Babashka runner"})
 
+(defn- resolve-scenario-reference
+  "Resolve a bare scenario ID to its canonical EDN fixture.
+
+   Explicit filesystem and resource paths are returned unchanged. A bare ID is
+   matched against :scenario-id so case differences between IDs and filenames
+   do not affect the documented CLI invocation."
+  [scenario]
+  (if (or (nil? scenario)
+          (str/starts-with? scenario "resource:")
+          (str/starts-with? scenario "file:")
+          (str/ends-with? scenario ".edn")
+          (str/ends-with? scenario ".json")
+          (.exists (io/file scenario)))
+    scenario
+    (let [fixture-dir (io/file "scenarios" "edn")]
+      (or (some (fn [file]
+                  (when (and (.isFile file)
+                             (str/ends-with? (.getName file) ".edn"))
+                    (try
+                      (let [path (.getPath file)
+                            fixture (io-sc/load-scenario-file path)]
+                        (when (= scenario (:scenario-id fixture)) path))
+                      (catch Exception _ nil))))
+                (file-seq fixture-dir))
+          scenario))))
+
 (defn resolve-path-run-request
   "Prepare a normalized request envelope for one or more file-backed scenarios.
 
@@ -390,6 +416,8 @@
   [paths opts]
   (let [{request :scenario-run/request :as envelope}
         (resolve-path-run-request paths opts)
+        _ (doseq [{:keys [scenario-id protocol]} (:entries request)]
+            (println (str "[run:scenario] " scenario-id " protocol " protocol)))
         summary (execute-path-run-request envelope opts)
         normalized (normalize-run-result request summary)]
     (assoc (:summary (:scenario-run/result normalized))
@@ -874,18 +902,29 @@
 ;; ── Post-execution ──────────────────────────────────────────────────────────────
 
 (defn- populate-forensic-claims!
-  "Run Phase 3 forensic claims/attestations population (best-effort)."
+  "Run Phase 3 forensic claims/attestations after the evidence registry exists.
+
+   Scenario replay can execute without the final forensic artifact bundle. In
+   that case, defer claim population instead of attempting to read absent
+   registry and cursor files."
   []
-  (log-event :info :forensic-claims-start)
-  (try
-    (let [rid (or (some-> (prov/provenance-map) :bundle/id) "unknown")
-          pop-result (fp/populate-claims-and-attestations! rid)]
-      (log-event :info :forensic-claims-done
-                 :claim-count (:claim-count pop-result)
-                 :attestation-count (:attestation-count pop-result)
-                 :all-pass? (:all-pass? pop-result)))
-    (catch Exception e
-      (log-event :warn :forensic-claims-failed :error (.getMessage e)))))
+  (let [artifact-dir (str (evcfg/artifact-dir))
+        registry-file (io/file artifact-dir "evidence-registry.json")]
+    (if-not (.exists registry-file)
+      (log-event :info :forensic-claims-skipped
+                 :reason :evidence-registry-not-yet-emitted
+                 :artifact-dir artifact-dir)
+      (do
+        (log-event :info :forensic-claims-start)
+        (try
+          (let [rid (or (some-> (prov/provenance-map) :bundle/id) "unknown")
+                pop-result (fp/populate-claims-and-attestations! rid)]
+            (log-event :info :forensic-claims-done
+                       :claim-count (:claim-count pop-result)
+                       :attestation-count (:attestation-count pop-result)
+                       :all-pass? (:all-pass? pop-result)))
+          (catch Exception e
+            (log-event :warn :forensic-claims-failed :error (.getMessage e))))))))
 
 (defn- write-run-links!
   "Write a researcher-friendly _run-links.edn file into the forensic run directory.
@@ -895,11 +934,14 @@
   (try
     (let [dir (evcfg/artifact-dir)
           scenario-path (:scenario dispatch)
+          cursor-file (io/file dir "chain-cursor-final.json")
+          evidence-root (when (.exists cursor-file)
+                          (chain/evidence-root-hash :dir dir))
           links {:type :forensic-run
                  :run/id run-id
                  :scenario/path scenario-path
                  :protocol/id protocol-id
-                 :evidence/root (chain/evidence-root-hash :dir dir)
+                                  :evidence/root evidence-root
                  :tsa/configured? (boolean tsa-url)
                  :tsa/url tsa-url
                  :signature/configured? (boolean (System/getenv "PRF_SIGNING_KEY"))
@@ -941,8 +983,9 @@
 
    Returns {:exit-code <int> :bundle-root <map> :execution-node <map>}."
   [dispatch opts]
-  (validate-dispatch! dispatch)
-  (let [protocol-id (resolve-protocol-id dispatch)
+  (let [dispatch (update dispatch :scenario resolve-scenario-reference)]
+    (validate-dispatch! dispatch)
+    (let [protocol-id (resolve-protocol-id dispatch)
         source-provenance (prov/source-provenance)]
     (if (:dry-run? dispatch)
       (run-dry dispatch opts protocol-id)
@@ -1113,4 +1156,4 @@
                   (write-result-json err-path minimal-root))
                 {:exit-code 1
                  :bundle-root minimal-root
-                 :execution-node nil}))))))))
+                 :execution-node nil})))))))))

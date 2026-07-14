@@ -142,12 +142,22 @@
           {}
           (:benchmark/scenarios manifest)))
 
+(defn- path-basename
+  [path]
+  (.getName (io/file (str path))))
+
 (defn- result-by-path
+  "Index results by their reported path and basename. Benchmark execution resolves
+   resource paths to filesystem paths, whereas suite metadata retains resource-relative
+   paths; the basename is the stable identifier across those representations."
   [results]
-  (into {}
-        (map (fn [result]
-               [(:simulator/scenario-path result) result]))
-        results))
+  (reduce (fn [idx result]
+            (let [path (:simulator/scenario-path result)]
+              (assoc idx
+                     path result
+                     (path-basename path) result)))
+          {}
+          results))
 
 (defn- declaration-for-scenario
   [declaration-by-id scenario-meta]
@@ -245,8 +255,8 @@
                                :fill-mode (get-in d [:policy :mode])
                                :exercised-fill? (= :partial-fill (:settlement-mode d))})
                             (range) (or decisions []))))]
-    (cond-> (into base-checks (or cf-checks []))
-      (seq witnesses) (assoc :witnesses witnesses))))
+    {:checks (into base-checks (or cf-checks []))
+     :witnesses (or witnesses [])}))
 
 (defn- level-verdict
   [level matched-scenarios results claim-spec]
@@ -257,17 +267,20 @@
      :check-results []
      :evidence-references []}
     (let [scenario-ids (mapv :scenario/id matched-scenarios)
-          level-checks (mapcat (fn [match]
-                                 (let [result (get results (:scenario/source-path match))
-                                       checks (scenario-check-results claim-spec level result)]
+              result-for (fn [source-path]
+                           (or (get results source-path)
+                               (get results (path-basename source-path))))
+              level-checks (mapcat (fn [match]
+                                     (let [result (result-for (:scenario/source-path match))
+                                           {:keys [checks]} (scenario-check-results claim-spec level result)]
                                    (map (fn [check]
                                           (assoc check :scenario/id (:scenario/id match)))
-                                        (remove #(= :witnesses (:check/id %)) checks))))
+                                        checks)))
                                matched-scenarios)
           witnesses (mapcat (fn [match]
-                              (let [result (get results (:scenario/source-path match))
-                                    checks (scenario-check-results claim-spec level result)
-                                    ws (:witnesses checks)]
+                              (let [result (result-for (:scenario/source-path match))
+                                                                  {:keys [witnesses]} (scenario-check-results claim-spec level result)
+                                    ws witnesses]
                                 (map #(assoc % :scenario/id (:scenario/id match)) (or ws []))))
                             matched-scenarios)
           integrity-gate (gate/evaluate-integrity-gate
@@ -310,7 +323,9 @@
                               vals
                               (keep (fn [scenario-meta]
                                       (let [declaration (declaration-for-scenario declaration-by-id scenario-meta)
-                                            result (get results-by-path (:scenario/path scenario-meta))]
+                                                                                  source-path (:scenario/path scenario-meta)
+                                                                                  result (or (get results-by-path source-path)
+                                                                                             (get results-by-path (path-basename source-path)))]
                                         (when (and declaration result)
                                           {:declaration declaration
                                            :scenario-meta scenario-meta

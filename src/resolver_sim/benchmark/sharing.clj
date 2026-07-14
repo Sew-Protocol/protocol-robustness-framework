@@ -3,6 +3,7 @@
             [resolver-sim.benchmark.coverage :as coverage]
             [resolver-sim.benchmark.repo :as repo]
             [resolver-sim.benchmark.signing :as signing]
+            [resolver-sim.benchmark.dag :as dag]
             [resolver-sim.hash.canonical :as hc]
             [clojure.java.shell :as shell]
             [clojure.java.io :as io]
@@ -65,7 +66,32 @@
         (do (println "✗ Hash mismatch! Results differ from original run.") false)))))
 
 (def ^:private required-export-entries
-  #{"./evidence.edn" "./manifest.edn" "./repo.edn" "./results.edn" "./metrics.edn"})
+  #{"./evidence.edn" "./manifest.edn" "./repo.edn" "./results.edn" "./metrics.edn" "./export-manifest.json"})
+
+(defn- sha256-file [file]
+  (let [digest (java.security.MessageDigest/getInstance "SHA-256")]
+    (with-open [in (java.io.FileInputStream. file)]
+      (let [buffer (byte-array 8192)]
+        (loop [n (.read in buffer)]
+          (when (pos? n)
+            (.update digest buffer 0 n)
+            (recur (.read in buffer))))))
+    (format "%064x" (java.math.BigInteger. 1 (.digest digest)))))
+
+(defn- write-export-manifest! [tmp-dir evidence-hash]
+  (let [files (->> (file-seq tmp-dir)
+                   (filter #(.isFile %))
+                   (sort-by #(.getPath %)))
+        base (.toPath tmp-dir)
+        artifacts (mapv (fn [file]
+                          {:path (str (.relativize base (.toPath file)))
+                           :sha256 (sha256-file file)}) files)
+        manifest {:manifest/version "benchmark-export.v1"
+                  :evidence/hash evidence-hash
+                  :artifacts artifacts}
+        path (io/file tmp-dir "export-manifest.json")]
+    (spit path (json/write-str manifest {:key-fn name :indent true}))
+    {:path path :manifest manifest :sha256 (sha256-file path)}))
 
 (defn export [evidence-path export-tar-path]
   (let [evidence (edn/read-string (slurp evidence-path))
@@ -80,7 +106,15 @@
       (spit (io/file tmp-dir "repo.edn") (pr-str (:repo evidence)))
       (spit (io/file tmp-dir "results.edn") (pr-str (:results evidence)))
       (spit (io/file tmp-dir "metrics.edn") (pr-str (:metrics evidence)))
-      (let [{create-exit :exit create-err :err}
+      (let [graph-dir (io/file (dag/artifact-directory evidence-path))]
+        (when-not (.isDirectory graph-dir)
+          (dag/export! evidence-path))
+        (let [{:keys [exit err]} (shell/sh "cp" "-R" (.getPath graph-dir) (.getPath tmp-dir))]
+          (when-not (zero? exit)
+            (throw (ex-info "Could not stage evidence DAG artifacts" {:error err})))))
+      (let [{manifest-path :path manifest-sha256 :sha256}
+            (write-export-manifest! tmp-dir (:evidence/hash evidence))
+            {create-exit :exit create-err :err}
             (shell/sh "tar" "--sort=name" "--mtime=2026-01-01" "--owner=0" "--group=0"
                       "--numeric-owner" "-czf" (.getPath export-file) "-C" (.getPath tmp-dir) ".")
             {verify-exit :exit verify-out :out verify-err :err}
@@ -91,7 +125,16 @@
         (if (and (zero? create-exit)
                  (zero? verify-exit)
                  (every? entries required-export-entries))
-          (do (println "Portable bundle exported to:" export-tar-path) true)
+          (do
+            (spit (str export-tar-path ".manifest.json")
+                  (json/write-str {:manifest/version "benchmark-delivery.v1"
+                                   :evidence/hash (:evidence/hash evidence)
+                                   :archive/path export-tar-path
+                                   :archive/sha256 (sha256-file export-file)
+                                   :export-manifest/sha256 manifest-sha256}
+                                  {:key-fn name :indent true}))
+            (println "Portable bundle exported to:" export-tar-path)
+            true)
           (do (println "Export failed:" (str/trim (or verify-err create-err))) false)))
       (catch java.io.IOException e
         (println "Export failed: could not run `tar`." (.getMessage e))
@@ -104,9 +147,15 @@
     (let [{:keys [exit out err]} (shell/sh "ipfs" "add" "-Q" export-tar-path)]
       (if (zero? exit)
         (let [cid (str/trim out)
+              delivery-path (str export-tar-path ".manifest.json")
+              delivery (when (.isFile (io/file delivery-path))
+                         (json/read-str (slurp delivery-path) :key-fn keyword))
               manifest {:ipfs-cid cid
                         :timestamp (System/currentTimeMillis)
-                        :bundle-path export-tar-path}]
+                        :bundle-path export-tar-path
+                        :evidence-hash (:evidence/hash delivery)
+                        :archive-sha256 (:archive/sha256 delivery)
+                        :export-manifest-sha256 (:export-manifest/sha256 delivery)}]
           (spit "evidence-manifest.json" (json/write-str manifest {:key-fn name :indent true}))
           (println "Published to IPFS")
           (println "\nCID:\n" cid)

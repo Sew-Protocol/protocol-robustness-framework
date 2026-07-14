@@ -584,6 +584,15 @@
     :execution/mode :inline
     :description "Pro-rata allocation execution evidence node — records the full pro-rata computation chain (projection, allocation, claims, artifact) as a DAG-verifiable evidence node."
     :claims #{:allocation-complete :non-negative :conservation :rounding-bounded :ordering-independent}}
+   {:id :execution/yield-accounting
+    :version 1
+    :kind :accounting
+    :runner :protocol-layer
+    :entry 'resolver-sim.evidence.node/build-execution-node
+    :execution/type :yield-accounting
+    :execution/mode :inline
+    :description "Per-event yield accounting delta emitted during deterministic replay."
+    :claims #{:conservation :trace-fidelity}}
    {:id :evidence/commitment-root
     :version 1
     :kind :commitment-root

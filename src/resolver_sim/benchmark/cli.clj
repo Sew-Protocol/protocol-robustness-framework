@@ -88,7 +88,8 @@
    [nil "--share-summary PATH" "Generate share summary for an evidence bundle"]
    [nil "--export PATH" "Export portable bundle (tar.gz) from evidence bundle"]
    [nil "--publish-ipfs PATH" "Publish exported bundle to IPFS"]
-   [nil "--menu PATH" "Open the interactive post-run menu for an existing evidence bundle"]
+      [nil "--export-dag PATH" "Export evidence DAG SVG/HTML/JSON artifacts"]
+      [nil "--menu PATH" "Open the interactive post-run menu for an existing evidence bundle"]
    [nil "--attest PATH" "Generate an independent attestation for an evidence bundle"]
    [nil "--verify-attestation PATH" "Verify an independent attestation"]
    [nil "--tsa-url URL" "RFC 3161 Time-Stamp Authority URL for timestamping evidence artifacts"]
@@ -135,6 +136,7 @@
     (println "[3] Generate attestation")
     (println "[4] Publish to IPFS")
     (println "[5] Reproduce locally")
+    (println "[6] Export evidence DAG visualisation")
     (println "[q] Quit")
     (print "\nChoice > ")
     (flush)
@@ -154,6 +156,7 @@
                 (sharing/publish-ipfs tar-path)
                 (println "IPFS publication skipped because bundle export failed.")))
         "5" (sharing/reproduce output-path)
+        "6" ((requiring-resolve 'resolver-sim.benchmark.dag/export!) output-path)
         "q" (System/exit 0)
         (println "Invalid choice"))
       (when-not (= choice "q")
@@ -516,6 +519,10 @@
 
       (:publish-ipfs options)
       (do (sharing/publish-ipfs (:publish-ipfs options))
+          (System/exit 0))
+
+      (:export-dag options)
+      (do ((requiring-resolve 'resolver-sim.benchmark.dag/export!) (:export-dag options))
           (System/exit 0))
 
       (:attest options)

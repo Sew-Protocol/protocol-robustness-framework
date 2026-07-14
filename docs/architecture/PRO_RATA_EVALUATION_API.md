@@ -89,7 +89,7 @@ The evaluator keeps calculation and validation separate:
 - `:validation/status` is `:passed` unless a check reports `:failed`.
 - Failed validation describes a calculated result that violates a declared property; it does not silently repair that result.
 
-Current checks cover conservation, allocation bounds, allocation completeness, and deterministic replay. The replay check is a same-process repeat-execution guard, not an independent rounding proof. Exact quota-based weight proportionality is not yet implemented and is reported as `:not-evaluated` rather than passed.
+Current checks cover conservation, allocation bounds, allocation completeness, and deterministic replay. The replay check is a same-process repeat-execution guard, not an independent rounding proof. Exact quota-based weight proportionality is not yet implemented and is reported as `:not-evaluated` rather than passed. Validation therefore separates check correctness from coverage: it may report `:status :passed` with `:coverage-status :partial`, plus evaluated and not-evaluated check counts.
 
 Partial-fill closed-form checks remain in `resolver-sim.yield.partial-fill`. They validate settlement decisions after allocation and must not mutate allocation progress or economics results.
 
@@ -117,9 +117,90 @@ For notebook compatibility, adapt an atom:
   :on-progress (payoffs/progress-atom-observer progress)})
 ```
 
-Events include phase and completion information. Redistribution additionally reports `:phase :redistributing` and `:redistribution-pass`.
+Events include phase and completion information. Redistribution additionally reports `:phase :redistributing` and `:redistribution-pass`. The observed allocation is the same projection-derived allocation returned by the evaluator; attaching an observer does not trigger a second operational allocation.
 
 Observer identity and emitted events are excluded from projection and result hashes. Attaching a UI, logger, channel bridge, or atom must not change allocation identity. Exceptions raised by function observers are ignored so observability cannot invalidate a mathematical allocation.
+
+## Proposed finalized outcome contract
+
+Redistribution allocation records must distinguish pool-level conservation from
+participant entitlement semantics. A participant weight, request, or cap does
+not by itself establish an entitlement; protocol adapters must explicitly
+supply an entitlement interpretation before `:final-unmet-entitlement` is
+meaningful.
+
+```clojure
+{:participants
+ [{:id :claimant-a
+   :initial-request 50
+   :initial-allocation 30
+   :effective-cap 30
+   :redistributed-in 0
+   :final-allocation 30
+   :final-entitlement nil
+   :final-unmet-entitlement nil}]
+ :allocation-summary
+ {:available 100
+  :allocated 100
+  :unallocated-residual 0
+  :residual-reason :none
+  :entitlement-model nil}}
+```
+
+### Field decision table
+
+| Field | Scope | Timing | Meaning | Conservation role |
+|---|---|---|---|---|
+| `:id` | Participant | Input / final | Stable, unique participant identity | Join key only; not numeric |
+| `:initial-request` | Participant | Before first-pass constraints | Algorithmic request or quota target; diagnostic unless an entitlement model explicitly says otherwise | Not inherently a conservation term |
+| `:initial-allocation` | Participant | Initial pass | Value actually allocated during the first allocation pass | `final-allocation = initial-allocation + redistributed-in` |
+| `:effective-cap` | Participant | Final policy input | Cumulative maximum final allocation permitted by the active policy | Bounds `:final-allocation`; residual capacity is derived, not stored |
+| `:redistributed-in` | Participant | Final | Additional allocation received after the initial pass | Together with `:initial-allocation`, reconstructs final allocation |
+| `:final-allocation` | Participant | Final | Cumulative allocation after all passes | Sum across participants equals `:allocation-summary/:allocated` |
+| `:final-entitlement` | Participant | Final, only when declared by the mechanism | Mechanism-declared entitlement amount | Equals allocation plus unmet entitlement; otherwise `nil` |
+| `:final-unmet-entitlement` | Participant | Final, only when declared by the mechanism | Unsatisfied portion of declared entitlement | Must be `nil` when `:final-entitlement` is `nil` |
+| `:available` | Pool | Input | Value available to allocate | `available = allocated + unallocated-residual` |
+| `:allocated` | Pool | Final | Sum of all final participant allocations | Sum of participant `:final-allocation` |
+| `:unallocated-residual` | Pool | Final | Value still outside all participant allocations | Completes pool conservation; never assigned to a participant merely for reporting |
+| `:residual-reason` | Pool | Final | Canonical primary reason for residual value: `:none`, `:rounding`, `:capacity-exhausted`, or `:no-eligible-participants` | Diagnostic only; precedence is defined below |
+| `:entitlement-model` | Policy provenance | Final summary | Declares how entitlement interpretation was established, e.g. `{:type :declared-claim :adapter :sew/shortfall-claims-v1}` | Required when participant entitlement fields are populated; otherwise `nil` |
+
+### Conservation rules
+
+Pool conservation always applies:
+
+```text
+available = allocated + unallocated-residual
+```
+
+Participant entitlement conservation applies only when `:entitlement-model` is
+explicitly declared:
+
+```text
+final-entitlement = final-allocation + final-unmet-entitlement
+```
+
+The finalized contract must enforce:
+
+```text
+allocated = sum(participant.final-allocation)
+available = allocated + unallocated-residual
+final-allocation = initial-allocation + redistributed-in
+0 <= initial-allocation, redistributed-in, final-allocation, unallocated-residual
+final-allocation <= effective-cap  (when a cap is present)
+```
+
+When an entitlement model is declared, `final-unmet-entitlement >= 0` and the
+entitlement equation applies. When it is not declared, both
+`:final-entitlement` and `:final-unmet-entitlement` must be `nil`.
+
+Residual reason is canonical: a zero residual requires `:residual-reason :none`;
+a positive residual requires a non-`:none` reason. When several conditions
+apply, precedence is `:capacity-exhausted`, then `:no-eligible-participants`,
+then `:rounding`.
+
+Generic weighted allocation must not manufacture participant entitlement fields
+from a weight, first-pass quota, cap, or temporary pass-local `:unmet` value.
 
 ## Evidence and persistence boundary
 

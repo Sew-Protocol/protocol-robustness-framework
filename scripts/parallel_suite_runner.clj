@@ -17,6 +17,7 @@
      happen during suite execution (run-suite), not at load time."
   (:require [clojure.java.io :as io]
             [resolver-sim.sim.fixtures :as f]
+            [resolver-sim.io.fixtures :as io-fix]
             [resolver-sim.evidence.chain :as chain]
             [resolver-sim.evidence.attestation-registry :as ar]
             [resolver-sim.evidence.config :as evcfg]
@@ -52,7 +53,7 @@
      (ar/with-fresh-registry*
       (fn []
         (binding [evcfg/*artifact-dir* artifact-dir]
-          (let [result (try (f/run-suite suite-key :save nil {})
+           (let [result (try (io-fix/run-suite-from-key suite-key :save nil {})
                             (catch Throwable t
                               (when (instance? InterruptedException t)
                                 (.interrupt (Thread/currentThread)))
