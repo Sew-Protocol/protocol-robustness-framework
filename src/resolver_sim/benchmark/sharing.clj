@@ -4,7 +4,7 @@
             [resolver-sim.benchmark.repo :as repo]
             [resolver-sim.benchmark.signing :as signing]
             [resolver-sim.hash.canonical :as hc]
-            [clojure.java.shell :refer [sh]]
+            [clojure.java.shell :as shell]
             [clojure.java.io :as io]
             [clojure.data.json :as json]
             [clojure.edn :as edn]
@@ -13,8 +13,10 @@
 (defn generate-reproduce-command [evidence-path]
   (str "bb benchmark:reproduce " evidence-path))
 
-(defn share-summary [evidence]
-  (let [bm-id (get-in evidence [:benchmark :benchmark/id])
+(defn share-summary
+  ([evidence] (share-summary evidence "evidence/latest.edn"))
+  ([evidence evidence-path]
+   (let [bm-id (get-in evidence [:benchmark :benchmark/id])
         protocol-commit (get-in evidence [:repo :repo :commit])
         scenarios-pass? (= (get-in evidence [:metrics :passed])
                            (get-in evidence [:metrics :total]))
@@ -34,7 +36,7 @@
          "Result:\n" outcome "\n\n"
          "Evidence Hash:\n" evidence-hash "\n\n"
          "Signed:\n" (if signed? "yes" "no") "\n\n"
-         "Reproduce:\n" (generate-reproduce-command "evidence/latest.edn"))))
+         "Reproduce:\n" (generate-reproduce-command evidence-path)))))
 
 (defn reproduce [evidence-path]
   (let [evidence (edn/read-string (slurp evidence-path))
@@ -62,41 +64,61 @@
         (do (println "✓ Hash match! Results are reproducible.") true)
         (do (println "✗ Hash mismatch! Results differ from original run.") false)))))
 
+(def ^:private required-export-entries
+  #{"./evidence.edn" "./manifest.edn" "./repo.edn" "./results.edn" "./metrics.edn"})
+
 (defn export [evidence-path export-tar-path]
   (let [evidence (edn/read-string (slurp evidence-path))
-        tmp-dir (io/file "tmp-export")
-        _ (.mkdirs tmp-dir)]
+        tmp-dir (.toFile (java.nio.file.Files/createTempDirectory "benchmark-export-"
+                                                                 (make-array java.nio.file.attribute.FileAttribute 0)))
+        export-file (.getAbsoluteFile (io/file export-tar-path))]
     (try
+      (when-let [parent (.getParentFile export-file)]
+        (.mkdirs parent))
       (spit (io/file tmp-dir "evidence.edn") (pr-str evidence))
       (spit (io/file tmp-dir "manifest.edn") (pr-str (:benchmark evidence)))
       (spit (io/file tmp-dir "repo.edn") (pr-str (:repo evidence)))
       (spit (io/file tmp-dir "results.edn") (pr-str (:results evidence)))
       (spit (io/file tmp-dir "metrics.edn") (pr-str (:metrics evidence)))
-
-      ;; Deterministic tar
-      ;; We use --sort=name --mtime='2026-01-01' --owner=0 --group=0 --numeric-owner
-      (let [{:keys [exit out err]} (sh "tar" "--sort=name" "--mtime=2026-01-01" "--owner=0" "--group=0" "--numeric-owner" "-czf" export-tar-path "-C" "tmp-export" ".")]
-        (if (zero? exit)
-          (println "Portable bundle exported to:" export-tar-path)
-          (println "Export failed:" err)))
+      (let [{create-exit :exit create-err :err}
+            (shell/sh "tar" "--sort=name" "--mtime=2026-01-01" "--owner=0" "--group=0"
+                      "--numeric-owner" "-czf" (.getPath export-file) "-C" (.getPath tmp-dir) ".")
+            {verify-exit :exit verify-out :out verify-err :err}
+            (if (zero? create-exit)
+              (shell/sh "tar" "-tzf" (.getPath export-file))
+              {:exit 1 :out "" :err create-err})
+            entries (set (str/split-lines verify-out))]
+        (if (and (zero? create-exit)
+                 (zero? verify-exit)
+                 (every? entries required-export-entries))
+          (do (println "Portable bundle exported to:" export-tar-path) true)
+          (do (println "Export failed:" (str/trim (or verify-err create-err))) false)))
+      (catch java.io.IOException e
+        (println "Export failed: could not run `tar`." (.getMessage e))
+        false)
       (finally
-        (sh "rm" "-rf" "tmp-export")))))
+        (shell/sh "rm" "-rf" (.getPath tmp-dir))))))
 
 (defn publish-ipfs [export-tar-path]
-  (let [{:keys [exit out err]} (sh "ipfs" "add" "-Q" export-tar-path)]
-    (if (zero? exit)
-      (let [cid (str/trim out)
-            manifest {:ipfs-cid cid
-                      :timestamp (System/currentTimeMillis)
-                      :bundle-path export-tar-path}]
-        (spit "evidence-manifest.json" (json/write-str manifest {:key-fn name :indent true}))
-        (println "Published to IPFS")
-        (println "\nCID:\n" cid)
-        (println "\nGateway:\n" (str "https://ipfs.io/ipfs/" cid))
-        cid)
-      (do
-        (println "IPFS publication failed (is ipfs installed and daemon running?)")
-        nil))))
+  (try
+    (let [{:keys [exit out err]} (shell/sh "ipfs" "add" "-Q" export-tar-path)]
+      (if (zero? exit)
+        (let [cid (str/trim out)
+              manifest {:ipfs-cid cid
+                        :timestamp (System/currentTimeMillis)
+                        :bundle-path export-tar-path}]
+          (spit "evidence-manifest.json" (json/write-str manifest {:key-fn name :indent true}))
+          (println "Published to IPFS")
+          (println "\nCID:\n" cid)
+          (println "\nGateway:\n" (str "https://ipfs.io/ipfs/" cid))
+          cid)
+        (do
+          (println "IPFS publication failed:" (str/trim err))
+          nil)))
+    (catch java.io.IOException e
+      (println "IPFS publication unavailable: could not run `ipfs`."
+               "Install the IPFS CLI and ensure it is on PATH.")
+      nil)))
 
 (defn attest [evidence-path private-key-path password]
   (let [evidence (edn/read-string (slurp evidence-path))

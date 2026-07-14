@@ -124,6 +124,7 @@
              derived from the requested amount (existing behavior)."
   [available-liquidity requested policy & [opts]]
   (let [rows (:rows opts)
+        progress-atom (:progress-atom opts)
         total (if rows
                 (reduce + 0 (map #(long (:owed %)) rows))
                 (sum-requested requested))
@@ -153,7 +154,8 @@
                       :cap-fn :cap
                       :rounding (if (#{:floor :floor-with-largest-remainder} rounding-policy)
                                   rounding-policy
-                                  :floor-with-largest-remainder)})
+                                  :floor-with-largest-remainder)
+                      :progress-atom progress-atom})
               filled (into {} (map (fn [a] [(:id a) (:allocated a)]) (:allocations alloc)))
               row-evidence (mapv #(row-evidence % filled) rows)
               deferred (into {} (map (fn [r] [(:key r) (:deferred r)]) row-evidence))]
@@ -204,7 +206,8 @@
              weight/cap allocation. When absent, weight and cap are both
              derived from the requested amount (existing behavior)."
   [available-liquidity requested policy & [opts]]
-  (let [rows (:rows opts)]
+  (let [rows (:rows opts)
+        progress-atom (:progress-atom opts)]
     (if rows
       ;; Decoupled rows path
       (let [principal-row (first (filter #(= :principal (:key %)) rows))
@@ -231,7 +234,8 @@
                               :id-fn :id :weight-fn :weight :cap-fn :cap
                               :rounding (if (#{:floor :floor-with-largest-remainder} rounding-policy)
                                           rounding-policy
-                                          :floor-with-largest-remainder)}))
+                                          :floor-with-largest-remainder)
+                              :progress-atom progress-atom}))
               yield-filled (when yield-alloc
                              (into {} (map (fn [a] [(:id a) (:allocated a)]) (:allocations yield-alloc))))
               filled (cond-> {}
@@ -300,7 +304,7 @@
    Processes buckets in fill-order, allocating to each bucket's rows
    respecting per-row caps, with remaining liquidity flowing to the next bucket.
    Returns {:filled {} :row-evidence [] :redistributions [{:bucket k :redistribution m}]}."
-  [available-liquidity rows fill-order policy]
+  [available-liquidity rows fill-order policy progress-atom]
   (let [rounding-policy (:rounding-policy policy :floor-and-carry)
         bucket->rows (group-by :key rows)]
     (loop [remaining available-liquidity
@@ -338,7 +342,8 @@
                                    :id-fn :id :weight-fn :weight :cap-fn :cap
                                    :rounding (if (#{:floor :floor-with-largest-remainder} rounding-policy)
                                                rounding-policy
-                                               :floor-with-largest-remainder)})
+                                               :floor-with-largest-remainder)
+                                   :progress-atom progress-atom})
                     bucket-filled (into {} (map (fn [a] [(:id a) (:allocated a)]) (:allocations bucket-alloc)))
                     bucket-filled-total (reduce + 0 (vals bucket-filled))
                     bucket-row-evidence (mapv #(row-evidence % bucket-filled) bucket-rows)]
@@ -361,6 +366,7 @@
   [available-liquidity requested policy & [opts]]
   (let [fill-order (:fill-order policy [:principal :realized-yield :deferred-yield])
         rows (:rows opts)
+        progress-atom (:progress-atom opts)
         total (if rows
                 (reduce + 0 (map #(long (:owed %)) rows))
                 (sum-requested requested))
@@ -368,7 +374,7 @@
     (if rows
       ;; Rows-with-caps path: always go through the capped allocator
       ;; to respect per-row caps even when total liquidity is sufficient
-      (let [result (waterfall-allocate-rows available-liquidity rows fill-order policy)
+      (let [result (waterfall-allocate-rows available-liquidity rows fill-order policy progress-atom)
             row-evidence (:row-evidence result)
             filled (:filled result)
             deferred (into {} (map (fn [r] [(:key r) (:deferred r)]) row-evidence))
@@ -485,11 +491,11 @@
                    :fill-mode mode}}
        (case mode
          :pro-rata        (calculate-fulfillment-pro-rata available requested policy
-                                                          (select-keys opts [:rows]))
+                                                          (select-keys opts [:rows :progress-atom]))
          :principal-first (calculate-fulfillment-principal-first available requested policy
-                                                                 (select-keys opts [:rows]))
+                                                                 (select-keys opts [:rows :progress-atom]))
          :waterfall       (calculate-fulfillment-waterfall available requested policy
-                                                           (select-keys opts [:rows])))))))
+                                                           (select-keys opts [:rows :progress-atom])))))))
 
 (defn partial-fill?
   "True if the settlement decision represents a partial fill."

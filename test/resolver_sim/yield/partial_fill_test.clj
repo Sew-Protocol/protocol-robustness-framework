@@ -2,6 +2,7 @@
   "Tests for partial-fill settlement decisions: pro-rata, principal-first,
    waterfall modes, recovery, haircut, and multi-escrow isolation."
   (:require [clojure.test :refer [deftest is testing]]
+            [resolver-sim.economics.payoffs :as payoffs]
             [resolver-sim.yield.partial-fill :as pf]
             [resolver-sim.yield.position :as pos]))
 
@@ -39,6 +40,23 @@
       (is (> (get filled :principal 0) 0) "Principal gets some")
       (is (> (get filled :realized-yield 0) 0) "Realized yield gets some")
       (is (> (get filled :deferred-yield 0) 0) "Deferred yield gets some"))))
+
+(deftest test-pro-rata-row-allocation-reports-progress
+  (let [progress (payoffs/make-pro-rata-progress-atom)
+        decision (pf/calculate-fulfillment-pro-rata
+                  50
+                  {:a 40 :b 60}
+                  {:mode :pro-rata :rounding-policy :largest-remainder}
+                  {:rows [{:key :a :owed 40 :weight 40 :cap 40}
+                          {:key :b :owed 60 :weight 60 :cap 60}]
+                   :progress-atom progress})]
+    (is (= :partial-fill (:settlement-mode decision)))
+    (is (= {:a 20 :b 30} (:filled decision)))
+    (is (= {:status :completed
+            :phase :completed
+            :current 2
+            :total 2}
+           (select-keys @progress [:status :phase :current :total])))))
 
 (deftest test-partial-fill-principal-first
   (testing "Principal-first fill protects principal"

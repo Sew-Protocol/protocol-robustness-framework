@@ -141,7 +141,7 @@
     (let [choice (read-line)]
       (case choice
         "1" (sharing/export output-path (str output-path ".tar.gz"))
-        "2" (println "\n" (sharing/share-summary evidence))
+        "2" (println "\n" (sharing/share-summary evidence output-path))
         "3" (if-let [key-path (:key options)]
               (let [att (sharing/attest output-path key-path (:password options))
                     att-path (str output-path ".attestation.edn")]
@@ -149,10 +149,10 @@
                 (println "Attestation written to:" att-path))
               (println "Private key path (-k) required for attestation."))
         "4" (let [tar-path (str output-path ".tar.gz")]
-              (if (.exists (io/file tar-path))
+              (if (or (.exists (io/file tar-path))
+                      (sharing/export output-path tar-path))
                 (sharing/publish-ipfs tar-path)
-                (do (sharing/export output-path tar-path)
-                    (sharing/publish-ipfs tar-path))))
+                (println "IPFS publication skipped because bundle export failed.")))
         "5" (sharing/reproduce output-path)
         "q" (System/exit 0)
         (println "Invalid choice"))
@@ -507,7 +507,7 @@
 
       (:share-summary options)
       (let [bundle (rp/edn-read (:share-summary options))]
-        (println (sharing/share-summary bundle))
+        (println (sharing/share-summary bundle (:share-summary options)))
         (System/exit 0))
 
       (:export options)

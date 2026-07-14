@@ -33,6 +33,45 @@
             :total 3}
            @progress))))
 
+(deftest evaluate-pro-rata-allocation-builds-pure-canonical-package
+  (let [events (atom [])
+        request {:schema-version 1
+                 :allocation/id :allocation/example-1
+                 :amount 100
+                 :unit {:asset :test-token :decimals 0}
+                 :participants [{:id :a :weight 40}
+                                {:id :b :weight 60}]
+                 :policy {:rounding :floor-with-largest-remainder
+                          :cap-treatment :unallocated
+                          :tie-break :input-order}
+                 :on-progress #(swap! events conj %)}
+        evaluated (payoffs/evaluate-pro-rata-allocation request)
+        replayed (payoffs/evaluate-pro-rata-allocation (dissoc request :on-progress))]
+    (is (= [40 60] (mapv :allocated (get-in evaluated [:allocation :allocations]))))
+    (is (= :passed (get-in evaluated [:validation :status])))
+    (is (= (:result evaluated) (:result replayed))
+        "runtime observer identity and events do not change canonical output")
+    (is (string? (get-in evaluated [:projection :artifact/hash])))
+    (is (string? (get-in evaluated [:result :artifact/hash])))
+    (is (= :completed (:status (last @events))))))
+
+(deftest evaluate-pro-rata-allocation-rejects-function-valued-request
+  (is (thrown-with-msg? clojure.lang.ExceptionInfo
+                        #"cannot contain functions"
+                        (payoffs/evaluate-pro-rata-allocation
+                         {:amount 10
+                          :participants [{:id :a :weight 10}]
+                          :policy {}
+                          :source {:derived (fn [_] 1)}}))))
+
+(deftest evaluate-pro-rata-allocation-rejects-invalid-canonical-participants
+  (doseq [request [{:amount 10 :unit :unit :participants [{:id :a :weight 1} {:id :a :weight 2}]}
+                   {:amount -1 :unit :unit :participants [{:id :a :weight 1}]}
+                   {:amount 10 :unit :unit :participants [{:id :a :weight -1}]}
+                   {:amount 10 :unit :unit :participants [{:id :a :weight 0}]}]]
+    (is (thrown? clojure.lang.ExceptionInfo
+                 (payoffs/evaluate-pro-rata-allocation request)))))
+
 (deftest allocate-pro-rata-unequal-weights
   (testing "unequal weights allocate proportionally"
     (let [result (payoffs/allocate-pro-rata
@@ -198,6 +237,14 @@
       (is (seq (:claims artifact)))
       (is (:source-hash (:source artifact))))))
 
+(deftest projection-artifact-rejects-tampered-source-hash
+  (let [artifact (payoffs/build-projection-artifact
+                  {:amount 10 :items [{:id :a :weight 1}]})]
+    (is (thrown-with-msg? clojure.lang.ExceptionInfo
+                          #"source hash mismatch"
+                          (payoffs/calculate-prorata-from-projection
+                           (assoc-in artifact [:source :source-hash] "tampered"))))))
+
 (deftest calculate-prorata-from-projection-shadows-direct-allocation
   (testing "projection artifacts replay to the same generic pro-rata allocation as direct input"
     (doseq [input [{:amount 400
@@ -319,6 +366,21 @@
       (is (= (:total-allocated vanilla) (:total-allocated with-redist)))
       (is (= (mapv :allocated (:allocations vanilla))
              (mapv :allocated (:allocations with-redist)))))))
+
+(deftest redistribution-respects-residual-capacity-across-passes
+  (let [items [{:id :a :weight 1 :cap 140}
+               {:id :b :weight 1 :cap 50}
+               {:id :c :weight 1 :cap 110}]
+        result (payoffs/allocate-pro-rata-with-redistribution
+                {:amount 300
+                 :items items
+                 :id-fn :id :weight-fn :weight :cap-fn :cap
+                 :rounding :floor-with-largest-remainder})
+        allocations (into {} (map (juxt :id :allocated) (:allocations result)))]
+    (is (every? (fn [{:keys [id cap]}] (<= (get allocations id 0) cap)) items))
+    (is (= 140 (get allocations :a)))
+    (is (= 50 (get allocations :b)))
+    (is (= 110 (get allocations :c)))))
 
 (deftest allocate-pro-rata-with-redistribution-all-capped
   (testing "all items capped => no redistribution, remainder reported"

@@ -122,6 +122,7 @@ Primary project framing and status live in the root `../README.md`.
 | `architecture/YIELD_AND_SNAPSHOT_MODULES.md` | Yield and snapshot module architecture |
 | `architecture/YIELD_V1_VAULT_CENTRIC_TESTING.md` | Yield V1 vault-centric testing approach |
 | `architecture/GENERIC_ECONOMICS_LAYERING.md` | Generic economics layering model |
+| `architecture/PRO_RATA_EVALUATION_API.md` | Pure pro-rata evaluation, progress observers, and evidence boundary |
 | `architecture/protocol-parity.md` | Protocol parity tracking |
 | `architecture/ORACLE_FIXTURE_EXHAUSTION.md` | Oracle fixture exhaustion analysis |
 | `architecture/AAVE_DIAGNOSTIC_ARCHITECTURE.md` | Aave diagnostic architecture |
