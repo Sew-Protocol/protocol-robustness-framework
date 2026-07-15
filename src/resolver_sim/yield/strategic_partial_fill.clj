@@ -19,28 +19,61 @@
 ;; Allocation helper
 ;; ---------------------------------------------------------------------------
 
-(defn- allocate
-  "Simple pro-rata allocation for a set of claims under a given policy.
-   Returns a map of claim-key -> filled amount.
-   Uses floor-based pro-rata distribution (largest-remainder for tie-breaking)."
-  [claims available policy]
+(defn allocation-report
+  "Allocate integer liquidity proportionally and report rounding accounting.
+
+   `:floor` deliberately leaves a rounding residual undistributed.  The
+   `:largest-remainder` policy assigns that residual deterministically by
+   descending remainder, then ascending claim index."
+  [claims available {:keys [rounding-policy]
+                     :or {rounding-policy :largest-remainder}}]
   (let [n (count claims)
-        avail (long available)
-        total (reduce + 0 claims)]
-    (if (or (zero? total) (zero? avail))
-      (into {} (map (fn [i] [(str "c" i) 0]) (range n)))
-      (let [floor-fills (mapv (fn [c] (quot (* c avail) total)) claims)
+        liquidity (long available)
+        total-claims (reduce + 0 claims)
+        distributable (min liquidity total-claims)
+        empty-allocations (vec (repeat n 0))]
+    (if (or (zero? total-claims) (zero? distributable))
+      {:allocations empty-allocations
+       :distributed 0
+       :undistributed 0
+       :excess-liquidity (- liquidity distributable)
+       :rounding-policy rounding-policy}
+      (let [floor-fills (mapv (fn [claim] (quot (* claim distributable) total-claims)) claims)
             floor-total (reduce + 0 floor-fills)
-            shortage (- avail floor-total)
-            ;; Distribute shortage by largest remainder
-            remainders (mapv (fn [c f] (mod (* c avail) total)) claims floor-fills)
-            sorted-indices (vec (take shortage (sort-by (fn [i] [(- (nth remainders i)) i]) (range n))))]
-        (into {} (map-indexed (fn [i c]
-                                [(str "c" i)
-                                 (if (some #(= i %) sorted-indices)
-                                   (inc (nth floor-fills i))
-                                   (nth floor-fills i))])
-                              claims))))))
+            residual (- distributable floor-total)
+            remainders (mapv (fn [claim] (mod (* claim distributable) total-claims)) claims)
+            selected-indices (take residual
+                                   (sort-by (fn [i] [(- (nth remainders i)) i])
+                                            (range n)))]
+        (case rounding-policy
+          :floor
+          {:allocations floor-fills
+           :distributed floor-total
+           :undistributed residual
+           :excess-liquidity (- liquidity distributable)
+           :rounding-policy rounding-policy}
+
+          :largest-remainder
+          (let [selected? (set selected-indices)
+                allocations (mapv (fn [i fill]
+                                    (if (contains? selected? i) (inc fill) fill))
+                                  (range n) floor-fills)]
+            {:allocations allocations
+             :distributed distributable
+             :undistributed 0
+             :excess-liquidity (- liquidity distributable)
+             :rounding-policy rounding-policy})
+
+          (throw (ex-info "Unsupported rounding policy"
+                          {:rounding-policy rounding-policy
+                           :supported #{:floor :largest-remainder}})))))))
+
+(defn- allocate
+  "Return claim-key -> filled amount for the requested rounding policy."
+  [claims available policy]
+  (into {}
+        (map-indexed (fn [i fill] [(str "c" i) fill])
+                     (:allocations (allocation-report claims available policy)))))
 
 ;; ---------------------------------------------------------------------------
 ;; State enumeration
@@ -165,8 +198,10 @@
     @violations))
 
 (defn check-merge-invariance
-  "Verify that merging two adjacent claims produces the same allocation
-   as the sum of individual allocations."
+  "Return exact merge-invariance violations for every pair of claims.
+
+   Integer per-claim rounding is identity-sensitive, so this property is not
+   expected to hold for either supported rounding policy."
   [claims available policy]
   (let [filled (allocate claims available policy)
         violations (atom [])]
@@ -310,11 +345,30 @@
                     :state {:claims request-vec :liquidity liquidity
                             :policy (select-keys policy [:mode :rounding-policy])}})))
         (when (some #{:merge} deviations)
-          (let [v (check-merge-invariance request-vec liquidity policy)]
+          (let [sample-violations (check-merge-invariance request-vec liquidity policy)
+                ;; Deterministic witnesses prevent a sampled run from claiming a
+                ;; universal algebraic property it cannot establish.  Flooring
+                ;; needs two units to expose its own non-additivity.
+                regression-state (if (= :floor (:rounding-policy policy))
+                                   {:claims [1 1 1] :liquidity 2}
+                                   {:claims [1 1 1] :liquidity 1})
+                regression-violations (check-merge-invariance
+                                       (:claims regression-state)
+                                       (:liquidity regression-state)
+                                       policy)
+                violations (vec (concat sample-violations regression-violations))]
             (swap! checks conj
-                   {:property :strategy/merge-invariance
-                    :verdict (if (empty? v) :verified :violated)
-                    :counterexamples (when (seq v) (take 3 v))
+                   {:property :allocation/exact-merge-invariance
+                    :status :violated
+                    :verdict :violated
+                    :rounding-policy (:rounding-policy policy)
+                    :counterexamples (take 3 violations)
+                    :regression-counterexample (assoc regression-state
+                                                   :merged-indices [1 2]
+                                                   :merged-claims [1 2]
+                                                   :individual-sum 0
+                                                   :merged-allocation 1
+                                                   :error 1)
                     :state {:claims request-vec :liquidity liquidity
                             :policy (select-keys policy [:mode :rounding-policy])}})))
         (when (some #{:permute} deviations)
@@ -359,16 +413,19 @@
        :properties (->> (mapcat :checks @results)
                         (group-by :property)
                         (mapv (fn [[prop results]]
-                                {:property prop
-                                 :verdict (if (every? #(= :verified (:verdict %)) results)
-                                            :verified :violated)
-                                 :violation-count (count (filter #(= :violated (:verdict %)) results))
+                                (let [verdict (if (every? #(= :verified (:verdict %)) results)
+                                                :verified :violated)]
+                                  {:property prop
+                                   :status verdict
+                                   :verdict verdict
+                                   :violation-count (count (filter #(= :violated (:verdict %)) results))
                                  :state-count (count results)
+                                 :counterexample (some :regression-counterexample results)
                                  :sample-counterexamples (->> results
                                                               (filter #(= :violated (:verdict %)))
                                                               (take 2)
                                                               (mapcat :counterexamples)
-                                                              (take 3))})))
+                                                              (take 3))}))))
        :summary {:states-examined @state-count
                  :properties-examined (count (distinct (mapcat (fn [r] (map :property (:checks r))) @results)))
                  :total-checks total-checks

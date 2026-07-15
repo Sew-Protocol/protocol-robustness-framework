@@ -15,9 +15,29 @@
             [clojure.set :as set]
             [resolver-sim.evidence.chain :as chain]
             [resolver-sim.evidence.config :as evcfg]
-            [resolver-sim.evidence.registry :as reg]))
+            [resolver-sim.evidence.registry :as reg]
+            [resolver-sim.io.event-evidence :as io-evidence]))
 
 ;; ── Check Runner ─────────────────────────────────────────────────────────────
+
+(defn- contained-file
+  "Resolve a registry-relative path only when it remains under artifact-dir."
+  [artifact-dir relative-path]
+  (when (and (string? relative-path)
+             (not (.isAbsolute (io/file relative-path))))
+    (let [root (.getCanonicalFile (io/file artifact-dir))
+          candidate (.getCanonicalFile (io/file root relative-path))]
+      (when (.startsWith (.toPath candidate) (.toPath root)) candidate))))
+
+(defn- content-hash-valid?
+  [artifact-dir entry]
+  (when-let [file (contained-file artifact-dir (:file/path entry))]
+    (when (.isFile file)
+      (try
+        (= (:hash/content entry)
+           (or (:evidence/hash (io-evidence/read-evidence-json file))
+               (:evidence-hash (io-evidence/read-evidence-json file))))
+        (catch Exception _ false)))))
 
 (defn- check-required
   "Run all required checks. Returns a vector of check result maps."
@@ -31,17 +51,20 @@
         c3 (every? :hash/content entries)
         ;; Every entry has :file/path
         c4 (every? :file/path entries)
-        ;; Every file path exists
-        c5 (every? (fn [e] (.exists (io/file artifact-dir (:file/path e)))) entries)
+        ;; Every path is relative, contained, and names an existing file.
+        c5 (every? (fn [e] (some-> (contained-file artifact-dir (:file/path e)) .isFile)) entries)
         ;; No duplicate IDs
         c6 (let [ids (map :evidence/id entries)]
-             (= (count ids) (count (set ids))))]
+             (= (count ids) (count (set ids))))
+        ;; Registry content hash must match evidence currently on disk.
+        c7 (every? #(content-hash-valid? artifact-dir %) entries)]
     [{:id "every-entry-has-id" :status (if c1 :passed :failed) :detail {:count (count entries) :missing (count (remove :evidence/id entries))}}
      {:id "every-entry-has-type" :status (if c2 :passed :failed) :detail {:count (count entries) :missing (count (remove :evidence/type entries))}}
      {:id "every-entry-has-content-hash" :status (if c3 :passed :failed) :detail {:count (count entries) :missing (count (remove :hash/content entries))}}
      {:id "every-entry-has-path" :status (if c4 :passed :failed) :detail {:count (count entries) :missing (count (remove :file/path entries))}}
-     {:id "every-path-exists" :status (if c5 :passed :failed) :detail {:entries (count entries) :missing (count (remove (fn [e] (.exists (io/file artifact-dir (:file/path e)))) entries))}}
-     {:id "no-duplicate-evidence-ids" :status (if c6 :passed :failed) :detail {:total (count entries) :unique (count (set (map :evidence/id entries)))}}]))
+     {:id "every-path-exists-and-is-contained" :status (if c5 :passed :failed) :detail {:entries (count entries) :invalid (count (remove (fn [e] (some-> (contained-file artifact-dir (:file/path e)) .isFile)) entries))}}
+     {:id "no-duplicate-evidence-ids" :status (if c6 :passed :failed) :detail {:total (count entries) :unique (count (set (map :evidence/id entries)))}}
+     {:id "every-content-hash-matches-file" :status (if c7 :passed :failed) :detail {:entries (count entries) :mismatched (count (remove #(content-hash-valid? artifact-dir %) entries))}}]))
 
 (defn- check-attribution
   "Run attribution completeness checks. Returns a vector of check result maps.

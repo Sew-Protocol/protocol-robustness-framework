@@ -254,9 +254,12 @@
       :amount-released     {}   ; {workflow-id nat-int} — cumulative partial release amounts
       :resolver-stakes     {}   ; {addr nat-int} — for Tiered Authority (Phase K)
      :resolver-slash-total {}  ; {addr nat-int} — cumulative stake slashed (distinguishes slash from withdrawal)
-     :pending-fraud-slashes {} ; {slash-id {:resolver :amount :status :appeal-deadline
-                               ;            :appeal-bond-held :contest-deadline :proposed-at
-                               ;            :reversal-detection-probability}}
+     ;; Canonical slash registry. Each slash has an entity-local integer ID and
+     ;; records its workflow relationship explicitly. Legacy scenario ingestion
+     ;; is responsible for normalizing pre-v2 string slash identifiers.
+     :pending-fraud-slashes {} ; {slash-id {:slash/id :slash/workflow-id ...}}
+     :slash-by-context     {} ; {[workflow-id kind level] slash-id}
+     :next-slash-id        0
      :previous-decisions  {}   ; {wf-id {level {:resolver :is-release}}}
      :challengers         {}   ; {wf-id {level challenger-addr}} — for Phase L Bounties
      :bond-balances       {}   ; {workflow-id {addr amount}}
@@ -298,6 +301,69 @@
 ;; ---------------------------------------------------------------------------
 ;; Result constructors
 ;; ---------------------------------------------------------------------------
+
+(def ^:const max-supported-id
+  "Largest unsigned integer representable by Solidity uint256."
+  (dec (reduce *' 1N (repeat 256 2N))))
+
+(defn valid-entity-id?
+  "True for canonical protocol entity IDs: non-negative uint256 integers.
+   Strings, keywords, ratios, and floating-point values are intentionally not
+   accepted at mutation boundaries."
+  [x]
+  (and (integer? x)
+       (not (neg? x))
+       (<= x max-supported-id)))
+
+(defn slash-context-key
+  "Canonical secondary-index key for a slash's semantic context."
+  [workflow-id kind level]
+  [workflow-id kind level])
+
+(defn allocate-slash-id
+  "Allocate the next canonical slash ID without mutating the world.
+   Callers must insert the entity and increment :next-slash-id in the same
+   transition before emitting evidence."
+  [world]
+  (let [slash-id (get world :next-slash-id 0)]
+    (when-not (valid-entity-id? slash-id)
+      (throw (ex-info "Invalid next slash ID" {:next-slash-id slash-id})))
+    slash-id))
+
+(defn insert-slash
+  "Insert a canonical slash entry and update its context index atomically.
+   Rejects identifier reuse, mismatched embedded IDs, and duplicate semantic
+   contexts rather than overwriting existing state."
+  [world {:slash/keys [id workflow-id kind level] :as slash}]
+  (let [context (slash-context-key workflow-id kind level)]
+    (cond
+      (not (valid-entity-id? id))
+      (throw (ex-info "Invalid slash ID" {:slash-id id}))
+
+      (not (valid-entity-id? workflow-id))
+      (throw (ex-info "Invalid slash workflow ID" {:workflow-id workflow-id}))
+
+      (contains? (:pending-fraud-slashes world) id)
+      (throw (ex-info "Slash ID already exists" {:slash-id id}))
+
+      (contains? (:slash-by-context world) context)
+      (throw (ex-info "Slash context already exists" {:context context}))
+
+      :else
+      (-> world
+          (assoc-in [:pending-fraud-slashes id] slash)
+          (assoc-in [:slash-by-context context] id)
+          (assoc :next-slash-id (inc id))))))
+
+(defn slash-for-workflow
+  "Return the canonical slash when `slash-id` exists and belongs to workflow-id.
+   Returns nil for absent or mismatched references; transition functions can
+   convert those states into distinct public errors."
+  [world workflow-id slash-id]
+  (when (and (valid-entity-id? workflow-id)
+             (valid-entity-id? slash-id))
+    (let [slash (get-in world [:pending-fraud-slashes slash-id])]
+      (when (= workflow-id (:slash/workflow-id slash)) slash))))
 
 (defn ok
   "Successful transition result."

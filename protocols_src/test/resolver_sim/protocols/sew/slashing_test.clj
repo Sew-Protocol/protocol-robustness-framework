@@ -11,6 +11,23 @@
             [resolver-sim.protocols.sew.reversal-fixtures :as rev-fx]
             [resolver-sim.time.context :as time-ctx]))
 
+(deftest canonical-slash-registry-uses-entity-local-integer-ids
+  (let [world (t/empty-world 1000)
+        slash-id (t/allocate-slash-id world)
+        slash {:slash/id slash-id
+               :slash/workflow-id 0
+               :slash/kind :reversal
+               :slash/level 0
+               :slash/status :appealable}
+        world' (t/insert-slash world slash)]
+    (is (= 0 slash-id))
+    (is (= slash (get-in world' [:pending-fraud-slashes slash-id])))
+    (is (= slash-id (get-in world' [:slash-by-context [0 :reversal 0]])))
+    (is (= 1 (:next-slash-id world')))
+    (is (= slash (t/slash-for-workflow world' 0 slash-id)))
+    (is (nil? (t/slash-for-workflow world' 1 slash-id)))
+    (is (thrown? Exception (t/insert-slash world' slash)))))
+
 (defn- world-ready-for-fraud-slash-propose
   "Escrow with custom resolver, raised dispute, and executed resolution."
   [world buyer token seller resolver amount snap]
