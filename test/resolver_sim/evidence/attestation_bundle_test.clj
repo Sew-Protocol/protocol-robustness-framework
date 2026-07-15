@@ -227,11 +227,67 @@
                  :sensitivity-report {:sentinel/decision :allowed
                                       :sentinel/report-hash "sha256:r"}
                  :options {:bundle-dir tmp-dir}})]
-    (ab/write-attestation-bundle! bundle {:attestations [a]})
+    (ab/write-attestation-bundle! bundle {:attestations [a]} tmp-dir)
     (let [read-back (ab/read-attestation-bundle tmp-dir)]
       (is (= (:bundle/version bundle) (:bundle/version read-back)))
       (is (= (:bundle/root-hash bundle) (:bundle/root-hash read-back)))
       (io/delete-file (io/file tmp-dir) true))))
+
+(deftest required-signature-profile-rejects-unsigned-attestations
+  (let [a (build-a)
+        bundle (ab/build-attestation-bundle
+                {:attestations [a]
+                 :registries {:attestors registries/attestor-registry
+                              :claim-definitions registries/claim-definition-registry
+                              :hash-intents hc/hash-intents}
+                 :options {:signature? true}})
+        result (ab/verify-attestation-bundle bundle)]
+    (is (false? (:valid? result)))
+    (is (= :invalid (:bundle/status result)))
+    (is (some #(and (= :attestation-signature-valid (:check/id %))
+                    (= :fail (:check/status %)))
+              (:checks result)))))
+
+(deftest bundled-attestor-registry-requires-external-trust-anchor
+  (let [tmp-dir (str (System/getProperty "java.io.tmpdir") "/ab-test-" (java.util.UUID/randomUUID))
+        a (build-a)
+        registry registries/attestor-registry
+        bundle (ab/build-attestation-bundle
+                {:attestations [a]
+                 :registries {:attestors registry
+                              :claim-definitions registries/claim-definition-registry
+                              :hash-intents hc/hash-intents}
+                 :options {:bundle-dir tmp-dir}})
+        declared (get-in bundle [:bundle/registries :attestors :registry/hash])]
+    (ab/write-attestation-bundle! bundle {:attestations [a]
+                                          :attestors registry
+                                          :claim-definitions registries/claim-definition-registry
+                                          :hash-intents hc/hash-intents} tmp-dir)
+    (let [read-back (ab/read-attestation-bundle tmp-dir)
+          untrusted (ab/verify-attestation-bundle read-back {:trusted-attestor-registry-hashes #{"sha256:attacker"}})
+          trusted (ab/verify-attestation-bundle read-back {:trusted-attestor-registry-hashes #{(str "sha256:" declared)}})]
+      (is (false? (:valid? untrusted)))
+      (is (some #(= :untrusted-registry (:reason %)) (:checks untrusted)))
+      (is (some #(= :pass (:check/status %))
+                (filter #(= :attestor-registry-trusted (:check/id %)) (:checks trusted))))
+    (io/delete-file (io/file tmp-dir) true))))
+
+(deftest write-requires-explicit-trusted-root-and-rejects-escaping-paths
+  (let [tmp-dir (str (System/getProperty "java.io.tmpdir") "/ab-test-" (java.util.UUID/randomUUID))
+        a (build-a)
+        bundle (ab/build-attestation-bundle
+                {:attestations [a]
+                 :registries {:attestors registries/attestor-registry
+                              :claim-definitions registries/claim-definition-registry
+                              :hash-intents hc/hash-intents}
+                 :options {:bundle-dir tmp-dir}})
+        escaping (assoc-in bundle [:bundle/registries :attestors :registry/path] "/tmp/attestation-bundle-escape.edn")]
+    (is (thrown? clojure.lang.ExceptionInfo
+                 (ab/write-attestation-bundle! bundle {:attestations [a]})))
+    (is (thrown? clojure.lang.ExceptionInfo
+                 (ab/write-attestation-bundle! escaping {:attestations [a]} tmp-dir)))
+    (is (not (.exists (io/file "/tmp/attestation-bundle-escape.edn"))))
+    (io/delete-file (io/file tmp-dir) true)))
 
 (deftest read-throws-on-missing-manifest
   (let [tmp-dir (str (System/getProperty "java.io.tmpdir") "/ab-test-"

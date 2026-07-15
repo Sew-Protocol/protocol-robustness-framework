@@ -1,6 +1,7 @@
 (ns resolver-sim.benchmark.review-formatter-test
   (:require [clojure.test :refer [deftest is testing]]
-            [resolver-sim.benchmark.review-formatter :as formatter]))
+            [resolver-sim.benchmark.review-formatter :as formatter]
+            [resolver-sim.benchmark.reversal-audit :as reversal-audit]))
 
 (def sample-bundle
   {:benchmark {:benchmark/id :benchmark/example-v1
@@ -60,7 +61,39 @@
       (testing "all reviewer files are emitted"
         (is (.exists (java.io.File. (:summary paths))))
         (is (.exists (java.io.File. (:scenarios paths))))
-        (is (.exists (java.io.File. (:claims paths)))))
+        (is (.exists (java.io.File. (:claims paths))))
+        (is (.exists (java.io.File. (:reversals paths)))))
       (finally
         (doseq [file (reverse (file-seq dir))]
           (.delete file))))))
+
+(deftest projects-active-and-cleaned-up-reversal-slashes
+  (let [world {:previous-decisions {0 {0 {:resolver "0xl0" :is-release true}
+                                      1 {:resolver "0xl1" :is-release false}}}
+               :dispute-levels {0 1}
+               :pending-fraud-slashes {"0-reversal-0"
+                                       {:reason :reversal
+                                        :workflow-id 0
+                                        :level 0
+                                        :resolver "0xl0"
+                                        :status :appealed
+                                        :amount 2500
+                                        :appeal-deadline 1200
+                                        :appeal-bond-held 100}}
+               :reversal-slash-history {"1-reversal-0"
+                                        {:reason :reversal
+                                         :workflow-id 1
+                                         :level 0
+                                         :resolver "0xl0"
+                                         :status :expired-cleaned-up
+                                         :amount 2500
+                                         :cleanup-at 1300
+                                         :cleanup-reason :appeal-window-expired}}}
+        entries (reversal-audit/reversal-entries world)
+        markdown (reversal-audit/render-markdown world)]
+    (is (= 2 (count entries)))
+    (is (= :new-evidence-pending (:track (first entries))))
+    (is (= :expired-cleaned-up (:status (second entries))))
+    (is (:archived? (second entries)))
+    (is (.contains markdown "Reversal Slash Audit"))
+    (is (.contains markdown "expired-cleaned-up"))))

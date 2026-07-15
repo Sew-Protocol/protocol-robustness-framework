@@ -50,6 +50,6 @@
           {:seq 7 :time 1150 :agent "l1resolver" :action "execute_resolution" :params {:workflow-id 0 :is-release false :resolution-hash "0xl1refund"}}
           {:seq 8 :time 1200 :agent "l2resolver" :action "execute_resolution" :params {:workflow-id 0 :is-release true :resolution-hash "0xl2release"}}
           ;; Unrelated resolver attempts to appeal L1's slash
-          {:seq 9 :time 1250 :agent "unrelated-resolver" :action "appeal_slash" :params {:workflow-id 0 :slash-id "0-reversal-1"}}
+          {:seq 9 :time 1250 :agent "unrelated-resolver" :action "appeal_slash" :params {:workflow-id 0 :slash-id {:slash-ref {:workflow-id 0 :kind :reversal :level 1}}}}
           ;; L1's slash should be unchanged — no appeal opened
           {:seq 10 :time 2000 :agent "keeper" :action "automate_timed_actions" :params {:workflow-id 0}}]}

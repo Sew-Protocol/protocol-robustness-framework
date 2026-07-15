@@ -1185,17 +1185,17 @@
                    {:registry registry-name :id id
                     :reason :unknown-algorithm :algorithm (:algorithm verification)
                     :known-algorithms (vec (sort known-key-algorithms))}))
-      (not (:key-id verification))
+      (not (or (:key-id verification) (:active-key-id verification)))
       (conj (error :entry/missing-key-id
                    {:registry registry-name :id id}))
-      (and (:key-id verification)
-           (not (and (string? (:key-id verification))
-                     (seq (:key-id verification)))))
+      (and (or (:key-id verification) (:active-key-id verification))
+           (not (and (string? (or (:key-id verification) (:active-key-id verification)))
+                     (seq (or (:key-id verification) (:active-key-id verification))))))
       (conj (error :entry/malformed-public-key
                    {:registry registry-name :id id
                     :reason :key-id-not-non-empty-string
                     :key-id (:key-id verification)}))
-      (not (:public-key verification))
+      (and (not (:public-key verification)) (not (:active-key-id verification)))
       (conj (error :entry/missing-public-key
                    {:registry registry-name :id id}))
       (and (:public-key verification)
@@ -1326,6 +1326,42 @@
                                :sources srcs})])))))
             by-kid)))
 
+(def ^:private ed25519-public-key-hex #"[0-9a-f]{64}")
+(def ^:private key-statuses #{:active :retired :revoked})
+
+(defn- valid-instant? [value]
+  (try (java.time.Instant/parse value) true (catch Exception _ false)))
+
+(defn- validate-normalized-attestor-keys
+  "Validate the WP2 :keys schema when a public-key attestor opts into it."
+  [registry-name entry]
+  (let [id (:id entry) keys (:keys entry) verification (:verification entry)]
+    (cond
+      (not= :public-key (:type verification)) []
+      (and (contains? entry :keys) (not (vector? keys)))
+      [(error :entry/invalid-attestor-keys {:registry registry-name :id id :reason :not-a-vector})]
+      (not (vector? keys)) []
+      :else
+      (let [key-errors (mapcat (fn [key-entry idx]
+                                 (let [key-id (:key-id key-entry) status (:status key-entry)
+                                       public-key (:public-key key-entry) from (:valid-from key-entry)
+                                       until (:valid-until key-entry)]
+                                   (cond-> []
+                                     (not (and (string? key-id) (seq key-id))) (conj (error :entry/invalid-attestor-key {:registry registry-name :id id :index idx :reason :invalid-key-id}))
+                                     (not= :ed25519 (:algorithm key-entry)) (conj (error :entry/invalid-attestor-key {:registry registry-name :id id :index idx :reason :unsupported-algorithm}))
+                                     (not= :hex (:public-key-encoding key-entry)) (conj (error :entry/invalid-attestor-key {:registry registry-name :id id :index idx :reason :unsupported-key-encoding}))
+                                     (not (and (string? public-key) (re-matches ed25519-public-key-hex public-key) (not= public-key (apply str (repeat 64 "0"))))) (conj (error :entry/invalid-attestor-key {:registry registry-name :id id :index idx :reason :invalid-public-key}))
+                                     (not (contains? key-statuses status)) (conj (error :entry/invalid-attestor-key {:registry registry-name :id id :index idx :reason :invalid-key-status}))
+                                     (not (and (string? from) (valid-instant? from))) (conj (error :entry/invalid-attestor-key {:registry registry-name :id id :index idx :reason :invalid-valid-from}))
+                                     (and until (not (and (string? until) (valid-instant? until)))) (conj (error :entry/invalid-attestor-key {:registry registry-name :id id :index idx :reason :invalid-valid-until}))
+                                     (and (= :revoked status) (not (and (string? (:revoked-at key-entry)) (valid-instant? (:revoked-at key-entry))))) (conj (error :entry/invalid-attestor-key {:registry registry-name :id id :index idx :reason :missing-revoked-at}))
+                                     (and (= :revoked status) (nil? (:revocation-reason key-entry))) (conj (error :entry/invalid-attestor-key {:registry registry-name :id id :index idx :reason :missing-revocation-reason}))))) keys (range))
+            ids (map :key-id keys) active-id (:active-key-id verification)
+            registry-errors (cond-> []
+                              (not= (count ids) (count (set ids))) (conj (error :entry/duplicate-attestor-key-id {:registry registry-name :id id}))
+                              (not= 1 (count (filter #(= active-id (:key-id %)) keys))) (conj (error :entry/invalid-active-key-id {:registry registry-name :id id :key-id active-id})))]
+        (vec (concat key-errors registry-errors))))))
+
 (defn validate-attestor-registry-entries
   "Return attestor-registry-specific validation errors for entries.
    ATTESTATOR_REGISTRY_SPEC_V1 §9 checks:
@@ -1348,7 +1384,8 @@
                                 :status s
                                 :known-statuses (vec (sort known-attestor-statuses))})])))
                  (validate-attestor-delegates registry-name id (:delegates entry))
-                 (validate-attestor-key-history registry-name id (:key-history entry)))))
+                 (validate-attestor-key-history registry-name id (:key-history entry))
+                 (validate-normalized-attestor-keys registry-name entry))))
             entries)
     (find-duplicate-active-key-ids entries))))
 

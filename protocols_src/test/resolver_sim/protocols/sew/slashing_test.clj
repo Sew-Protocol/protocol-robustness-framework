@@ -8,8 +8,28 @@
             [resolver-sim.protocols.sew.registry   :as reg]
             [resolver-sim.protocols.sew.economics  :as sew-econ]
             [resolver-sim.protocols.sew.evidence.slashing :as slashing-ev]
+            [resolver-sim.protocols.sew.invariants :as inv]
             [resolver-sim.protocols.sew.reversal-fixtures :as rev-fx]
             [resolver-sim.time.context :as time-ctx]))
+
+(defn- slash-id-for
+  [world workflow-id kind level]
+  (get-in world [:slash-by-context (t/slash-context-key workflow-id kind level)]))
+
+(defn- slash-for
+  [world workflow-id kind level]
+  (when-let [slash-id (slash-id-for world workflow-id kind level)]
+    (get-in world [:pending-fraud-slashes slash-id])))
+
+(defn- insert-test-slash
+  [world workflow-id kind level entry]
+  (let [slash-id (t/allocate-slash-id world)]
+    (t/insert-slash world
+                    (merge entry
+                           {:slash/id slash-id
+                            :slash/workflow-id workflow-id
+                            :slash/kind kind
+                            :slash/level level}))))
 
 (deftest canonical-slash-registry-uses-entity-local-integer-ids
   (let [world (t/empty-world 1000)
@@ -19,14 +39,69 @@
                :slash/kind :reversal
                :slash/level 0
                :slash/status :appealable}
-        world' (t/insert-slash world slash)]
+        world' (t/insert-slash world slash)
+        world'' (t/register-slash-alias world' "0-reversal-0" slash-id)]
     (is (= 0 slash-id))
     (is (= slash (get-in world' [:pending-fraud-slashes slash-id])))
     (is (= slash-id (get-in world' [:slash-by-context [0 :reversal 0]])))
     (is (= 1 (:next-slash-id world')))
     (is (= slash (t/slash-for-workflow world' 0 slash-id)))
     (is (nil? (t/slash-for-workflow world' 1 slash-id)))
+    (is (= slash-id (t/resolve-slash-id-alias world'' "0-reversal-0")))
+    (is (= slash-id (t/resolve-slash-id-alias world'' slash-id)))
+    (is (nil? (t/resolve-slash-id-alias world'' "unknown-slash")))
+    (is (= [slash] (t/slash-registry->canonical world'')))
     (is (thrown? Exception (t/insert-slash world' slash)))))
+
+(deftest canonical-slash-projection-rejects-legacy-or-inconsistent-registry-keys
+  (testing "stringified numeric keys are not silently coerced for hashing"
+    (is (thrown? Exception
+                 (t/slash-registry->canonical
+                  {:pending-fraud-slashes {"0" {:slash/id 0
+                                                 :slash/workflow-id 0}}}))))
+  (testing "the map key and embedded ID must be identical"
+    (is (thrown? Exception
+                 (t/slash-registry->canonical
+                  {:pending-fraud-slashes {0 {:slash/id 1
+                                               :slash/workflow-id 0}}})))))
+
+(deftest scenario-slash-references-resolve-at-the-adapter-boundary
+  (let [slash {:slash/id 7 :slash/workflow-id 0
+               :slash/kind :reversal :slash/level 1 :slash/status :pending}
+        world (-> (t/empty-world 1000)
+                  (t/insert-slash slash)
+                  (assoc-in [:scenario-bindings :manual-slash] 7))
+        resolve-event #'resolver-sim.protocols.sew/resolve-scenario-bindings]
+    (is (= 7 (:slash-id
+              (resolve-event world {:slash-id {:from-binding :manual-slash}}))))
+    (is (= 7 (:slash-id
+              (resolve-event world {:slash-id {:slash-ref {:workflow-id 0
+                                                             :kind :reversal
+                                                             :level 1}}}))))
+    (is (thrown? clojure.lang.ExceptionInfo
+                 (resolve-event world {:slash-id {:from-binding :unknown}})))
+    (is (thrown? clojure.lang.ExceptionInfo
+                 (resolve-event world {:slash-id {:slash-ref {:workflow-id 0
+                                                               :kind :reversal
+                                                               :level 2}}})))))
+
+(deftest canonical-slash-registry-invariants-detect-identity-corruption
+  (let [slash {:slash/id 0 :slash/workflow-id 0 :slash/kind :fraud
+               :slash/level 0 :slash/status :pending}
+        world (-> (t/empty-world 1000)
+                  (assoc-in [:escrow-transfers 0] {})
+                  (t/insert-slash slash))]
+    (is (:holds? (inv/canonical-slash-registry-consistent? world)))
+    (is (:holds? (inv/slash-context-index-consistent? world)))
+    (is (false? (:holds?
+                 (inv/canonical-slash-registry-consistent?
+                  (assoc-in world [:pending-fraud-slashes 0 :slash/id] 1)))))
+    (is (false? (:holds?
+                 (inv/canonical-slash-registry-consistent?
+                  (assoc-in world [:pending-fraud-slashes 0 :slash/workflow-id] 1)))))
+    (is (false? (:holds?
+                 (inv/slash-context-index-consistent?
+                  (assoc-in world [:slash-by-context [0 :fraud 0]] 1)))))))
 
 (defn- world-ready-for-fraud-slash-propose
   "Escrow with custom resolver, raised dispute, and executed resolution."
@@ -106,18 +181,16 @@
 (deftest resolve-appeal-supports-custom-slash-id
   (let [resolver-addr "0xRes"
         gov "0xGov"
-        ;; Any custom slash-id is accepted; level-scoped ids look like "0-reversal-0"
-        slash-id "0-reversal-0"
-        world (-> (t/empty-world 1000)
-                  (assoc-in [:pending-fraud-slashes slash-id]
-                            {:resolver resolver-addr
-                             :amount 100
-                             :token "USDC"
-                             :status :appealed
-                             :proposed-at 1000
-                             :appeal-deadline 1100
-                             :appeal-bond-held 0
-                             :contest-deadline 0}))
+        world (insert-test-slash (t/empty-world 1000) 0 :reversal 0
+                                 {:resolver resolver-addr
+                                  :amount 100
+                                  :token "USDC"
+                                  :status :appealed
+                                  :proposed-at 1000
+                                  :appeal-deadline 1100
+                                  :appeal-bond-held 0
+                                  :contest-deadline 0})
+        slash-id (slash-id-for world 0 :reversal 0)
         r (res/resolve-appeal world 0 gov true slash-id
                               :authorization-provenance {:authorization/type :governance
                                                          :authorization/basis :test})]
@@ -204,8 +277,7 @@
         r-force-non-gov (sew/apply-action ctx world (assoc force-ev :agent "user"))
         r-force-gov (sew/apply-action ctx world (assoc force-ev :agent "gov"))
         propose-entry (get-in (:world r-propose-gov) [:pending-fraud-slashes workflow-id])
-        force-slash-id (str force-workflow-id "-force-reversal-0")
-        force-entry (get-in (:world r-force-gov) [:pending-fraud-slashes force-slash-id])]
+        force-entry (slash-for (:world r-force-gov) force-workflow-id :force-reversal 0)]
     (is (false? (:ok r-resolve-non-gov)))
     (is (= :not-governance (:error r-resolve-non-gov)))
     (is (false? (:ok r-force-non-gov)))
@@ -540,8 +612,8 @@
 (deftest reversal-slash-basis-is-stake
   (testing "Reversal slash amount is based on resolver stake, not escrow principal"
     (let [{:keys [world workflow-id]} (rev-fx/build-reversal-world)
-          slash-id (str workflow-id "-reversal-0")
-          slash (get-in world [:pending-fraud-slashes slash-id])
+          slash-id (slash-id-for world workflow-id :reversal 0)
+          slash (slash-for world workflow-id :reversal 0)
           stake (reg/get-stake world "0xL0Res")]
       (is (some? slash) "reversal slash should exist")
       (is (= :stake (:basis-kind slash)))
@@ -554,8 +626,7 @@
 (deftest reversal-slash-uses-level-scoped-id
   (testing "handle-reversal-slashing generates \"<wf>-reversal-<level-1>\" id"
     (let [{:keys [world workflow-id]} (rev-fx/build-reversal-world)
-          expected-slash-id (str workflow-id "-reversal-0")
-          slash (get-in world [:pending-fraud-slashes expected-slash-id])]
+          slash (slash-for world workflow-id :reversal 0)]
       (is (some? slash) "reversal slash entry should exist under level-scoped id")
       (is (= :executed (:status slash)) "Track 1 (same-evidence) slash is immediately executed")
       (is (= :reversal (:reason slash)))
@@ -572,19 +643,18 @@
           world0  (-> (t/empty-world 1000)
                       (reg/register-stake l0-res 5000))
           {:keys [world workflow-id]} (lc/create-escrow world0 buyer "USDC" seller 1000 {} snap)
-          slash-id (str workflow-id "-reversal-0")
-          ;; Manually install a :pending reversal slash (mimicking Track 2)
-          world1  (assoc-in world [:pending-fraud-slashes slash-id]
-                            {:resolver         l0-res
-                             :amount           500
-                             :token            "USDC"
-                             :reason           :reversal
-                             :status           :pending
-                             :proposed-at      1000
-                             :appeal-deadline  1200
-                             :appeal-bond-held 0
-                             :contest-deadline 0
-                             :workflow-id      workflow-id})
+          ;; Manually install a :pending reversal slash (mimicking Track 2).
+          world1  (insert-test-slash world workflow-id :reversal 0
+                                     {:resolver         l0-res
+                                      :amount           500
+                                      :token            "USDC"
+                                      :reason           :reversal
+                                      :status           :pending
+                                      :proposed-at      1000
+                                      :appeal-deadline  1200
+                                      :appeal-bond-held 0
+                                      :contest-deadline 0})
+          slash-id (slash-id-for world1 workflow-id :reversal 0)
           ;; Resolver appeals the reversal slash
           world2  (:world (res/appeal-slash world1 workflow-id l0-res slash-id))
           ;; Governance upholds the appeal → slash :reversed
@@ -603,20 +673,19 @@
 (deftest multi-level-reversal-no-slash-id-collision
   (testing "Two reversals on the same workflow use distinct level-scoped ids"
     ;; This is a regression test for the slash-id collision bug (Bug 2).
-    ;; We construct two slash entries with the ids that handle-reversal-slashing
-    ;; would generate: \"0-reversal-0\" (L0→L1 reversal) and \"0-reversal-1\" (L1→L2 reversal).
+    ;; Distinct semantic contexts (L0→L1 and L1→L2) must not collide.
     (let [wf-id    0
-          slash-l0 (str wf-id "-reversal-0")
-          slash-l1 (str wf-id "-reversal-1")
           world    (-> (t/empty-world 1000)
-                       (assoc-in [:pending-fraud-slashes slash-l0]
-                                 {:resolver "0xL0Res" :amount 100 :status :executed
-                                  :reason :reversal :proposed-at 1000 :appeal-deadline 0
-                                  :appeal-bond-held 0 :contest-deadline 0})
-                       (assoc-in [:pending-fraud-slashes slash-l1]
-                                 {:resolver "0xL1Res" :amount 200 :status :executed
-                                  :reason :reversal :proposed-at 1050 :appeal-deadline 0
-                                  :appeal-bond-held 0 :contest-deadline 0}))]
+                       (insert-test-slash wf-id :reversal 0
+                                          {:resolver "0xL0Res" :amount 100 :status :executed
+                                           :reason :reversal :proposed-at 1000 :appeal-deadline 0
+                                           :appeal-bond-held 0 :contest-deadline 0})
+                       (insert-test-slash wf-id :reversal 1
+                                          {:resolver "0xL1Res" :amount 200 :status :executed
+                                           :reason :reversal :proposed-at 1050 :appeal-deadline 0
+                                           :appeal-bond-held 0 :contest-deadline 0}))
+          slash-l0 (slash-id-for world wf-id :reversal 0)
+          slash-l1 (slash-id-for world wf-id :reversal 1)]
       (is (not= slash-l0 slash-l1) "Level-scoped ids must differ")
       (is (= "0xL0Res" (get-in world [:pending-fraud-slashes slash-l0 :resolver])))
       (is (= "0xL1Res" (get-in world [:pending-fraud-slashes slash-l1 :resolver])))
@@ -631,20 +700,19 @@
     (let [resolver "0xRes"
           gov      "0xGov"
           wf-id    42
-          slash-id (str wf-id "-reversal-0")
           world    (-> (t/empty-world 1000)
                        (reg/register-stake resolver 5000)
-                       (assoc-in [:pending-fraud-slashes slash-id]
-                                 {:resolver         resolver
-                                  :amount           300
-                                  :token            "USDC"
-                                  :reason           :reversal
-                                  :status           :appealed
-                                  :proposed-at      1000
-                                  :appeal-deadline  1200
-                                  :appeal-bond-held 0
-                                  :contest-deadline 0
-                                  :workflow-id      wf-id}))
+                       (insert-test-slash wf-id :reversal 0
+                                          {:resolver         resolver
+                                           :amount           300
+                                           :token            "USDC"
+                                           :reason           :reversal
+                                           :status           :appealed
+                                           :proposed-at      1000
+                                           :appeal-deadline  1200
+                                           :appeal-bond-held 0
+                                           :contest-deadline 0}))
+          slash-id (slash-id-for world wf-id :reversal 0)
           r     (res/resolve-appeal world wf-id gov true slash-id
                                     :authorization-provenance {:authorization/type :governance
                                                                :authorization/basis :test})
@@ -657,7 +725,7 @@
 (deftest appeal-executed-reversal-slash-rejected
   (testing "Track 1 :executed reversal slash cannot be appealed"
     (let [{:keys [world workflow-id]} (rev-fx/build-reversal-world)
-          slash-id (str workflow-id "-reversal-0")
+          slash-id (slash-id-for world workflow-id :reversal 0)
           r (res/appeal-slash world workflow-id "0xL0Res" slash-id)]
       (is (false? (:ok r)))
       (is (= :slash-not-pending (:error r))))))
@@ -667,8 +735,8 @@
     (let [{:keys [world workflow-id steps]}
           (rev-fx/build-reversal-world {:snapshot {:reversal-slash-bps 0}})
           after-l0 (:after-l0 steps)
-          slash-id (str workflow-id "-reversal-0")]
-      (is (nil? (get-in world [:pending-fraud-slashes slash-id]))
+          slash-id (slash-id-for world workflow-id :reversal 0)]
+      (is (nil? slash-id)
           "no slash entry created")
       (is (= (reg/get-stake after-l0 "0xL0Res")
              (reg/get-stake world "0xL0Res"))
@@ -709,8 +777,8 @@
           esc-fn (fn [_ _ _ _] {:ok true :new-resolver r1})
           after-escalation (:world (res/challenge-resolution world-slashed workflow-id buyer esc-fn))
           after-l1 (:world (res/execute-resolution after-escalation workflow-id r1 false "0xhash2" nil))
-          slash-id (str workflow-id "-reversal-0")
-          slash (get-in after-l1 [:pending-fraud-slashes slash-id])]
+          slash-id (slash-id-for after-l1 workflow-id :reversal 0)
+          slash (slash-for after-l1 workflow-id :reversal 0)]
       (is (some? slash) "reversal slash entry exists")
       ;; basis-amount reads current stake at reversal time, not original stake at decision
       (is (= 5000 (:basis-amount slash)) "basis-amount is remaining stake after fraud slash")
@@ -722,8 +790,8 @@
   (testing "handle-reversal-slashing handles nil challenger gracefully"
     (let [{:keys [world workflow-id]} (rev-fx/build-reversal-world)
           world-no-challenger (update world :challengers dissoc workflow-id)
-          slash-id (str workflow-id "-reversal-0")
-          slash (get-in world-no-challenger [:pending-fraud-slashes slash-id])]
+          slash-id (slash-id-for world-no-challenger workflow-id :reversal 0)
+          slash (slash-for world-no-challenger workflow-id :reversal 0)]
       (is (some? slash) "reversal slash entry exists despite nil challenger")
       (is (= :executed (:status slash)) "slash executed normally")
       (is (= "0xL0Res" (:resolver slash)))
@@ -761,17 +829,15 @@
 (deftest resolve-appeal-on-executed-slash-returns-cannot-reverse-executed-slash
   (let [resolver-addr "0xRes"
         gov "0xGov"
-        world (-> (t/empty-world 1000)
-                  (assoc-in [:pending-fraud-slashes "s1"]
-                            {:resolver resolver-addr
-                             :amount 100
-                             :reason :fraud
-                             :status :executed
-                             :proposed-at 1000
-                             :appeal-deadline 0
-                             :appeal-bond-held 0
-                             :contest-deadline 0}))
-        r (res/resolve-appeal world 0 gov true "s1"
+        slash-id 1
+        world (t/insert-slash
+               (t/empty-world 1000)
+               {:slash/id slash-id :slash/workflow-id 0
+                :slash/kind :fraud :slash/level 0
+                :resolver resolver-addr :amount 100 :reason :fraud
+                :status :executed :proposed-at 1000 :appeal-deadline 0
+                :appeal-bond-held 0 :contest-deadline 0 :workflow-id 0})
+        r (res/resolve-appeal world 0 gov true slash-id
                               :authorization-provenance {:authorization/type :governance
                                                          :authorization/basis :test})]
     (is (false? (:ok r)))
@@ -819,7 +885,7 @@
           esc-fn (fn [_ _ _ _] {:ok true :new-resolver "0xL1"})
           after-esc (:world (res/escalate-dispute after-evidence workflow-id buyer esc-fn))
           after-l1 (:world (res/execute-resolution after-esc workflow-id "0xL1" false "0xl1" nil))
-          slash-id (str workflow-id "-reversal-0")
+          slash-id (slash-id-for after-l1 workflow-id :reversal 0)
           world-appealed (:world (res/appeal-slash after-l1 workflow-id res slash-id))
           world-rejected (:world (res/resolve-appeal world-appealed workflow-id gov false slash-id
                                                      :authorization-provenance {:authorization/type :governance
@@ -864,8 +930,8 @@
           esc-fn (fn [_ _ _ _] {:ok true :new-resolver l1})
           after-esc (:world (res/escalate-dispute after-l0 workflow-id buyer esc-fn))
           w-pending (res/force-reversal-slash after-esc workflow-id :track :pending)
-          slash-id (str workflow-id "-force-reversal-0")
-          slash-entry (get-in w-pending [:pending-fraud-slashes slash-id])
+          slash-id (slash-id-for w-pending workflow-id :force-reversal 0)
+          slash-entry (slash-for w-pending workflow-id :force-reversal 0)
           deadline (:appeal-deadline slash-entry)
           w-late (time-ctx/advance-time w-pending {:to (inc deadline)})
           r-exec (res/execute-fraud-slash w-late workflow-id slash-id)]
@@ -1024,8 +1090,8 @@
           esc-fn (fn [_ _ _ _] {:ok true :new-resolver l1})
           after-esc (:world (res/escalate-dispute after-l0 workflow-id buyer esc-fn))
           after-l1 (:world (res/execute-resolution after-esc workflow-id l1 false "0xl1" nil))
-          slash-id (str workflow-id "-reversal-0")
-          slash (get-in after-l1 [:pending-fraud-slashes slash-id])]
+          slash-id (slash-id-for after-l1 workflow-id :reversal 0)
+          slash (slash-for after-l1 workflow-id :reversal 0)]
       (is (nil? slash) "no slash entry created when stake is zero")
       (is (= 0 (reg/get-stake after-l1 res)) "stake unchanged at zero"))))
 
@@ -1046,8 +1112,8 @@
           esc-fn (fn [_ _ _ _] {:ok true :new-resolver l1})
           after-esc (:world (res/escalate-dispute after-l0 workflow-id buyer esc-fn))
           after-l1 (:world (res/execute-resolution after-esc workflow-id l1 false "0xl1" nil))
-          slash-id (str workflow-id "-reversal-0")
-          slash (get-in after-l1 [:pending-fraud-slashes slash-id])]
+          slash-id (slash-id-for after-l1 workflow-id :reversal 0)
+          slash (slash-for after-l1 workflow-id :reversal 0)]
       (is (some? slash) "slash entry created")
       (is (= 500 (:amount slash)) "slash amount equals full stake at 10000 bps")
       (is (= 0 (reg/get-stake after-l1 res)) "stake consumed to zero")
@@ -1055,16 +1121,19 @@
 
 (deftest reversal-slash-credit-rejects-slash-total-underflow
   (let [workflow-id 42
-        slash-id "42-reversal-0"
-        world {:dispute-levels {workflow-id 2}
-               :escrow-transfers {workflow-id {:token :USDC}}
-               :previous-decisions {workflow-id {0 {:is-release true}
-                                                  1 {:is-release false}}}
-               :pending-fraud-slashes {slash-id {:status :executed
-                                                 :reason :reversal
-                                                 :resolver "0xRes"
-                                                 :amount 10}}
-               :resolver-slash-total {"0xRes" 5}}
+        world (-> {:dispute-levels {workflow-id 2}
+                    :escrow-transfers {workflow-id {:token :USDC}}
+                    :previous-decisions {workflow-id {0 {:is-release true}
+                                                       1 {:is-release false}}}
+                    :pending-fraud-slashes {}
+                    :slash-by-context {}
+                    :next-slash-id 0
+                    :resolver-slash-total {"0xRes" 5}}
+                   (insert-test-slash workflow-id :reversal 0
+                                      {:status :executed
+                                       :reason :reversal
+                                       :resolver "0xRes"
+                                       :amount 10}))
         error (try
                 (#'res/reverse-reversal-slash-on-vindication world workflow-id true)
                 nil
@@ -1131,7 +1200,7 @@
   (testing "force-reversal-slash produces an executed slash entry"
     (let [{:keys [world workflow-id]} (rev-fx/build-reversal-world)
           w (res/force-reversal-slash world workflow-id :track :immediate)
-          slash-entry (get-in w [:pending-fraud-slashes (str workflow-id "-force-reversal-0")])]
+          slash-entry (slash-for w workflow-id :force-reversal 0)]
       (is (some? slash-entry) "force-reversal slash entry should exist")
       (is (= :executed (:status slash-entry)) "immediate track should be executed")
       (is (pos? (:amount slash-entry)) "slash amount should be positive")
@@ -1141,7 +1210,7 @@
   (testing "force-reversal-slash produces a pending slash entry"
     (let [{:keys [world workflow-id]} (rev-fx/build-reversal-world)
           w (res/force-reversal-slash world workflow-id :track :pending)
-          slash-entry (get-in w [:pending-fraud-slashes (str workflow-id "-force-reversal-0")])]
+          slash-entry (slash-for w workflow-id :force-reversal 0)]
       (is (some? slash-entry) "force-reversal slash entry should exist")
       (is (= :pending (:status slash-entry)) "pending track should be pending")
       (is (pos? (:appeal-deadline slash-entry)) "pending track should have appeal deadline"))))
@@ -1152,9 +1221,9 @@
                                           :challenge-window-duration 120 :max-dispute-level 2
                                           :dispute-resolver "0xL0Res"})
           w0 (rev-fx/build-reversal-world {:snapshot snap})
-          [wf w] [(:workflow-id w0) (:world w0)]
-          w (res/force-reversal-slash w wf :slash-bps 5000 :track :immediate)
-          slash-entry (get-in w [:pending-fraud-slashes (str wf "-force-reversal-0")])]
+          [wf world] [(:workflow-id w0) (:world w0)]
+          w (res/force-reversal-slash world wf :slash-bps 5000 :track :immediate)
+          slash-entry (slash-for w wf :force-reversal 0)]
       (is (some? slash-entry) "custom bps override should produce a slash entry")
       (is (= :executed (:status slash-entry)) "immediate track should be executed")
       (is (pos? (:amount slash-entry)) "slash amount should be positive"))))
@@ -1169,7 +1238,8 @@
           (world-ready-for-fraud-slash-propose world0 "0xBuyer" "0xT" "0xSeller" resolver-addr 1000 snap)
           r-prop (res/propose-fraud-slash world workflow-id gov resolver-addr 300)
           world-prop (:world r-prop)
-          r-exec (res/execute-fraud-slash world-prop workflow-id workflow-id)
+          world-after-deadline (time-ctx/advance-time world-prop {:to 1001})
+          r-exec (res/execute-fraud-slash world-after-deadline workflow-id workflow-id)
           world-exec (:world r-exec)]
       (is (= :pending (get-in world-prop [:pending-fraud-slashes workflow-id :status])))
       (is (true? (:ok r-exec)))
@@ -1301,6 +1371,9 @@
           {:keys [world workflow-id]}
           (world-ready-for-fraud-slash-propose world0 "0xBuyer" "0xT" "0xSeller" resolver-addr 2000 snap)
           world1 (-> (res/propose-fraud-slash world workflow-id gov resolver-addr 500) :world)
+          ;; A zero-duration appeal window still reserves the proposal timestamp
+          ;; for appeal; execution is permitted strictly after the deadline.
+          world1 (time-ctx/advance-time world1 {:to 1001})
           r-exec (res/execute-fraud-slash world1 workflow-id workflow-id)
           w-exec (:world r-exec)]
       (is (true? (:ok r-exec)) "execute-fraud-slash succeeds")

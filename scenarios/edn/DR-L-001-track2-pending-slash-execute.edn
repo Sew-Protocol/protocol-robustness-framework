@@ -52,4 +52,4 @@
            :params {:workflow-id 0 :is-release false :resolution-hash "0xreversal"}}
           ;; After appeal deadline (1260), execute the pending reversal slash
           {:seq 8 :time 1400 :agent "keeper" :action "execute_fraud_slash"
-           :params {:workflow-id 0 :slash-id "0-reversal-0"}}]}
+           :params {:workflow-id 0 :slash-id {:slash-ref {:workflow-id 0 :kind :reversal :level 0}}}}]}

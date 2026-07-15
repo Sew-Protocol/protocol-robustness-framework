@@ -209,9 +209,15 @@
     (or (:workflow-id p) (compat/wf-id event))))
 
 (defn- event-slash-id
-  [event]
-  (let [p (:params event)]
-    (or (:slash-id p) (:workflow-id p) (compat/wf-id event))))
+  "Normalize a scenario slash reference before dispatch. Canonical integer IDs
+   and registered legacy aliases resolve here; transition functions receive the
+   resolved value and never probe alternate string formats. During migration an
+   unresolved legacy reference is returned unchanged so existing legacy storage
+   can be handled until Phase 3 converts all creation paths."
+  [world event]
+  (let [p   (:params event)
+        raw (or (:slash-id p) (:workflow-id p) (compat/wf-id event))]
+    (or (t/resolve-slash-id-alias world raw) raw)))
 
 (defn- event-slash-bps
   [event]
@@ -275,7 +281,7 @@
   "Build a stable dedupe key for replay-sensitive events."
   [world event]
   (let [wf  (event-workflow-id event)
-        sid (event-slash-id event)
+        sid (event-slash-id world event)
         eid (event-id event)
         action (compat/canonical-action event)
         explicit-hop (compat/hop-id event)
@@ -1187,7 +1193,7 @@
   (run-governance-action context world event
     (fn [addr _agent _provenance]
       (let [workflow-id (event-workflow-id event)
-            slash-id (event-slash-id event)
+            slash-id (event-slash-id world event)
             slash-id' (if (get-in world [:pending-fraud-slashes slash-id])
                         slash-id
                         (or (some #(when (get-in world [:pending-fraud-slashes %]) %)
@@ -1217,7 +1223,7 @@
                             (event-workflow-id event)
                             addr
                             (boolean (:upheld? p))
-                            (event-slash-id event)
+                            (event-slash-id world event)
                             :authorization-provenance provenance)))))
 
 (defmethod apply-action "execute-fraud-slash"
@@ -1236,7 +1242,7 @@
                         :execution/source :replay-context/agent-index
                         :execution/action action}
             result (res/execute-fraud-slash world (event-workflow-id event)
-                                            (event-slash-id event)
+                                            (event-slash-id world event)
                                             :execution-provenance provenance)]
         (if (:ok result)
           (update result :extra merge {:execution/provenance provenance})
@@ -1428,6 +1434,49 @@
 ;; SewProtocol Implementation (Tiered)
 ;; ---------------------------------------------------------------------------
 
+(defn- resolve-scenario-bindings
+  "Resolve {:from-binding key} values in an event before replay dispatch.
+   Bindings live in the replay world, making the reference explicit and
+   deterministic across scenario execution and replay."
+  [world value]
+  (cond
+    (and (map? value) (= #{:from-binding} (set (keys value))))
+    (let [binding-key (:from-binding value)
+          resolved (get-in world [:scenario-bindings binding-key] ::missing)]
+      (if (= ::missing resolved)
+        (throw (ex-info "Scenario binding is not available"
+                        {:binding binding-key}))
+        resolved))
+
+    (and (map? value) (= #{:slash-ref} (set (keys value))))
+    (let [{:keys [workflow-id kind level]} (:slash-ref value)
+          context-key (t/slash-context-key workflow-id kind level)
+          slash-id (get-in world [:slash-by-context context-key] ::missing)]
+      (if (= ::missing slash-id)
+        (throw (ex-info "Scenario slash reference is not available"
+                        {:slash-ref (:slash-ref value)}))
+        slash-id))
+
+    (map? value) (into (empty value)
+                        (map (fn [[k v]] [k (resolve-scenario-bindings world v)]))
+                        value)
+    (vector? value) (mapv #(resolve-scenario-bindings world %) value)
+    (sequential? value) (mapv #(resolve-scenario-bindings world %) value)
+    :else value))
+
+(defn- bind-scenario-result
+  "Persist values declared by an event's :bind map after a successful action.
+   A binding target is a top-level result key, e.g. {:slash-id :slash-id}."
+  [world event result]
+  (reduce-kv (fn [w binding-key result-key]
+               (if (contains? result result-key)
+                 (assoc-in w [:scenario-bindings binding-key] (get result result-key))
+                 (throw (ex-info "Scenario binding target is absent from action result"
+                                 {:binding binding-key :result-key result-key
+                                  :action (:action event)}))))
+             world
+             (:bind event {})))
+
 (defrecord SewProtocol []
   proto/SimulationAdapter
 
@@ -1493,20 +1542,25 @@
            :force-authorisation-policy (merge def-fa-policy fa-policy)})))
 
   (dispatch-action [_ context world event]
-    (let [flags       (:replay-flags context {})
+    (let [event       (resolve-scenario-bindings world event)
+          flags       (:replay-flags context {})
           require-id? (:require-event-id? flags false)
-          eid         (event-id event)]
+          eid         (event-id event)
+          apply!      (fn [w]
+                        (let [result (apply-action context w event)]
+                          (if (:ok result)
+                            (update result :world bind-scenario-result event result)
+                            result)))]
       (cond
         (and require-id? (replay-sensitive? event) (nil? eid))
         {:ok false :error :missing-event-id
          :detail {:action (:action event) :seq (:seq event)}}
 
         (and eid (replay-sensitive? event))
-        (idem/apply-once world (dedupe-op-key world event)
-                         (fn [w] (apply-action context w event)))
+        (idem/apply-once world (dedupe-op-key world event) apply!)
 
         :else
-        (apply-action context world event))))
+        (apply! world))))
 
   (check-invariants-single [_ world]
     (run-single-invariants world))

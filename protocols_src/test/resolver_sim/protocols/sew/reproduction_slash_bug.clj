@@ -7,6 +7,10 @@
             [resolver-sim.protocols.sew.types :as t]
             [resolver-sim.protocols.sew.snapshot-fixtures :as snap-fix]))
 
+(defn- slash-id-for
+  [world workflow-id kind level]
+  (get-in world [:slash-by-context (t/slash-context-key workflow-id kind level)]))
+
 (deftest test-reversal-slash-orphaned-after-fraud-slash
   (testing "Pending reversal slash (Track 2) is cleaned up if fraud slash finalizes escrow"
     (let [gov "0xGov"
@@ -35,7 +39,7 @@
           after-evidence (assoc-in after-escalation [:evidence-updated? workflow-id] true)
           after-l1 (:world (res/execute-resolution after-evidence workflow-id r1 false "0xhash2" nil))
 
-          slash-id (str workflow-id "-reversal-0")
+          slash-id (slash-id-for after-l1 workflow-id :reversal 0)
           slash-id-fraud workflow-id
 
           ;; 3. Verify Reversal slash is pending

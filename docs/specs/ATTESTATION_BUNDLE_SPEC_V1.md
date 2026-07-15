@@ -273,7 +273,8 @@ Returns the verification response map.
 (write-attestation-bundle! bundle-manifest
   {:attestations   [attestation-1 ...]
    :claim-results  [claim-result-1 ...]
-   :evidence-nodes [evidence-node-1 ...]})
+   :evidence-nodes [evidence-node-1 ...]}
+  trusted-bundle-root)
 ```
 
 Writes all objects to their declared paths and writes `manifest.edn`.

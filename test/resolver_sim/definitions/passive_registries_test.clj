@@ -415,6 +415,24 @@
   [registry-name entries]
   (registries/validate-attestor-registry-entries registry-name entries))
 
+(deftest attestor-registry-validates-normalized-ed25519-keys
+  (let [entry (valid-attestor-entry
+               {:verification {:type :public-key :algorithm :ed25519 :active-key-id "key-2026"}
+                :keys [{:key-id "key-2026" :algorithm :ed25519 :public-key-encoding :hex
+                        :public-key (apply str (repeat 64 "a")) :status :active
+                        :valid-from "2026-01-01T00:00:00Z"}]})]
+    (is (empty? (run-attestor-validation :test-registry [entry]))))
+  (let [entry (valid-attestor-entry
+               {:verification {:type :public-key :algorithm :ed25519 :active-key-id "key-2026"}
+                :keys [{:key-id "key-2026" :algorithm :ed25519 :public-key-encoding :hex
+                        :public-key (apply str (repeat 64 "a")) :status :active
+                        :valid-from "2026-01-01T00:00:00Z"}
+                       {:key-id "key-2026" :algorithm :ed25519 :public-key-encoding :hex
+                        :public-key (apply str (repeat 64 "b")) :status :retired
+                        :valid-from "2025-01-01T00:00:00Z"}]} )
+        errors (run-attestor-validation :test-registry [entry])]
+    (is (some #(= :entry/duplicate-attestor-key-id (:error %)) errors))))
+
 (deftest attestor-registry-accepts-valid-entry
   (testing "a valid public-key attestor passes validation"
     (let [entry (valid-attestor-entry)

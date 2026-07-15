@@ -5,6 +5,9 @@
 (def ^:private reversal-slash-enabled
   (assoc kleros-appeal
          :reversal-slash-bps 2500
+         ;; Track 2 executes through the common slash executor, whose epoch
+         ;; cap must admit the configured per-offense reversal penalty.
+         :slash-epoch-cap-bps 2500
          :challenge-bounty-bps 1000))
 
 ;; S101 — Track 1 reversal slash executes when bps > 0 (pre-v3 / enabled config)
@@ -175,10 +178,13 @@
      :params {:workflow-id 0 :evidence-hash "0xnew-evidence"}}
     {:seq 7 :time 1200 :agent "l1" :action "execute_resolution"
      :params {:workflow-id 0 :is-release false :resolution-hash "0xl1"}}
-    {:seq 8 :time 1201 :agent "l0" :action "appeal_slash"
-     :params {:workflow-id 0 :slash-id "0-reversal-0"}}
+    {:seq 8 :time 1201 :agent "governance" :action "appeal_slash"
+     :params {:workflow-id 0
+              :slash-id {:slash-ref {:workflow-id 0 :kind :reversal :level 0}}}}
     {:seq 9 :time 1202 :agent "governance" :action "resolve_appeal"
-     :params {:workflow-id 0 :slash-id "0-reversal-0" :upheld? true}}
+     :params {:workflow-id 0
+              :slash-id {:slash-ref {:workflow-id 0 :kind :reversal :level 0}}
+              :upheld? true}}
     {:seq 10 :time 1261 :agent "keeper" :action "execute_pending_settlement"
      :params {:workflow-id 0}}]})
 
@@ -194,7 +200,12 @@
                      {:id "l1"         :address "0xl1"     :role "resolver"}
                      {:id "governance" :address "0xgov"    :role "governance"}
                      {:id "keeper"     :address "0xkeeper" :role "keeper"}]
+   ;; The slash and settlement become executable in adjacent replay steps.
+   ;; Permit that intentional intermediate state; the following keeper event
+   ;; must consume the settlement.
    :protocol-params reversal-slash-enabled
+   :expected-failures {"s107-reversal-track2-appeal-rejected-executes"
+                       #{:no-stale-automatable-escrows}}
    :events
    [{:seq 0 :time 1000 :agent "l0" :action "register_stake" :params {:amount 8000}}
     {:seq 1 :time 1000 :agent "l1" :action "register_stake" :params {:amount 8000}}
@@ -208,14 +219,18 @@
      :params {:workflow-id 0 :evidence-hash "0xnew-evidence"}}
     {:seq 7 :time 1200 :agent "l1" :action "execute_resolution"
      :params {:workflow-id 0 :is-release false :resolution-hash "0xl1"}}
-    {:seq 8 :time 1201 :agent "l0" :action "appeal_slash"
-     :params {:workflow-id 0 :slash-id "0-reversal-0"}}
+    {:seq 8 :time 1201 :agent "governance" :action "appeal_slash"
+     :params {:workflow-id 0
+              :slash-id {:slash-ref {:workflow-id 0 :kind :reversal :level 0}}}}
     {:seq 9 :time 1202 :agent "governance" :action "resolve_appeal"
-     :params {:workflow-id 0 :slash-id "0-reversal-0" :upheld? false}}
-    {:seq 10 :time 1261 :agent "keeper" :action "execute_pending_settlement"
-     :params {:workflow-id 0}}
-     {:seq 11 :time 1262 :agent "governance" :action "execute_fraud_slash"
-      :params {:workflow-id 0 :slash-id "0-reversal-0"}}]})
+     :params {:workflow-id 0
+              :slash-id {:slash-ref {:workflow-id 0 :kind :reversal :level 0}}
+              :upheld? false}}
+    {:seq 10 :time 1261 :agent "governance" :action "execute_fraud_slash"
+     :params {:workflow-id 0
+              :slash-id {:slash-ref {:workflow-id 0 :kind :reversal :level 0}}}}
+    {:seq 11 :time 1262 :agent "keeper" :action "execute_pending_settlement"
+     :params {:workflow-id 0}}]})
 
 ;; S43 (orphan recovery) — Kleros-module reversal slash (ported from standalone JSON)
 ;; Functionally equivalent to S101, retains golden fixture at s43-dr3-kleros-reversal-slash.

@@ -29,6 +29,13 @@
 ;; Sew terminal-state vocabulary
 ;; ---------------------------------------------------------------------------
 
+(defn canonical-slash-registry
+  "Portable projection of Sew's canonical slash registry.
+   Runtime aliases and scenario bindings are intentionally excluded: they are
+   replay-ingestion metadata, not protocol entity identity."
+  [world]
+  {:slashes (t/slash-registry->canonical world)})
+
 (defn- terminal-state? [state]
   (contains? t/terminal-states (keyword (or state ""))))
 

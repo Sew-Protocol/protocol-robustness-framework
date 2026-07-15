@@ -148,9 +148,15 @@
 ;; ---------------------------------------------------------------------------
 
 (defn- make-reversal-slash-entry
-  [slash-id prev-resolver prev-stake slash-bps slash-amt token workflow-id status now appeal-deadline reversal-prob
+  [slash-id slash-kind slash-level prev-resolver prev-stake slash-bps slash-amt token workflow-id status now appeal-deadline reversal-prob
    & {:keys [authorization-provenance]}]
-  (let [entry {:resolver                       prev-resolver
+  (let [entry {:slash/id                       slash-id
+               :slash/workflow-id              workflow-id
+               :slash/kind                     slash-kind
+               :slash/level                    slash-level
+               ;; Legacy field names remain during the transition so existing
+               ;; accounting and invariant readers continue to work.
+               :resolver                       prev-resolver
                :basis-amount                   prev-stake
                :basis-kind                     :stake
                :slash-bps                      slash-bps
@@ -254,14 +260,18 @@
         (if-not (and (some? prev-decision)
                      (not= (:is-release prev-decision) current-is-release))
           world
-          (let [slash-id      (str workflow-id "-reversal-" (dec level))
-                prev-resolver (:resolver prev-decision)]
+          (let [legacy-slash-id (str workflow-id "-reversal-" (dec level))
+                slash-level     (dec level)
+                prev-resolver   (:resolver prev-decision)]
             ;; Idempotency: if a reversal entry already exists for this level, skip.
             ;; Also skip if a pending/appealed slash targets the same resolver on this
             ;; workflow (cross-type collision guard — prevents double-penalty from the
             ;; same dispute).  Different levels target different resolvers (L0 vs L1),
             ;; so the scan checks resolver + workflow-id, not just workflow-id alone.
-            (if (or (get-in world [:pending-fraud-slashes slash-id])
+            (if (or (get-in world [:slash-by-context [workflow-id :reversal slash-level]])
+                    ;; Retain recognition of pre-migration entries while new
+                    ;; slashes use the canonical context index.
+                    (get-in world [:pending-fraud-slashes legacy-slash-id])
                     (some (fn [[_id entry]]
                             (and (= (:workflow-id entry) workflow-id)
                                  (= (:resolver entry) prev-resolver)
@@ -269,7 +279,6 @@
                           (get world :pending-fraud-slashes {})))
               world
               (let [snap            (t/get-snapshot world workflow-id)
-                    snap            (t/get-snapshot world workflow-id)
                     et              (t/get-transfer world workflow-id)
                     token           (:token et "USDC")
                     new-evidence?   (get-in world [:evidence-updated? workflow-id] false)
@@ -283,17 +292,18 @@
                     bounty-bps      (:challenge-bounty-bps snap 0)]
             (if-not (pos? slash-amt)
               world
-              (if new-evidence?
-                (assoc-in world [:pending-fraud-slashes slash-id]
-                          (make-reversal-slash-entry slash-id prev-resolver prev-stake slash-bps
-                                                     slash-amt token workflow-id :pending now
-                                                     (+ now appeal-window) reversal-prob))
-                (-> (reg/slash-resolver-stake world prev-resolver slash-amt challenger bounty-bps workflow-id true)
-                    :world
-                    (assoc-in [:pending-fraud-slashes slash-id]
-                              (make-reversal-slash-entry slash-id prev-resolver prev-stake
-                                                         slash-bps slash-amt token workflow-id :executed
-                                                         now 0 reversal-prob)))))))))))))
+              (let [slash-id (t/allocate-slash-id world)
+                    entry    (make-reversal-slash-entry slash-id :reversal slash-level
+                                                        prev-resolver prev-stake slash-bps
+                                                        slash-amt token workflow-id
+                                                        (if new-evidence? :pending :executed)
+                                                        now (if new-evidence? (+ now appeal-window) 0)
+                                                        reversal-prob)
+                    world'   (if new-evidence?
+                               world
+                               (:world (reg/slash-resolver-stake world prev-resolver slash-amt challenger bounty-bps workflow-id true)))]
+                (-> (t/insert-slash world' entry)
+                    (t/register-slash-alias legacy-slash-id slash-id))))))))))))
 
 (defn force-reversal-slash
   "Force a reversal slash on a workflow without going through the full resolution
@@ -314,8 +324,11 @@
    schema, same `slash-resolver-stake` call, same invariants apply."
   [world workflow-id & {:keys [slash-bps track authorization-provenance]
                         :or   {track :pending}}]
-  (let [slash-id (str workflow-id "-force-reversal-0")]
-    (if (get-in world [:pending-fraud-slashes slash-id])
+  (let [legacy-slash-id (str workflow-id "-force-reversal-0")
+        slash-level     0]
+    (if (or (get-in world [:slash-by-context [workflow-id :force-reversal slash-level]])
+            ;; Preserve idempotence for worlds containing pre-migration entries.
+            (get-in world [:pending-fraud-slashes legacy-slash-id]))
       world
       (let [level       (t/dispute-level world workflow-id)
             prev-decision (when (pos? level)
@@ -332,19 +345,19 @@
             reversal-prob (or (:reversal-detection-probability snap) 0.0)]
         (if (or (nil? prev-resolver) (not (pos? slash-amt)))
           world
-          (if (= :immediate track)
-            (-> (reg/slash-resolver-stake world prev-resolver slash-amt nil 0 workflow-id)
-                :world
-                (assoc-in [:pending-fraud-slashes slash-id]
-                          (make-reversal-slash-entry slash-id prev-resolver prev-stake bps
-                                                     slash-amt token workflow-id :executed
-                                                     now 0 reversal-prob
-                                                     :authorization-provenance authorization-provenance)))
-            (assoc-in world [:pending-fraud-slashes slash-id]
-                      (make-reversal-slash-entry slash-id prev-resolver prev-stake bps
-                                                 slash-amt token workflow-id :pending now
-                                                 (+ now appeal-window) reversal-prob
-                                                 :authorization-provenance authorization-provenance))))))))
+          (let [slash-id (t/allocate-slash-id world)
+                entry    (make-reversal-slash-entry slash-id :force-reversal slash-level
+                                                    prev-resolver prev-stake bps
+                                                    slash-amt token workflow-id
+                                                    (if (= :immediate track) :executed :pending)
+                                                    now (if (= :immediate track) 0 (+ now appeal-window))
+                                                    reversal-prob
+                                                    :authorization-provenance authorization-provenance)
+                world'   (if (= :immediate track)
+                           (:world (reg/slash-resolver-stake world prev-resolver slash-amt nil 0 workflow-id))
+                           world)]
+            (-> (t/insert-slash world' entry)
+                (t/register-slash-alias legacy-slash-id slash-id))))))))
 
 (defn- reverse-reversal-slash-on-vindication
   "When a higher-level resolution agrees with a lower-level decision that was
@@ -375,7 +388,7 @@
                         vindicated?       (and original-decision
                                                (= (:is-release original-decision) current-is-release))]
                     (if (and was-reversed? vindicated?)
-                      (let [slash-id    (str workflow-id "-reversal-" rev-level)
+                      (let [slash-id    (get-in w [:slash-by-context [workflow-id :reversal rev-level]])
                             slash-entry (get-in w [:pending-fraud-slashes slash-id])]
                         (if (and slash-entry (= :executed (:status slash-entry)) (= :reversal (:reason slash-entry)))
                           (let [resolver (:resolver slash-entry)
@@ -504,22 +517,31 @@
                          :world-after world}))
         evidence-hash (:evidence/hash evidence-map)]
     (attr/log-with-attr :debug "handle-fraud-slashing" {:now now :appeal-window appeal-window})
-    (assoc-in world [:pending-fraud-slashes slash-id]
-              (append-authorization-provenance
-                {:resolver                       resolver
-                 :amount                         slash-amt
-                 :token                          token
-                 :workflow-id                    workflow-id
-                 :reason                         :fraud
-                 :status                         :pending
-                 :proposed-at                    now
-                :appeal-deadline                (+ now appeal-window)
-                :appeal-bond-held               0
-                :contest-deadline               0
-                :reversal-detection-probability reversal-prob
-                :proposal-evidence-hash         evidence-hash}
-               "propose-fraud-slash"
-               authorization-provenance))))
+    (let [entry (append-authorization-provenance
+                 {:slash/id                      slash-id
+                  :slash/workflow-id             workflow-id
+                  :slash/kind                    :fraud
+                  :slash/level                   0
+                  ;; Legacy field names remain during the transition so existing
+                  ;; accounting and invariant readers continue to work.
+                  :resolver                       resolver
+                  :amount                         slash-amt
+                  :token                          token
+                  :workflow-id                    workflow-id
+                  :reason                         :fraud
+                  :status                         :pending
+                  :proposed-at                    now
+                  :appeal-deadline                (+ now appeal-window)
+                  :appeal-bond-held               0
+                  :contest-deadline               0
+                  :reversal-detection-probability reversal-prob
+                  :proposal-evidence-hash         evidence-hash}
+                 "propose-fraud-slash"
+                 authorization-provenance)]
+      ;; The workflow-ID alias preserves legacy scenario ingestion only; the
+      ;; canonical registry itself is keyed solely by the allocated slash ID.
+      (-> (t/insert-slash world entry)
+          (t/register-slash-alias workflow-id slash-id)))))
 
 (defn update-unavailability
   "Idempotent resolver unavailability accounting + circuit breaker trigger.
@@ -1143,22 +1165,24 @@
                  :new-level    new-level
                  :new-resolver new-resolver))))))
 
-(declare resolve-reversal-slash-id)
-
 (defn execute-fraud-slash
   "Execute a previously proposed fraud slash after the timelock/appeal window.
-   slash-id defaults to workflow-id; pass the level-scoped string slash-id for
-   reversal slashes (e.g. \"0-reversal-0\" for the reversal at level 1 on workflow 0).
+   `slash-id` must be a canonical protocol entity ID belonging to `workflow-id`.
    Mirrors: ResolverSlashingModuleV1.executeSlash"
   ([world workflow-id] (execute-fraud-slash world workflow-id workflow-id))
   ([world workflow-id slash-id & {:keys [execution-provenance]}]
-   (let [slash-id (resolve-reversal-slash-id world slash-id workflow-id)
-         pending (get-in world [:pending-fraud-slashes slash-id])]
+   (let [pending (get-in world [:pending-fraud-slashes slash-id])]
      (cond
-       (nil? pending)
-       (t/fail :no-pending-slash)
+       (not (t/valid-entity-id? slash-id))
+       (t/fail :invalid-slash-id)
 
-        (not= :pending (:status pending))
+       (nil? pending)
+       (t/fail :slash-not-found)
+
+       (not= (:slash/workflow-id pending) workflow-id)
+       (t/fail :slash-workflow-mismatch)
+
+       (not= :pending (:status pending))
         (t/fail (case (:status pending)
                   :appealed :appeal-in-progress
                   :reversed :slash-already-reversed
@@ -1340,8 +1364,10 @@
                     appeal-days       (get-in world [:params :appeal-window-days] 7)
                      gov-delay         (or (:appeal-window-duration snap) (* appeal-days (time-ctx/tick-seconds world)))
                     reversal-prob     (or (:reversal-detection-probability snap) 0.0)]
-                (t/ok (handle-fraud-slashing world wf-id wf-id resolver-addr amount gov-delay reversal-prob
-                                             :authorization-provenance authorization-provenance))))))))))
+                (let [slash-id (t/allocate-slash-id world)
+                      world'   (handle-fraud-slashing world slash-id wf-id resolver-addr amount gov-delay reversal-prob
+                                                      :authorization-provenance authorization-provenance)]
+                  (assoc (t/ok world') :slash-id slash-id))))))))))
 
 (defn resolve-appeal
   "Governance (TIMELOCK) resolves a slashing appeal.
@@ -1355,23 +1381,27 @@
    tracing of who authorized the resolution.  Passing nil will fail with
    `:missing-authorization-provenance`.
 
-   For reversal slashes (which use level-scoped string slash-ids like
-   \"0-reversal-0\"), pass the explicit slash-id.  For primary (integer) slashes,
-   pass the workflow-id as slash-id."
+   `slash-id` must be a canonical protocol entity ID belonging to
+   `_workflow-id`."
   [world _workflow-id caller appeal-upheld? slash-id & {:keys [authorization-provenance]}]
-  (let [slash-id (resolve-reversal-slash-id world slash-id _workflow-id)
-        ctx (attr/make-context {:workflow-id _workflow-id :slash-id slash-id})
+  (let [ctx (attr/make-context {:workflow-id _workflow-id :slash-id slash-id})
         pending (get-in world [:pending-fraud-slashes slash-id])]
     (attr/log-annotated! :debug "Resolving appeal" ctx {:appeal-upheld? appeal-upheld?})
     (cond
+      (not (t/valid-entity-id? slash-id))
+      (t/fail :invalid-slash-id)
+
+      (nil? pending)
+      (t/fail :slash-not-found)
+
+      (not= (:slash/workflow-id pending) _workflow-id)
+      (t/fail :slash-workflow-mismatch)
+
       (nil? authorization-provenance)
       (t/fail :missing-authorization-provenance)
 
       (or (nil? caller) (= "" caller))
       (t/fail :missing-caller-context)
-
-      (nil? pending)
-      (t/fail :no-pending-slash)
 
       (not= :appealed (:status pending))
       (t/fail (case (:status pending)
@@ -1513,33 +1543,23 @@
                 :workflow-id wf-id})
               (emit-appeal-resolution! world' :rejected-no-bond)))))))
 
-(defn- resolve-reversal-slash-id
-  "Fallback for reversal slash-ids: if slash-id is an integer workflow-id
-   and no pending entry exists, try the Level 1 reversal key format.
-   This handles the common case where callers pass workflow-id instead of
-   the string-format reversal slash-id.
-   Returns the matching key string or the original slash-id, never a value."
-  [world slash-id workflow-id]
-  (if (and (integer? slash-id)
-           (nil? (get-in world [:pending-fraud-slashes slash-id])))
-    (or (first (filter #(get-in world [:pending-fraud-slashes %])
-                       [(str workflow-id "-reversal-0")
-                        (str workflow-id "-force-reversal-0")]))
-        slash-id)
-    slash-id))
 
 (defn appeal-slash
   "Resolver appeals a PENDING manual slash (Phase M).
-   slash-id defaults to workflow-id; pass the level-scoped string slash-id for
-   reversal slashes (e.g. \"0-reversal-0\" for the reversal at level 1 on workflow 0).
+   `slash-id` must be a canonical protocol entity ID belonging to `workflow-id`.
    Mirrors: ResolverSlashingModuleV1.appealSlash"
   ([world workflow-id caller] (appeal-slash world workflow-id caller workflow-id))
   ([world workflow-id caller slash-id & {:keys [authorization-provenance]}]
-   (let [slash-id (resolve-reversal-slash-id world slash-id workflow-id)
-         pending (get-in world [:pending-fraud-slashes slash-id])]
+   (let [pending (get-in world [:pending-fraud-slashes slash-id])]
      (cond
+       (not (t/valid-entity-id? slash-id))
+       (t/fail :invalid-slash-id)
+
        (nil? pending)
-       (t/fail :no-pending-slash)
+       (t/fail :slash-not-found)
+
+       (not= (:slash/workflow-id pending) workflow-id)
+       (t/fail :slash-workflow-mismatch)
 
        (nil? (:status pending))
        (t/fail :invalid-slash-state)

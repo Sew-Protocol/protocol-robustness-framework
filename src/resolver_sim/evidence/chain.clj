@@ -274,10 +274,14 @@
       (if (and eh (string? eh))
         (let [reg @evidence-registry-atom]
           (if (some #(hc/intent-hash= eh (:evidence-hash %)) (:artifacts reg))
-            (log/warn! :evidence-register-duplicate-hash
-                       {:evidence-hash eh
-                        :evidence-type (:evidence/type evidence)
-                        :artifact-kind (:artifact-kind evidence)})
+            ;; Content-addressed evidence is idempotent: repeated replay paths
+            ;; may legitimately register the same immutable record. The first
+            ;; registration remains authoritative; avoid treating this as an
+            ;; operational warning.
+            (log/debug! :evidence-register-duplicate-hash
+                        {:evidence-hash eh
+                         :evidence-type (:evidence/type evidence)
+                         :artifact-kind (:artifact-kind evidence)})
             (reset! evidence-registry-atom
                     (-> reg
                         (update :artifacts conj (evidence->artifact-entry evidence))

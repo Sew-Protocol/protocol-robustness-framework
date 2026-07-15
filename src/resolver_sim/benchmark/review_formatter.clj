@@ -5,7 +5,8 @@
    fields already present in the bundle; it does not infer coverage or claims."
   (:require [clojure.edn :as edn]
             [clojure.java.io :as io]
-            [clojure.string :as str]))
+            [clojure.string :as str]
+            [resolver-sim.benchmark.reversal-audit :as reversal-audit]))
 
 (defn- display
   [value]
@@ -108,7 +109,8 @@
          "- `scenario-results.md` lists executions; a deterministic replay benchmark may intentionally run each scenario more than once.\n\n"
          "## Included review files\n\n"
          "- `scenario-results.md` — one row per benchmark execution, grouped only by source directory.\n"
-         "- `claim-results.md` — one row per evaluated claim result.\n")))
+         "- `claim-results.md` — one row per evaluated claim result.\n"
+         "- `reversal-review.md` — per-reversal slash lifecycle projection, when result worlds are available.\n")))
 
 (defn render-scenario-results
   "Render scenario-results.md. Results are intentionally shown per execution."
@@ -170,7 +172,8 @@
                    (.getPath file)))]
     {:summary (write! "BENCHMARK_SUMMARY.md" (render-summary bundle))
      :scenarios (write! "scenario-results.md" (render-scenario-results bundle))
-     :claims (write! "claim-results.md" (render-claim-results bundle))}))
+     :claims (write! "claim-results.md" (render-claim-results bundle))
+     :reversals (write! "reversal-review.md" (reversal-audit/render-markdown bundle))}))
 
 (defn review-bundle!
   "Read an EDN evidence bundle and write its reviewer Markdown package."

@@ -899,19 +899,30 @@
 ;; ---------------------------------------------------------------------------
 
 (defn cleanup-orphaned-slashes
-  "Cleanup orphaned pending reversal slashes for a truly terminal escrow (released/refunded).
-   Only removes slashes whose appeal window has expired — prevents silent deletion of
-   Track 2 slashes that are still eligible for appeal."
+  "Archive and remove orphaned pending reversal slashes for a terminal escrow.
+   Only expired Track 2 slashes are removed; their complete records are retained in
+   :reversal-slash-history with an auditable :expired-cleaned-up status."
   [world workflow-id]
   (let [now-ts (time-ctx/block-ts world)]
     (if (#{:released :refunded} (t/escrow-state world workflow-id))
-      (update world :pending-fraud-slashes
-              (fn [slashes]
-                (into {} (remove (fn [[slash-id slash]]
-                                   (and (= :pending (:status slash))
-                                        (.startsWith (str slash-id) (str workflow-id "-reversal-"))
-                                        (<= (:appeal-deadline slash 0) now-ts)))
-                                 slashes))))
+      (let [expired? (fn [[_slash-id slash]]
+                       (and (= :pending (:status slash))
+                            (= workflow-id (:slash/workflow-id slash))
+                            (= :reversal (:slash/kind slash))
+                            (<= (:appeal-deadline slash 0) now-ts)))
+            expired  (filter expired? (:pending-fraud-slashes world {}))]
+        (-> world
+            (update :reversal-slash-history
+                    (fnil into {})
+                    (map (fn [[slash-id slash]]
+                           [slash-id (assoc slash
+                                            :status :expired-cleaned-up
+                                            :cleanup-at now-ts
+                                            :cleanup-reason :appeal-window-expired)])
+                         expired))
+            (update :pending-fraud-slashes
+                    (fn [slashes]
+                      (into {} (remove expired? slashes))))))
       world)))
 
 ;; ---------------------------------------------------------------------------

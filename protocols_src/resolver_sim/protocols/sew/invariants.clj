@@ -645,6 +645,50 @@
      :violations (vec violations)}))
 
 ;; ---------------------------------------------------------------------------
+;; Canonical slash registry identity invariants
+;; ---------------------------------------------------------------------------
+
+(defn canonical-slash-registry-consistent?
+  "Every slash registry key is its embedded canonical ID and every slash has a
+   valid workflow foreign key. Runtime aliases are deliberately not inspected."
+  [world]
+  (let [workflows (:escrow-transfers world {})
+        violations (for [[slash-id slash] (:pending-fraud-slashes world {})
+                         :when (or (not (t/valid-entity-id? slash-id))
+                                   (not= slash-id (:slash/id slash))
+                                   (not (contains? workflows (:slash/workflow-id slash))))]
+                     {:slash-id slash-id
+                      :embedded-id (:slash/id slash)
+                      :workflow-id (:slash/workflow-id slash)})]
+    {:holds? (empty? violations) :violations (vec violations)}))
+
+(defn slash-context-index-consistent?
+  "Every canonical slash has exactly its declared context-index entry, and the
+   allocator remains strictly above all allocated slash IDs."
+  [world]
+  (let [slashes (:pending-fraud-slashes world {})
+        index (:slash-by-context world {})
+        next-id (:next-slash-id world 0)
+        violations (concat
+                    (for [[slash-id slash] slashes
+                          :let [context (t/slash-context-key (:slash/workflow-id slash)
+                                                            (:slash/kind slash)
+                                                            (:slash/level slash))]
+                          :when (not= slash-id (get index context))]
+                      {:slash-id slash-id :context context :indexed-id (get index context)})
+                    (for [[context slash-id] index
+                          :when (not= context
+                                      (when-let [slash (get slashes slash-id)]
+                                        (t/slash-context-key (:slash/workflow-id slash)
+                                                             (:slash/kind slash)
+                                                             (:slash/level slash))))]
+                      {:context context :slash-id slash-id})
+                    (when (or (not (t/valid-entity-id? next-id))
+                              (some #(>= % next-id) (keys slashes)))
+                      [{:next-slash-id next-id}]))]
+    {:holds? (empty? violations) :violations (vec violations)}))
+
+;; ---------------------------------------------------------------------------
 ;; Invariant 14: Slash status consistency
 ;;
 ;; A slash in :executed status must have proposed-at > 0 and executedAt > 0
@@ -1544,22 +1588,29 @@
 ;; ---------------------------------------------------------------------------
 ;; Invariant 28: Slash epoch cap respected (20% per epoch)
 ;;
-;; Total slashing recorded in :resolver-epoch-slashed must not exceed 20% of
-;; the resolver's current stake for any resolver.
+;; Total slashing recorded in :resolver-epoch-slashed must not exceed the cap
+;; against the slashable stake before those epoch debits. The live stake balance
+;; is post-debit, so use current stake plus the recorded epoch debit.
 ;; ---------------------------------------------------------------------------
 
 (defn slash-epoch-cap-respected?
   "True when no resolver's total slashing in the current epoch exceeds the cap.
-   Threshold read from world params (:slash-epoch-cap-bps, default 2000 = 20%)."
+   Threshold read from world params (:slash-epoch-cap-bps, default 2000 = 20%).
+   The execution guard evaluates against stake before the slash is debited, so
+   the invariant reconstructs that basis from live stake plus epoch debits."
   [world]
   (let [epoch-cap-bps (get-in world [:params :slash-epoch-cap-bps] 2000)
         violations
         (for [[addr epoch-data] (:resolver-epoch-slashed world {})
               :let [epoch-amt (:amount epoch-data 0)
-                    stake     (get (:resolver-stakes world) addr 0)]
-              :when (pos? stake)
-              :when (> (* epoch-amt 10000) (* stake epoch-cap-bps))]
-          {:resolver addr :epoch-amount epoch-amt :stake stake})]
+                    stake (get (:resolver-stakes world) addr 0)
+                    slashable-basis (+ stake epoch-amt)]
+              :when (pos? slashable-basis)
+              :when (> (* epoch-amt 10000) (* slashable-basis epoch-cap-bps))]
+          {:resolver addr
+           :epoch-amount epoch-amt
+           :stake stake
+           :slashable-basis slashable-basis})]
     {:holds?     (empty? violations)
      :violations (vec violations)}))
 
@@ -2047,6 +2098,8 @@
                  :temporal-consistency          (check-temporal-consistency world)
                  :dispute-timestamp-consistent  (dispute-timestamp-consistency? world)
                  :dispute-level-bounded         (dispute-level-bounded? world)
+                 :canonical-slash-registry-consistent (canonical-slash-registry-consistent? world)
+                 :slash-context-index-consistent (slash-context-index-consistent? world)
                  :slash-status-consistent       (slash-status-consistent? world)
                  :appeal-bond-conserved         (appeal-bond-conserved? world)
                  :appeal-bond-custody-consistent (appeal-bond-custody-consistent? world)

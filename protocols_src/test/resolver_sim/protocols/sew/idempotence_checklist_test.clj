@@ -51,17 +51,21 @@
 
 (deftest checklist-execute-fraud-slash-single-execution
   (let [w0 (-> (t/empty-world 1000)
-               (assoc-in [:resolver-stakes resolver] 5000)
-               (assoc-in [:escrow-transfers 0] {:token usdc})
-               (assoc-in [:pending-fraud-slashes 0]
-                         {:resolver resolver
-                          :amount 100
-                          :reason :fraud
-                          :status :pending
-                          :proposed-at 900
-                          :appeal-deadline 999
-                          :appeal-bond-held 0
-                          :contest-deadline 0}))
+         (assoc-in [:resolver-stakes resolver] 5000)
+         (assoc-in [:escrow-transfers 0] {:token usdc})
+         (t/insert-slash
+          {:slash/id 0
+           :slash/workflow-id 0
+           :slash/kind :fraud
+           :slash/level 0
+           :resolver resolver
+           :amount 100
+           :reason :fraud
+           :status :pending
+           :proposed-at 900
+           :appeal-deadline 999
+           :appeal-bond-held 0
+           :contest-deadline 0}))
         r1 (res/execute-fraud-slash w0 0)
         r2 (res/execute-fraud-slash (:world r1) 0)]
     (is (:ok r1))

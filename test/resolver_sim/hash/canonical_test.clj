@@ -38,6 +38,15 @@
     (is (thrown? Exception (hc/canonical-bytes 1.9)))
     (is (thrown? Exception (hc/canonical-bytes (/ 1 3))))))
 
+(deftest test-evidence-content-projects-floating-point-values-exactly
+  (let [hash-content #(hc/hash-with-intent {:hash/intent :evidence-content} %)]
+    (testing "content hashing accepts projected IEEE floating-point values"
+      (is (= (hash-content {:index 1.0})
+             (hash-content {:index 1.0}))))
+    (testing "the tagged floating-point representation preserves numeric type"
+      (is (not= (hash-content {:index 1.0})
+                (hash-content {:index (float 1.0)}))))))
+
 (deftest test-string
   (let [expected (byte-array [0x20 0x06 0x61 0x63 0x74 0x69 0x76 0x65])]
     (is (bytes= expected (hc/canonical-bytes "active")))))

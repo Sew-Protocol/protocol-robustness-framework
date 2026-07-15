@@ -470,15 +470,17 @@
     :falsifying []}
 
    :claims/reversal-slash-track1
-   {:supporting []
+   {:supporting ["DR-D-001-reversal-slashing-auto-track"
+                 "DR-N-001-reversal-slash-appeal-lifecycle"]
     :falsifying []}
 
    :claims/reversal-slash-track2-reversed
-   {:supporting []
+   {:supporting ["DR-G-001-manual-reversal-slash-t2"
+                 "DR-N-001-reversal-slash-appeal-lifecycle"]
     :falsifying []}
 
    :claims/reversal-slash-track2-executes
-   {:supporting []
+   {:supporting ["DR-N-002-reversal-slash-appeal-rejected"]
     :falsifying []}})
 
 (defn purpose-def [k] (get purposes k))

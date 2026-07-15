@@ -54,10 +54,10 @@
            :params {:workflow-id 0 :is-release false :resolution-hash "0xreversal"}}
           ;; Resolver appeals the pending reversal slash (1310 < deadline 1320)
           {:seq 8 :time 1310 :agent "resolver-l0" :action "appeal_slash"
-           :params {:workflow-id 0 :slash-id "0-reversal-0"}}
+           :params {:workflow-id 0 :slash-id {:slash-ref {:workflow-id 0 :kind :reversal :level 0}}}}
           ;; Governance rejects the appeal: bond forfeited, slash returns to pending
           {:seq 9 :time 1400 :agent "governance" :action "resolve_appeal"
-           :params {:workflow-id 0 :slash-id "0-reversal-0" :upheld? false}}
+           :params {:workflow-id 0 :slash-id {:slash-ref {:workflow-id 0 :kind :reversal :level 0}} :upheld? false}}
           ;; Past original deadline (1320). Execute the pending slash.
           {:seq 10 :time 1450 :agent "keeper" :action "execute_fraud_slash"
-           :params {:workflow-id 0 :slash-id "0-reversal-0"}}]}
+                     :params {:workflow-id 0 :slash-id {:slash-ref {:workflow-id 0 :kind :reversal :level 0}}}}]}

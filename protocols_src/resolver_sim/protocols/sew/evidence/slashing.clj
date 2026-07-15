@@ -19,10 +19,22 @@ tunneling."
 
 ;; ── Extractors ──────────────────────────────────────────────────────────
 
+(defn slash-subject-reference
+  "Qualified protocol-entity reference for slash evidence.
+   Runtime slash IDs are only meaningful within the protocol and workflow;
+   run/scenario context belongs in the enclosing evidence envelope."
+  [slash-id workflow-id]
+  {:entity/type :slash
+   :entity/id slash-id
+   :workflow/id workflow-id
+   :protocol/id :sew
+   :protocol/version 1})
+
 (defn extract-slash-context
   "Extract slash-specific context."
   [slash-id workflow-id epoch trigger]
-  {:slash-id slash-id
+  {:subject/ref (slash-subject-reference slash-id workflow-id)
+   :slash-id slash-id
    :workflow-id workflow-id
    :epoch epoch
    :trigger trigger})
@@ -63,7 +75,7 @@ tunneling."
                  :claims/projection-artifact projection-artifact
                  :claims/projection-artifact-again projection-artifact-again
                  :claims/projection-result projection-result}
-        node-hash (hc/hash-with-intent {:hash/intent :evidence-record} content)]
+        node-hash (hc/hash-with-intent {:hash/intent :evidence-content} content)]
     {:node-hash node-hash
      :result content
      :claims/evaluation-context true}))
@@ -254,7 +266,7 @@ tunneling."
         result-artifact-v1 (payoffs/build-pro-rata-allocation-result-artifact
                             artifact-base-opts)
         allocation-result-hash (:allocation-result-hash result-artifact-v1)
-        allocation-hash (hc/hash-with-intent {:hash/intent :evidence-record} allocation-result)
+        allocation-hash (hc/hash-with-intent {:hash/intent :evidence-content} allocation-result)
         evidence-result {:projection (projection-summary projection-artifact)
                          :pro-rata {:intent {:id :pro-rata/slash-obligation-allocation
                                              :version 1}
@@ -270,9 +282,10 @@ tunneling."
                           :schema-version "slash-prorata-allocation.v2"
                           :world world
                           :frame (agg/extract-decision-frame world)
-                          :subject {:slash-id slash-id
-                                    :workflow-id workflow-id
-                                    :resolver resolver
+                          :subject {:subject/ref (slash-subject-reference slash-id workflow-id)
+                                                              :slash-id slash-id
+                                                              :workflow-id workflow-id
+                                                              :resolver resolver
                                     :epoch epoch
                                     :trigger trigger}
                           :inputs {:allocation allocation-input
@@ -281,7 +294,7 @@ tunneling."
                           :result evidence-result
                           :dependencies transition-dependencies
                           :attribution attribution})
-        evidence-hash (hc/hash-with-intent {:hash/intent :evidence-record}
+        evidence-hash (hc/hash-with-intent {:hash/intent :evidence-content}
                                            (dissoc evidence-record :evidence/hash :evidence-hash))
         evidence (assoc evidence-record :evidence/hash evidence-hash)
         ;; Phase 2: rebuild artifact with evidence-record-hash and evidence-group-id in :external-refs

@@ -6,6 +6,10 @@
             [resolver-sim.protocols.sew.resolution :as res]
             [resolver-sim.protocols.sew.registry   :as reg]))
 
+(defn- slash-id-for
+  [world workflow-id kind level]
+  (get-in world [:slash-by-context (t/slash-context-key workflow-id kind level)]))
+
 (deftest evidence-gated-slashing-test
   (let [world (t/empty-world 1000)
         buyer "0xBuyer"
@@ -27,19 +31,19 @@
         world (-> (res/escalate-dispute world workflow-id buyer esc-fn) :world)]
 
     (testing "TRACK 1: Automated Slash (Same Evidence)"
-      (let [slash-id (str workflow-id "-reversal-0")
-            r-final (res/execute-resolution world workflow-id r1 false "h1" nil)
-            world-final (:world r-final)]
+      (let [r-final (res/execute-resolution world workflow-id r1 false "h1" nil)
+            world-final (:world r-final)
+            slash-id (slash-id-for world-final workflow-id :reversal 0)]
         (is (= :executed (get-in world-final [:pending-fraud-slashes slash-id :status]))
             "Slash should be executed immediately on same-evidence reversal")
         (is (= 0 (reg/get-stake world-final r0))
             "100% reversal slash-bps on 2000 stake removes all stake")))
 
     (testing "TRACK 2: Manual Proposal (New Evidence)"
-      (let [slash-id (str workflow-id "-reversal-0")
-            world-new-info (assoc-in world [:evidence-updated? workflow-id] true)
+      (let [world-new-info (assoc-in world [:evidence-updated? workflow-id] true)
             r-final (res/execute-resolution world-new-info workflow-id r1 false "h1" nil)
             world-final (:world r-final)
+            slash-id (slash-id-for world-final workflow-id :reversal 0)
             slash-entry (get-in world-final [:pending-fraud-slashes slash-id])]
         (is (= :pending (:status slash-entry)) "Slash should be PENDING when new evidence exists")
         (is (= 2000 (reg/get-stake world-final r0)) "Resolver NOT slashed yet")
@@ -82,7 +86,7 @@
           world-ev (-> (res/submit-evidence world workflow-id buyer) :world)
           r-final (res/execute-resolution world-ev workflow-id r1 false "h1" nil)
           world-final (:world r-final)
-          slash-id (str workflow-id "-reversal-0")
+          slash-id (slash-id-for world-final workflow-id :reversal 0)
           slash (get-in world-final [:pending-fraud-slashes slash-id])]
       (is (true? (:ok (res/submit-evidence world workflow-id buyer))) "submit-evidence succeeds")
       (is (= :pending (:status slash)) "Track 2 via submit-evidence produces :pending slash"))))
@@ -122,7 +126,7 @@
 
           ;; L1 resolves (refund → reverses L0) — Track 2, :pending
           world (-> (res/execute-resolution world workflow-id r1 false "h1" nil) :world)
-          slash-l0-id (str workflow-id "-reversal-0")
+          slash-l0-id (slash-id-for world workflow-id :reversal 0)
           flag-after-l1 (get-in world [:evidence-updated? workflow-id])]
 
       ;; Assert L1 reversal created :pending slash (Track 2)
@@ -136,7 +140,7 @@
 
             ;; L2 resolves (release → reverses L1) — Track 2 again
             world (-> (res/execute-resolution world workflow-id r2 true "h2" nil) :world)
-            slash-l1-id (str workflow-id "-reversal-1")
+            slash-l1-id (slash-id-for world workflow-id :reversal 1)
             flag-after-l2 (get-in world [:evidence-updated? workflow-id])]
 
         (is (= :pending (get-in world [:pending-fraud-slashes slash-l1-id :status]))

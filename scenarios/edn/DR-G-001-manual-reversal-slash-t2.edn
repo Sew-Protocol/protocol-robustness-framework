@@ -39,15 +39,15 @@
            :params {:workflow-id 0 :evidence-hash "0xnewevidence"}}
           ;; Escalate to L1 (clears pending settlement)
           {:seq 4 :time 1130 :agent "seller" :action "escalate_dispute" :params {:workflow-id 0}}
-          ;; L1 resolves refund (reversal) — Track 2 fires: pending slash, slash-id "0-reversal-0"
+          ;; L1 resolves refund (reversal) — Track 2 fires: pending slash, referenced by workflow, reversal kind, and level 0
           ;; appeal-deadline = 1150 + 120 = 1270
           {:seq 5 :time 1150 :agent "l1resolver" :action "execute_resolution"
            :params {:workflow-id 0 :is-release false :resolution-hash "0xl1refund"}}
-          ;; Slashed resolver appeals with explicit slash-id for reversal slash
-          {:seq 6 :time 1160 :agent "l0resolver" :action "appeal_slash"
-           :params {:workflow-id 0 :slash-id "0-reversal-0"}}
+          ;; Slashed resolver appeals with an explicit structured slash reference
+                    {:seq 6 :time 1160 :agent "l0resolver" :action "appeal_slash"
+                     :params {:workflow-id 0 :slash-id {:slash-ref {:workflow-id 0 :kind :reversal :level 0}}}}
           ;; Governance resolves the appeal as rejected (slash stands → executed)
           {:seq 7 :time 1200 :agent "governance" :action "resolve_appeal"
-           :params {:workflow-id 0 :slash-id "0-reversal-0" :appeal-upheld? false}}
+           :params {:workflow-id 0 :slash-id {:slash-ref {:workflow-id 0 :kind :reversal :level 0}} :appeal-upheld? false}}
           {:seq 8 :time 1300 :agent "keeper" :action "execute_pending_settlement"
            :params {:workflow-id 0}}]}

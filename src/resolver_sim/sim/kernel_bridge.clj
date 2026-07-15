@@ -269,7 +269,7 @@
        :params {:workflow-id 0}}
       {:seq 5 :time 1160 :agent "governance" :action "resolve_appeal"
        :params {:workflow-id 0
-                :is-appeal-valid false}}]}))
+                :upheld? false}}]}))
 
 (defn- check-domain-metrics
   "Verify that a replay result exercised the expected protocol path.

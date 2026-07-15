@@ -402,9 +402,12 @@
               {:type :float64 :value-str (format "%.17g" (double x))}
               (instance? Float x)
               {:type :float64 :value-str (format "%.17g" (float x))}
-              ;; Ratio → tagged representation
+              ;; Ratio → exact tagged representation. Converting through double
+              ;; would alias distinct rational values in a commitment.
               (instance? clojure.lang.Ratio x)
-              {:type :ratio :value-str (format "%.17g" (double x))}
+              {:type :ratio
+               :numerator (numerator x)
+               :denominator (denominator x)}
               ;; Function → structured marker (NOT lossy :fn atom)
               (fn? x)
               {:type :fn}
@@ -481,6 +484,19 @@
   (letfn [(walk [v]
             (cond
               (instance? clojure.lang.Keyword v) (name v)
+              ;; Ratios are not part of the canonical binary ABI. Preserve their
+              ;; exact value in a JSON-round-trippable tagged representation at
+              ;; the evidence projection boundary rather than truncating them.
+              (ratio? v) {"$type" "ratio"
+                          "$numerator" (numerator v)
+                          "$denominator" (denominator v)}
+              ;; Floating-point values are not valid raw canonical ABI values.
+              ;; Content evidence preserves their exact IEEE value as hexadecimal,
+              ;; rather than rounding to a decimal representation.
+              (instance? Double v) {"$type" "float64"
+                                    "$hex" (Double/toHexString v)}
+              (instance? Float v) {"$type" "float32"
+                                   "$hex" (Float/toHexString v)}
               (instance? clojure.lang.IPersistentMap v)
               (into (sorted-map) (map (fn [[k v]] [(walk k) (walk v)]) v))
               (instance? clojure.lang.IPersistentVector v)
@@ -908,8 +924,10 @@
     :intent/description "Top-level benchmark commitment root"
     :intent/includes    #{:benchmark-metadata :root-commitment :bundle-summary}
     :intent/excludes    #{:individual-results :detailed-evidence :traces}
-    :intent/projection-fn project-identity
-    :intent/version     1}
+    ;; Benchmark output contains exact ratios and runtime collections; normalize
+    ;; them before canonical encoding rather than relying on lossy coercion.
+    :intent/projection-fn project-world-to-structure-view
+    :intent/version     2}
 
    :registry
    {:intent/name        :registry
