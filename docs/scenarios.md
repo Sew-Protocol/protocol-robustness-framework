@@ -33,19 +33,18 @@ This repository maintains two scenario suites:
 | Suite | Prefix | Count | Runtime | Purpose |
 |-------|--------|-------|---------|---------|
 | **Deterministic invariant suite** | `S` | S01–S41 (41 scenarios) | ~1 s in-process, no server | Protocol correctness, state machine validation, adversarial rejection, edge cases |
-| **Adversarial gRPC suite** | `F` (failure class) via `S24–S35` | 33 scenarios | Requires gRPC server | Live adversarial agents, failure-mode reproduction, attack-surface mapping |
+
 
 **S-prefix** — all in-process deterministic scenarios (S01–S67 in the full suite; S01–S41 in the baseline invariant run). Each has fixed inputs, a known expected outcome, and invariants checked at every step.
 
-**F-prefix** — the 10 adversarial failure-mode categories (F1–F10). Each F-class maps to one or more scenarios in the gRPC suite (S24–S35 in the current baseline). The F-prefix is used when referring to the failure class independent of the specific scenario number.
+
 
 **Running the suites:**
 ```bash
 # Deterministic in-process suite (S01–S41)
 clojure -M:run -- --invariants
 
-# Adversarial agent suite (all scenarios)
-bb adv:broad
+
 
 # Focused adversarial search or scenario replay
 bb run:scenario:search <text>

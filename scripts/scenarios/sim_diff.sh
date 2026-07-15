@@ -38,13 +38,13 @@ trap cleanup EXIT
 
 echo "Running baseline replay at $BASELINE..."
 mkdir -p "$TEMP_DIR/results"
-python3 "$REPO_ROOT/python/replay_once.py" "$SCENARIO" "$TEMP_DIR/results/baseline.json" "$TEMP_DIR"
+python3 "$REPO_ROOT/scripts/replay_once.py" "$SCENARIO" "$TEMP_DIR/results/baseline.json" "$TEMP_DIR"
 
 echo "Running candidate replay at HEAD..."
-python3 "$REPO_ROOT/python/replay_once.py" "$SCENARIO" "results/candidate.json" "$REPO_ROOT"
+python3 "$REPO_ROOT/scripts/replay_once.py" "$SCENARIO" "results/candidate.json" "$REPO_ROOT"
 
 echo "Generating comparison report..."
-python3 "$REPO_ROOT/python/trace_compare.py" \
+python3 "$REPO_ROOT/scripts/trace_compare.py" \
   --baseline "$TEMP_DIR/results/baseline.json" \
   --candidate results/candidate.json \
   --out-dir results/sim-diff

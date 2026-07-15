@@ -50,6 +50,25 @@
                 world-upheld (:world r-res)]
             (is (= :reversed (get-in world-upheld [:pending-fraud-slashes workflow-id :status])))))))))
 
+(deftest slash-deadline-belongs-to-appeal-window
+  (let [world (t/empty-world 1000)
+        buyer "0xBuyer"
+        seller "0xSeller"
+        resolver-addr "0xRes"
+        gov "0xGov"
+        snap (snap-fix/escrow-snapshot {:appeal-window-duration 10})
+        world (reg/register-stake world resolver-addr 1000)
+        {:keys [world workflow-id]}
+        (world-ready-for-fraud-slash-propose world buyer "0xT" seller resolver-addr 1000 snap)
+        world-prop (-> (res/propose-fraud-slash world workflow-id gov resolver-addr 500) :world)
+        deadline (get-in world-prop [:pending-fraud-slashes workflow-id :appeal-deadline])
+        world-at-deadline (time-ctx/advance-time world-prop {:to deadline})
+        execute-result (res/execute-fraud-slash world-at-deadline workflow-id)
+        appeal-result (res/appeal-slash world-at-deadline workflow-id resolver-addr)]
+    (is (false? (:ok execute-result)))
+    (is (= :timelock-not-expired (:error execute-result)))
+    (is (true? (:ok appeal-result)))))
+
 (deftest appeal-slash-after-deadline-rejected
   (let [world (t/empty-world 1000)
         buyer "0xBuyer"

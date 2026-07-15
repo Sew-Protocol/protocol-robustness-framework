@@ -179,7 +179,7 @@ Single-trace execution is not a formal proof of safety across all possible infor
 * Adversarial and multi-actor scenario modelling
 * Optional evidence and artifact generation
 * Validation-root builder for structured result accumulation
-* Adversarial agent suite (Python/gRPC) with Babashka wrappers (`bb adv:broad`, `bb adv:deep`)
+* Trace-comparison reports for replay and model/EVM equivalence (`bb trace:compare`)
 
 ## Advanced Capabilities & Observability
 
@@ -528,14 +528,12 @@ bb test:invariants
 
 Runs fast in-process invariant scenarios.
 
-### 4. Run adversarial exploration
+### 4. Compare replay outputs
 
-Run the adversarial agent suite:
+Generate a structural and metric diff between two normalized replay JSON outputs:
 
 ```bash
-bb adv:broad           # broad discovery preset
-bb adv:deep            # deeper exploit-chain preset
-bb adv:all:broad       # start server + broad (all-in-one)
+bb trace:compare --baseline results/baseline.json --candidate results/candidate.json
 ```
 
 ### 5. Run dispute-resolution robustness validation

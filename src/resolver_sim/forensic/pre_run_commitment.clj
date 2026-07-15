@@ -1,7 +1,8 @@
 (ns resolver-sim.forensic.pre-run-commitment
   "Pre-run commitment manifest: binds source hash, deps hash, corpus hash,
    runner binary hash, and config hash BEFORE execution begins.
-   Written to results/runs/<run-id>/pre-run-commitment.json"
+   Callers may provide an explicit execution directory; the legacy writer uses
+   results/runs/<run-id>/pre-run-commitment.json."
   (:require [clojure.java.io :as io]
             [resolver-sim.forensic.source-hash :as src-hash]
             [resolver-sim.forensic.deps-hash :as deps-hash]
@@ -55,12 +56,16 @@
      (assoc commitment :pre-run/commitment-hash hash))))
 
 (defn write-commitment!
-  "Write pre-run commitment to disk.
-   Creates results/runs/<run-id>/pre-run-commitment.json"
-  [commitment]
-  (let [run-id (or (:pre-run/run-id commitment) "unknown")
-        dir (io/file "results" "runs" run-id)
-        f (io/file dir "pre-run-commitment.json")]
-    (.mkdirs dir)
-    (spit f (json/write-str commitment {:indent true}))
-    {:path (.getPath f) :hash (:pre-run/commitment-hash commitment)}))
+  "Write a pre-run commitment to disk.
+
+   The one-argument arity retains the legacy results/runs location. An explicit
+   execution-dir makes the commitment owned by a structured run bundle."
+  ([commitment]
+   (write-commitment! commitment nil))
+  ([commitment execution-dir]
+   (let [run-id (or (:pre-run/run-id commitment) "unknown")
+         dir (or execution-dir (str (io/file "results" "runs" run-id)))
+         f (io/file dir "pre-run-commitment.json")]
+     (.mkdirs (io/file dir))
+     (spit f (json/write-str commitment {:indent true}))
+     {:path (.getPath f) :hash (:pre-run/commitment-hash commitment)})))

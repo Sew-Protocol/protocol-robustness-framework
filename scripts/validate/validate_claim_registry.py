@@ -58,29 +58,43 @@ def normalize_claim_id(raw: str) -> str:
     return s
 
 
-def collect_theory_claim_ids(scenarios_dir: Path) -> set[str]:
+def normalize_scenario_id(raw: str) -> str:
+    """Normalize historical `S29_name` aliases to canonical EDN scenario IDs."""
+    return str(raw).strip().lower().replace("_", "-")
+
+
+def load_edn_scenarios(scenarios_dir: Path) -> list[dict[str, Any]]:
+    """Read canonical scenario metadata with Clojure's EDN parser."""
+    command = (
+        "(require '[clojure.edn :as edn] '[clojure.data.json :as json] '[clojure.java.io :as io]) "
+        f"(let [root (io/file {json.dumps(str(scenarios_dir / 'edn'))}) "
+        "scenarios (for [path (file-seq root) :when (.endsWith (.getName path) \".edn\") "
+        ":let [doc (edn/read-string (slurp path))]] "
+        "{:path (.getPath path) :scenario-id (:scenario-id doc) :theory (:theory doc)})] "
+        "(println (json/write-str scenarios)))"
+    )
+    try:
+        result = subprocess.run(["clojure", "-M", "-e", command], check=True, capture_output=True, text=True)
+    except (subprocess.CalledProcessError, OSError) as exc:
+        fail(f"could not load canonical EDN scenarios: {exc}")
+    lines = result.stdout.strip().splitlines()
+    if not lines:
+        fail("empty EDN scenario payload from Clojure")
+    payload = json.loads(lines[-1])
+    if not isinstance(payload, list):
+        fail("EDN scenario payload must be a list")
+    return [scenario for scenario in payload if isinstance(scenario, dict)]
+
+
+def collect_theory_claim_ids(scenarios: list[dict[str, Any]]) -> set[str]:
     found: set[str] = set()
-    parse_errors: list[str] = []
-    for p in sorted(scenarios_dir.glob("*.json")):
-        obj: Any | None = None
-        try:
-            obj = json.loads(p.read_text())
-        except json.JSONDecodeError as exc:
-            parse_errors.append(f"{p.name}: invalid JSON ({exc})")
-        except OSError as exc:
-            parse_errors.append(f"{p.name}: unreadable file ({exc})")
-        if obj is None:
+    for scenario in scenarios:
+        theory = scenario.get("theory") or {}
+        if not isinstance(theory, dict):
             continue
-        if not isinstance(obj, dict):
-            continue
-        theory = obj.get("theory") or {}
-        cid = theory.get("claim-id")
-        if cid:
-            found.add(normalize_claim_id(cid))
-    if parse_errors:
-        warn(f"skipped {len(parse_errors)} scenario files due to read/parse errors:")
-        for err in parse_errors:
-            warn(f"  {err}")
+        claim_id = theory.get("claim-id")
+        if claim_id:
+            found.add(normalize_claim_id(claim_id))
     return found
 
 
@@ -111,7 +125,7 @@ def load_sew_claims(path: Path) -> list[dict[str, Any]]:
 def validate_sew_claims(scenarios_dir: Path, sew_claims_path: Path) -> None:
     if not sew_claims_path.exists():
         fail(f"sew-claims file missing: {sew_claims_path}")
-    scenario_files = {p.name for p in scenarios_dir.rglob("*.json")}
+    scenario_files = {p.name for p in scenarios_dir.rglob("*.edn")}
     claims = load_sew_claims(sew_claims_path)
     for claim in claims:
         cid = claim.get("claim/id") or claim.get("claim-id") or claim.get("id")
@@ -120,12 +134,15 @@ def validate_sew_claims(scenarios_dir: Path, sew_claims_path: Path) -> None:
         cid_s = normalize_claim_id(str(cid))
         for ref in claim.get("validated-by") or []:
             ref_s = str(ref).strip()
-            fname = Path(ref_s).name
-            if fname not in scenario_files:
-                fail(
-                    f"sew-claims claim '{cid_s}' references missing scenario file '{fname}' "
-                    f"(from '{ref_s}')"
-                )
+            if ref_s.startswith("scenarios/"):
+                fname = Path(ref_s).name
+                if fname not in scenario_files:
+                    fail(
+                        f"sew-claims claim '{cid_s}' references missing scenario file '{fname}' "
+                        f"(from '{ref_s}')"
+                    )
+            elif not Path(ref_s).exists():
+                fail(f"sew-claims claim '{cid_s}' references missing evidence path '{ref_s}'")
 
 
 def main() -> int:
@@ -155,7 +172,12 @@ def main() -> int:
             f"missing_in_map={missing_in_map}, extra_in_map={extra_in_map}"
         )
 
-    scenario_files = {p.name for p in scenarios_dir.rglob("*.json")}
+    scenarios = load_edn_scenarios(scenarios_dir)
+    scenario_ids = {
+        normalize_scenario_id(scenario_id)
+        for scenario in scenarios
+        if (scenario_id := scenario.get("scenario-id"))
+    }
 
     for cid, cdef in claims.items():
         claim_id_field = normalize_claim_id(cdef.get("claim/id") or cid)
@@ -172,11 +194,11 @@ def main() -> int:
         for bucket in ("supporting", "falsifying"):
             scenarios = entry.get(bucket) or []
             for sid in scenarios:
-                fname = f"{sid}.json"
-                if fname not in scenario_files:
+                canonical_id = normalize_scenario_id(sid)
+                if canonical_id not in scenario_ids:
                     fail(f"unknown scenario '{sid}' referenced by claim '{cid}' ({bucket})")
 
-    theory_claim_ids = collect_theory_claim_ids(scenarios_dir)
+    theory_claim_ids = collect_theory_claim_ids(scenarios)
     registry_ids = set(claims.keys())
     unregistered_theory_claims = sorted(theory_claim_ids - registry_ids)
 

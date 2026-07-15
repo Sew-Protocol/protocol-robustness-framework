@@ -947,8 +947,9 @@
   (let [allow-dirty? (or allow-dirty? *allow-dirty* false)
         registry (build-registry :run-id run-id)
         reg-hash (:registry-hash registry)
-        reg-path (write-registry! registry dir)
-        sig-result (write-registry-signature! registry
+        reg-path (write-registry! registry
+                                  (when dir (str (io/file dir evidence-registry-filename))))
+                                          sig-result (write-registry-signature! registry
                                               :private-key-path private-key-path
                                               :password password
                                               :dir dir)

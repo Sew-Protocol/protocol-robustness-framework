@@ -43,8 +43,6 @@ bb test:suites
 # Generate evidence artifacts for a single scenario
 bb evidence:build --scenario data/fixtures/traces/s08-state-machine-attack-gauntlet.trace.json
 
-# Run adversarial profitability sweep
-bb adv:sweep
 ```
 
 Every run is stamped with git SHA and UTC timestamp. Output is deterministic — the same commit produces identical results on any machine.

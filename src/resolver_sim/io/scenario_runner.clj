@@ -34,6 +34,11 @@
 ;; Structured logging
 ;; ---------------------------------------------------------------------------
 
+(def ^:dynamic *finalize-evidence?*
+  "When true, let replay finalize its own evidence cursor into the bound artifact directory.
+   Structured runs bind this so chain roots are produced by the cursor owner."
+  false)
+
 (def ^:dynamic *log-level*
   "Log level threshold for structured stderr output.
      :info   — all events (default)
@@ -203,8 +208,8 @@
       #(replay/replay-yield-scenario protocol %)
       (fn [scenario]
         (if (= "sew-v1" protocol-id)
-          (sew/replay-with-sew-protocol scenario {:allow-dirty? true :skip-finalize true})
-          (replay/replay-with-protocol protocol scenario {:allow-dirty? true :skip-finalize true}))))))
+          (sew/replay-with-sew-protocol scenario {:allow-dirty? true :skip-finalize (not *finalize-evidence?*)})
+                    (replay/replay-with-protocol protocol scenario {:allow-dirty? true :skip-finalize (not *finalize-evidence?*)}))))))
 
 (defn- scenario-file-details
   [scenario-path default-protocol-id]
@@ -975,7 +980,12 @@
       :suite          — path-list keyword (e.g. :yield-provider-scenarios, :sew-yield-scenarios)
       :fixture-suite  — EDN fixture keyword (e.g. :suites/all-invariants)
       :scenario       — file path
-      :output-file    — JSON path when running a single scenario
+      :output-file    — canonical replay JSON path when running a single scenario
+      :artifact-dir   — low-level forensic/evidence artifact directory
+                         (:output-dir is a deprecated internal alias)
+      :run-root       — complete structured bundle root, when applicable
+      :scenario-root, :execution-dir, :summary-dir, :manifest-dir
+                       — structured-run destinations owned by their respective writers
       :protocol       — protocol id (default sew-v1)
       :dry-run?       — when true, validate without replaying
    `opts` may include:
@@ -1003,12 +1013,21 @@
     ;; Pre-run commitment (best-effort, lazy-loaded forensic namespaces)
         (let [suite-key (:suite dispatch)
               run-id (str "run-" (java.time.Instant/now))
+              structured? (boolean (:run-root dispatch))
+              artifact-dir (or (:artifact-dir dispatch) (:output-dir dispatch)
+                               (str "./prf-runs/" run-id))
+              execution-dir (:execution-dir dispatch)
+              _ (when (and structured? (nil? execution-dir))
+                  (throw (ex-info "Structured runs require :execution-dir"
+                                  {:dispatch (select-keys dispatch [:run-root :scenario-root :artifact-dir])})))
               _ (try
                   (let [prc (requiring-resolve 'resolver-sim.forensic.pre-run-commitment/build-commitment)
                         pwrite (requiring-resolve 'resolver-sim.forensic.pre-run-commitment/write-commitment!)
                         ctx {:suite-key suite-key :run-id run-id}
                         commitment (prc ctx)
-                        written (pwrite commitment)]
+                        written (if structured?
+                                  (pwrite commitment execution-dir)
+                                  (pwrite commitment))]
                     (log-event :info :pre-commitment :hash (:hash written))
                 ;; Sign if key available
                     (when (or (System/getenv "PRF_SIGNING_KEY")
@@ -1025,8 +1044,8 @@
               (chain/with-fresh-registry
                 (chain/with-fresh-chain-cursor
                   (binding [ts/*tsa-url* (or tsa-url ts/*tsa-url*)
-                            evcfg/*artifact-dir* (or (:output-dir dispatch)
-                                                     (str "./prf-runs/" run-id))]
+                            *finalize-evidence?* structured?
+                            evcfg/*artifact-dir* artifact-dir]
                     (let [exec-spec (-> (build-execution-node-spec
                                          dispatch opts runner-selection
                                          canonical? non-canonical-reason protocol-id
@@ -1087,6 +1106,8 @@
                           enriched-root (if (seq raw-results)
                                           (assoc enriched-root :run/scenario-results raw-results)
                                           enriched-root)]
+                      ;; In structured mode replay finalized its own cursor while
+                      ;; the supplied forensic artifact directory was bound.
                       (populate-forensic-claims!)
                       (write-run-links! run-id dispatch protocol-id tsa-url canonical?)
 
@@ -1130,10 +1151,69 @@
                                                     :input-hashes {:scenario/path p}}))
                                           (or paths []))
                               dag (dag-build nodes [])]
-                          (dag-write dag run-id)
+                          (if structured?
+                            (dag-write dag run-id execution-dir)
+                            (dag-write dag run-id))
                           (log-event :info :dag-write :node-count (:dag/node-count dag)))
                         (catch Exception e
                           (log-event :warn :dag-write-failed :error (.getMessage e))))
+
+                      ;; Write run-enrichment.json for manifest enrichment in consolidated path
+                      (when-let [manifest-dir (:manifest-dir dispatch)]
+                        (try
+                          (let [evidence-root (chain/evidence-root-hash)
+                                exec-hash (some-> execution-node :node-hash)
+                                bundle-root-hash (some-> execution-node
+                                                         :policy-output :visible :outputs :bundle/root-hash)
+                                dag-path (if structured?
+                                           (str (io/file execution-dir "execution-dag.json"))
+                                           (str "results/runs/" run-id "/execution-dag.json"))
+                                dag-root-hash (try
+                                                (-> (json/read-str (slurp dag-path) :key-fn keyword)
+                                                    :dag/root-hash)
+                                                (catch Exception _ nil))
+                                pre-commit-path (if structured?
+                                                  (str (io/file execution-dir "pre-run-commitment.json"))
+                                                  (str "results/runs/" run-id "/pre-run-commitment.json"))
+                                pre-commit (try
+                                             (json/read-str (slurp pre-commit-path) :key-fn keyword)
+                                             (catch Exception _ nil))
+                                env (get-in enriched-root [:run/environment] {})
+                                source-data (or (:source pre-commit) source-provenance)
+                                enrichment
+                                {"execution"
+                                 {"chain-root-ref" (when evidence-root
+                                                    (str "evidence-chain:sha256:" evidence-root))
+                                 "execution-node-ref" (when exec-hash
+                                                        (str "evidence-node:sha256:" exec-hash))
+                                 "dag-root-ref" (when dag-root-hash
+                                                  (str "dag:sha256:" dag-root-hash))
+                                 "dag-path" (when structured?
+                                              (str "scenarios/" (:scenario-slug dispatch)
+                                                   "/execution/execution-dag.json"))
+                                 "pre-run-commitment-path" (when structured?
+                                                             (str "scenarios/" (:scenario-slug dispatch)
+                                                                  "/execution/pre-run-commitment.json"))}
+                                 "implementation"
+                                 {"source-ref" (:hash source-data)
+                                  "source-commit" (:commit source-data)
+                                  "source-dirty?" (boolean (:dirty? source-data))
+                                  "deps-ref" (some-> pre-commit :deps :root-hash)
+                                  "config-ref" (:config-hash pre-commit)}
+                                 "configuration"
+                                 {"evidence-config-ref" (:config-hash pre-commit)
+                                  "contract-version" "evidence-contract.v1"
+                                  "hashing-version" "domain-hash.v1"}
+                                 "environment"
+                                 {"clojure-version" (:clojure/version env)
+                                  "java-version" (:java/version env)
+                                  "os-name" (:os/name env)}}
+                                enrichment-path (str manifest-dir "/run-enrichment.json")]
+                            (io/make-parents enrichment-path)
+                            (spit enrichment-path (json/write-str enrichment {:indent true}))
+                            (log-event :info :run-enrichment-written :path enrichment-path))
+                          (catch Exception e
+                            (log-event :warn :run-enrichment-failed :error (.getMessage e)))))
 
                       (let [output-path (or (:output-file dispatch)
                                             (when (:output-dir dispatch)

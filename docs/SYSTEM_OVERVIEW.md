@@ -380,7 +380,7 @@ specification*.
 | Run Monte Carlo phases           | `./scripts/test.sh monte-carlo`                    |
 | Run everything                   | `./scripts/test.sh all`                            |
 | Run single MC phase              | `clojure -M:run -- -p data/params/baseline.edn -O` |
-| Generate attack-outcome diagrams | `bb report:attack-map`                              |
+| Compare replay outputs           | `bb trace:compare --baseline a.json --candidate b.json` |
 
 
 Parameter files live in `data/params/`. Results are written to `results/`. The

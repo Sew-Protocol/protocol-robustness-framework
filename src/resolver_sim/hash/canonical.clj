@@ -247,7 +247,15 @@
     (instance? Boolean v)
     (ba-of (if v tag-bool-true tag-bool-false))
 
-    (number? v)
+    ;; Only integer types have a canonical representation.  Do not use
+    ;; number? here: coercing floating-point values or ratios to long silently
+    ;; aliases distinct semantic values (for example, 1 and 1.9).
+    (or (instance? Long v)
+        (instance? Integer v)
+        (instance? Short v)
+        (instance? Byte v)
+        (instance? clojure.lang.BigInt v)
+        (instance? BigInteger v))
     (let [bi (coerce-integer v)
           zv (zigzag bi)
           vu (encode-varuint zv)]

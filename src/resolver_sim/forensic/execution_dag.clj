@@ -1,7 +1,8 @@
 (ns resolver-sim.forensic.execution-dag
   "Formal execution DAG: typed nodes and edges with input/output hashes.
    Plan DAG is created before execution; Evidence DAG is populated during run.
-   Written to results/runs/<run-id>/execution-dag.json"
+   Callers may provide an explicit execution directory; the legacy arity writes
+   to results/runs/<run-id>/execution-dag.json."
   (:require [clojure.java.io :as io]
             [clojure.data.json :as json])
   (:import [java.security MessageDigest]
@@ -73,10 +74,16 @@
      :dag/root-hash (sha256 root-str)}))
 
 (defn write-dag!
-  "Write DAG to disk.  Returns the path written."
-  [dag run-id]
-  (let [dir (io/file "results" "runs" (or run-id "unknown"))
-        f (io/file dir "execution-dag.json")]
-    (.mkdirs dir)
-    (spit f (json/write-str dag {:indent true}))
-    (.getPath f)))
+  "Write DAG to disk. Returns the path written.
+
+   The two-argument arity preserves the legacy results/runs location. Supplying
+   execution-dir keeps a structured run self-contained."
+  ([dag run-id]
+   (write-dag! dag run-id nil))
+  ([dag run-id execution-dir]
+   (let [dir (or execution-dir
+                 (str (io/file "results" "runs" (or run-id "unknown"))) )
+         f (io/file dir "execution-dag.json")]
+     (.mkdirs (io/file dir))
+     (spit f (json/write-str dag {:indent true}))
+     (.getPath f))))

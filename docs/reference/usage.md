@@ -1,6 +1,6 @@
 # Usage Reference
 
-This is the supported command reference for the current repository. The preferred entry points are the Babashka tasks (`bb ...`) and the canonical test runner (`./scripts/test.sh ...`). Direct invocation of Python scripts under `integration/python/` or `test/integration/python/` remains supported for advanced use but is not the recommended workflow.
+This is the supported command reference for the current repository. The preferred entry points are the Babashka tasks (`bb ...`) and the canonical test runner (`./scripts/test.sh ...`). The standalone replay-comparison utilities live under `scripts/`; use their Babashka wrappers where available.
 
 ## Command surfaces
 
@@ -35,7 +35,15 @@ bb run:scenario <scenario-id>
 bb sim:run -p data/params/baseline.edn
 ```
 
-`bb run:scenario` accepts `--result-display-level summary|failures|standard|verbose|audit` and `--output-dir <dir>`.
+`bb run:scenario` accepts `--result-display-level summary|failures|standard|verbose|audit`.
+
+For a self-contained structured execution bundle, use the canonical option:
+
+```bash
+bb run:scenario <scenario-id> --run-root <dir>
+```
+
+`--output-dir`, `--scenario-output-dir`, and `--save-output` are temporary compatibility aliases for `--run-root`. At the CLI, the **run root** is the complete bundle (`manifest/` plus `scenarios/<slug>/...`). Internally, an **artifact directory** is only the low-level `scenarios/<slug>/forensic/` destination supplied to evidence and forensic writers. With no output-root option, the legacy scattered output behavior remains unchanged.
 
 ## Canonical test-runner targets
 

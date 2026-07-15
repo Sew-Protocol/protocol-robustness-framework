@@ -128,24 +128,7 @@ The report includes:
 - terminal-state count differences
 - a single headline line you can paste into research notes
 
-### Attack-to-outcome visual map (shareable diagrams)
 
-Generate three canonical visual artifacts from fixtures/sweep outputs:
-
-```bash
-bb report:attack-map --out-dir results/attack-outcome-map
-```
-
-Outputs (timestamped directory):
-- `state-transition-heatmap.md` — action→action transition heatmap table
-- `profitability-surface-snapshot.md` — top risk points from latest `adv:sweep` surface
-- `escalation-timeline.md` — Mermaid escalation/settlement timeline
-
-If no profitability surface exists yet, run:
-
-```bash
-bb adv:sweep
-```
 
 ### Transition/guard coverage release gate
 

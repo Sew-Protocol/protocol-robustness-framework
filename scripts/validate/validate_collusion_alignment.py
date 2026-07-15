@@ -1,56 +1,94 @@
 #!/usr/bin/env python3
-"""Validate collusion fixture/claim alignment.
+"""Validate collusion scenario/claim alignment.
 
-Extracted from test.sh inline Python block at line 445.
+Canonical scenarios are EDN.  Clojure performs the EDN decoding so this
+validator does not introduce a second EDN parser or interpretation in Python.
 """
 
+from __future__ import annotations
+
 import json
+import subprocess
 import sys
 from pathlib import Path
+from typing import Any
 
 
-def main():
-    root = Path('data/fixtures/traces')
-    errors = []
+def load_edn(path: Path) -> dict[str, Any]:
+    command = (
+        "(require '[clojure.edn :as edn] '[clojure.data.json :as json]) "
+        f"(println (json/write-str (edn/read-string (slurp {json.dumps(str(path))}))))"
+    )
+    result = subprocess.run(
+        ["clojure", "-M", "-e", command],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    payload = result.stdout.strip().splitlines()
+    if not payload:
+        raise ValueError("empty EDN decoding result")
+    document = json.loads(payload[-1])
+    if not isinstance(document, dict):
+        raise ValueError("scenario must decode to a map")
+    return document
 
-    for p in sorted(root.glob('*.trace.json')):
+
+def requires_collusion_alignment(document: dict[str, Any]) -> bool:
+    theory = document.get("theory") or {}
+    mechanism_properties = theory.get("mechanism-properties") or []
+    claim = str(theory.get("claim", "")).lower()
+    tags = [str(tag).lower() for tag in (document.get("threat-tags") or [])]
+    return (
+        "collusion-resistance" in mechanism_properties
+        or "collusion" in claim
+        or any("collusion" in tag for tag in tags)
+    )
+
+
+def is_inconclusive_fixture(document: dict[str, Any]) -> bool:
+    scenario_id = str(document.get("scenario-id", ""))
+    title = str(document.get("scenario-title") or document.get("title") or "").lower()
+    return "collusion-resistance-inconclusive" in scenario_id or "inconclusive" in title
+
+
+def has_collusive_actor(document: dict[str, Any]) -> bool:
+    return any(
+        str(agent.get("strategy") or agent.get("type") or "").lower() == "collusive"
+        for agent in (document.get("agents") or [])
+        if isinstance(agent, dict)
+    )
+
+
+def main() -> int:
+    root = Path("scenarios/edn")
+    errors: list[str] = []
+
+    for path in sorted(root.glob("*.edn")):
+        # Collusion is the only property this validator reads; avoid starting
+        # Clojure for every scenario in the catalog.
+        if "collusion" not in path.read_text(encoding="utf-8").lower():
+            continue
         try:
-            obj = json.loads(p.read_text())
-        except Exception:
+            document = load_edn(path)
+        except (OSError, subprocess.CalledProcessError, ValueError, json.JSONDecodeError) as exc:
+            errors.append(f"collusion-alignment-unreadable:{path}:{exc}")
             continue
 
-        theory = obj.get('theory') or {}
-        mech = theory.get('mechanism-properties') or []
-        claim = str(theory.get('claim', '')).lower()
-        tags = [str(t).lower() for t in (obj.get('threat-tags') or [])]
-        needs_collusion_alignment = (
-            ('collusion-resistance' in mech)
-            or ('collusion' in claim)
-            or any('collusion' in t for t in tags)
-        )
-        if not needs_collusion_alignment:
-            continue
-
-        agents = obj.get('agents') or []
-        has_explicit_collusive_actor = any(
-            str(a.get('type', '')).lower() == 'collusive' for a in agents if isinstance(a, dict)
-        )
-
-        # Allow dedicated inconclusive fixture by id/title to remain actor-agnostic.
-        sid = str(obj.get('scenario-id', ''))
-        title = str(obj.get('title', '')).lower()
-        inconclusive_fixture = ('collusion-resistance-inconclusive' in sid) or ('inconclusive' in title)
-
-        if (not has_explicit_collusive_actor) and (not inconclusive_fixture):
-            errors.append(f"collusion-alignment-missing:{p}:expected at least one agent.type='collusive'")
+        if (
+            requires_collusion_alignment(document)
+            and not has_collusive_actor(document)
+            and not is_inconclusive_fixture(document)
+        ):
+            errors.append(f"collusion-alignment-missing:{path}:expected at least one agent.strategy='collusive'")
 
     if errors:
-        print('Collusion fixture/claim alignment checks failed:')
-        for e in errors:
-            print(' -', e)
-        raise SystemExit(1)
+        print("Collusion fixture/claim alignment checks failed:")
+        for error in errors:
+            print(" -", error)
+        return 1
 
-    print('Collusion fixture/claim alignment checks passed')
+    print("Collusion fixture/claim alignment checks passed")
     return 0
 
 

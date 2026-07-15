@@ -204,23 +204,48 @@ def extract_metrics(replay: dict, replay_path: pathlib.Path) -> dict:
     }
 
 
-def _extract_claimable_from_world(world: dict) -> list:
-    """Discover claimable entries from any known world structure.
+def _workflow_token_map(world: dict) -> dict:
+    """Infer settlement token by workflow from custody records.
 
-    Currently handles:
-      - Generic: world['claimable'] dict
-      - Yield protocol: world['yield/partial-fill-decisions'] with deferred amounts
+    Generic SEW claimables are keyed by workflow and recipient, while token is
+    recorded in the corresponding held-custody adjustment or claimable-v2
+    settlement domain. This joins those normalized state projections without
+    guessing a token from an amount.
     """
-    entries = []
+    tokens = {}
+    for adjustment in world.get("held-adjustments", []):
+        if not isinstance(adjustment, dict):
+            continue
+        workflow_id = adjustment.get("held/workflow-id")
+        token = adjustment.get("token")
+        if workflow_id is not None and token is not None:
+            tokens[str(workflow_id)] = token
+    return tokens
 
-    # Generic claimable key
+
+def _extract_claimable_from_world(world: dict) -> list:
+    """Discover claimable entries and their available token amounts."""
+    entries = []
+    workflow_tokens = _workflow_token_map(world)
+    claimable_v2 = world.get("claimable-v2", {})
+
+    # Generic SEW claimables: workflow -> recipient -> amount.
     claimable = world.get("claimable", {})
     if isinstance(claimable, dict):
-        entries.extend(
-            {"source": "claimable", "key": k, "type": "deferred-fill"}
-            for k, v in claimable.items()
-            if isinstance(v, dict)
-        )
+        for workflow_id, recipients in claimable.items():
+            if not isinstance(recipients, dict):
+                continue
+            token = workflow_tokens.get(str(workflow_id))
+            v2_domains = claimable_v2.get(str(workflow_id), {}) if isinstance(claimable_v2, dict) else {}
+            entries.append({
+                "source": "claimable",
+                "key": workflow_id,
+                "type": "settlement-claimable",
+                "token": token,
+                "available_to_claim": recipients,
+                "available_total": sum(v for v in recipients.values() if isinstance(v, (int, float))),
+                "claimable_v2": v2_domains if isinstance(v2_domains, dict) else {},
+            })
 
     # Yield protocol: partial-fill decisions with deferred amounts
     pfd = world.get("yield/partial-fill-decisions", {})
@@ -258,10 +283,36 @@ def _extract_claimable_from_world(world: dict) -> list:
 def extract_claimable_classification(replay: dict, replay_path: pathlib.Path) -> dict:
     world = replay.get("world", {})
     entries = _extract_claimable_from_world(world)
+    available_by_token = {}
+    for entry in entries:
+        token = entry.get("token")
+        amount = entry.get("available_total")
+        if token is not None and isinstance(amount, (int, float)):
+            available_by_token[token] = available_by_token.get(token, 0) + amount
+
+    # Fees are not claimable, but reporting them beside claimable balances makes
+    # the settlement disposition auditable: gross = claimable + fees.
+    fees_by_token = world.get("total-fees", {})
+    if not isinstance(fees_by_token, dict):
+        fees_by_token = {}
+    settlement_accounting_by_token = {}
+    for token in set(available_by_token) | set(fees_by_token):
+        claimable_amount = available_by_token.get(token, 0)
+        fee_amount = fees_by_token.get(token, 0)
+        if not isinstance(fee_amount, (int, float)):
+            fee_amount = 0
+        settlement_accounting_by_token[token] = {
+            "claimable": claimable_amount,
+            "fees": fee_amount,
+            "gross_settlement": claimable_amount + fee_amount,
+        }
+
     result = {
         "schema_version": "claimable-classification.v2",
         "scenario_id": replay.get("source", {}).get("scenario-id"),
         "claimable_entries": len(entries),
+        "available_to_claim_by_token": available_by_token,
+        "settlement_accounting_by_token": settlement_accounting_by_token,
         "escrow_count": len([
             k for k in world if k.startswith("escrow") and isinstance(world[k], dict)
         ]) if isinstance(world, dict) else 0,
@@ -389,9 +440,15 @@ def _artifact_entry(artifact_id: str, kind: str, importance: str,
     }
 
 
-def update_artifact_registry(run_dir: pathlib.Path, new_entries: list[dict]):
-    """Append new entries to test-artifacts.json in the run directory."""
-    registry_path = run_dir / "test-artifacts.json"
+def update_artifact_registry(run_dir: pathlib.Path, new_entries: list[dict],
+                             run_root: pathlib.Path | None = None):
+    """Update the legacy registry or the structured run-root registry.
+
+    Structured registry paths are relative to the complete run root, never to
+    its manifest directory. The legacy behavior remains unchanged.
+    """
+    registry_path = ((run_root / "manifest" / "artifacts.json")
+                     if run_root else run_dir / "test-artifacts.json")
     if not registry_path.exists():
         return
     with registry_path.open("r", encoding="utf-8") as f:
@@ -415,7 +472,7 @@ def update_artifact_registry(run_dir: pathlib.Path, new_entries: list[dict]):
         registry["generated_at"] = _now_utc()
         with registry_path.open("w", encoding="utf-8") as f:
             json.dump(registry, f, indent=2)
-        print(f"  [registry] Added {added} new artifact(s) to test-artifacts.json")
+        print(f"  [registry] Added {added} new artifact(s) to {registry_path}")
 
 
 def main():
@@ -425,10 +482,13 @@ def main():
                         help="Path to replay output JSON (--output-file)")
     parser.add_argument("--run-dir", required=True,
                         help="Run-specific directory (e.g. results/runs/s19-.../)")
+    parser.add_argument("--run-root",
+                        help="Complete structured bundle root. Enables manifest/artifacts.json updates.")
     args = parser.parse_args()
 
     replay_path = pathlib.Path(args.replay)
     run_dir = pathlib.Path(args.run_dir)
+    run_root = pathlib.Path(args.run_root) if args.run_root else None
 
     if not replay_path.exists():
         print(f"Error: replay file not found: {replay_path}", file=sys.stderr)
@@ -440,9 +500,11 @@ def main():
     # Normalize: handle both bundle-root.v1 and raw replay formats
     replay = normalize_replay(replay_raw)
 
-    # 1. raw/replay-output.json — copy of original output (always the raw input)
-    write_json(run_dir / "raw" / "replay-output.json", replay_raw)
-    print(f"  raw/replay-output.json ({os.path.getsize(run_dir / 'raw' / 'replay-output.json')} bytes)")
+    # The execution replay is canonical in structured mode. Legacy bundles keep
+    # a raw copy for compatibility; it is not an independent semantic artifact.
+    if not run_root:
+        write_json(run_dir / "raw" / "replay-output.json", replay_raw)
+        print(f"  raw/replay-output.json ({os.path.getsize(run_dir / 'raw' / 'replay-output.json')} bytes)")
 
     # 2. summaries/trace-summary.json
     trace_summ = extract_trace_summary(replay, replay_path)
@@ -480,40 +542,46 @@ def main():
         f.write(trace_plain)
     print(f"  summaries/trace-plain.md")
 
-    # 9. Ensure test-run.json and test-summary.json exist in the run dir
+    # Structured bundles use manifest/run.json and manifest/summary.json as
+    # authoritative documents; do not create legacy scenario-local views.
     test_run_path = run_dir / "test-run.json"
     test_summary_path = run_dir / "test-summary.json"
-    run_id = run_dir.name.split("-", 1)[-1] if "-" in run_dir.name else "unknown"
-    if not test_run_path.exists():
-        write_json(test_run_path, {
-            "schema_version": "test-run.v1",
-            "run_id": run_id,
-            "framework": {
-                "name": "protocol-robustness-framework-test-runner",
-                "version": "0.1.0",
-                "git_commit": None,
-                "git_message": None,
-            },
-        })
-    if not test_summary_path.exists():
-        status = "pass" if replay.get("pass?") else "fail"
-        write_json(test_summary_path, {
-            "schema_version": "test-summary.v2",
-            "run_id": run_id,
-            "overall_status": status,
-            "risk_digest": {},
-        })
+    if not run_root:
+        run_id = run_dir.name.split("-", 1)[-1] if "-" in run_dir.name else "unknown"
+        if not test_run_path.exists():
+            write_json(test_run_path, {"schema_version": "test-run.v1", "run_id": run_id,
+                                       "framework": {"name": "protocol-robustness-framework-test-runner", "version": "0.1.0", "git_commit": None, "git_message": None}})
+        if not test_summary_path.exists():
+            write_json(test_summary_path, {"schema_version": "test-summary.v2", "run_id": run_id,
+                                           "overall_status": "pass" if replay.get("pass?") else "fail", "risk_digest": {}})
 
     print(f"\nArtifacts written to {run_dir}")
 
-    # 10. Register new artifacts in test-artifacts.json
-    new_entries = [
-        _artifact_entry("test-run", "run-manifest", "CORE",
-                        "test-run.v1", test_run_path),
-        _artifact_entry("test-summary", "summary", "CORE",
-                        "test-summary.v2", test_summary_path),
+    # 10. Register generated artifacts. Structured paths are relative to run root.
+    new_entries = []
+    if not run_root:
+        new_entries.extend([
+        _artifact_entry("test-run", "run-manifest", "CORE", "test-run.v1", test_run_path),
+        _artifact_entry("test-summary", "summary", "CORE", "test-summary.v2", test_summary_path),
         _artifact_entry("raw.replay-output", "raw.replay", "DIAGNOSTIC",
-                        "raw-replay.v1", run_dir / "raw" / "replay-output.json"),
+                        "raw-replay.v1", run_dir / "raw" / "replay-output.json")])
+    else:
+        canonical = [
+            ("manifest.run", "run-manifest", "run-manifest.v1", run_root / "manifest" / "run.json"),
+            ("manifest.summary", "summary", "summary.v1", run_root / "manifest" / "summary.json"),
+            ("manifest.claimable-classification", "summary", "claimable-classification.v2", run_root / "manifest" / "claimable-classification.json"),
+            ("manifest.run-enrichment", "run-enrichment", "run-enrichment.v1", run_root / "manifest" / "run-enrichment.json"),
+            ("manifest.artifact-registry-validation", "validation", "validation-root.v1", run_root / "manifest" / "artifact-registry-validation.json"),
+            ("execution.replay-output", "raw.replay", "bundle-root.v1", replay_path),
+            ("execution.dag", "execution.dag", "execution-dag.v1", run_dir / "execution" / "execution-dag.json"),
+            ("execution.pre-run-commitment", "pre-run-commitment", "pre-run-commitment.v1", run_dir / "execution" / "pre-run-commitment.json"),
+        ]
+        for artifact_id, kind, schema_version, path in canonical:
+            if path.exists():
+                entry = _artifact_entry(artifact_id, kind, "CORE", schema_version, path)
+                entry["path"] = str(path.relative_to(run_root))
+                new_entries.append(entry)
+    new_entries.extend([
         _artifact_entry("summaries.trace", "summary.trace", "CORE",
                         "trace-summary.v1", run_dir / "summaries" / "trace-summary.json"),
         _artifact_entry("summaries.trace-plain", "summary.trace-plain", "DIAGNOSTIC",
@@ -522,14 +590,33 @@ def main():
                         "scenario-metrics.v1", run_dir / "summaries" / "metrics.json"),
         _artifact_entry("summaries.claimable", "summary.claimable", "CORE",
                         "claimable-classification.v2", run_dir / "summaries" / "claimable-classification.json"),
-        _artifact_entry("summaries.mechanisms", "summary.mechanisms", "CORE",
+                                _artifact_entry("summaries.mechanisms", "summary.mechanisms", "CORE",
                         "mechanism-summary.v1", run_dir / "summaries" / "mechanism-summary.json"),
         _artifact_entry("summaries.schema-map", "summary.schema-map", "DIAGNOSTIC",
                         "schema-map.v1", run_dir / "summaries" / "schema-map.json"),
         _artifact_entry("state.world-final", "state.final", "CORE",
                         "world-final.v1", run_dir / "state" / "world-final.json"),
-    ]
-    update_artifact_registry(run_dir, new_entries)
+    ])
+    if run_root:
+        # The existing forensic producers do not return a file inventory. Scan
+        # only their supplied scenario directory, never a shared/global root.
+        forensic_dir = run_dir / "forensic"
+        if forensic_dir.exists():
+            for path in sorted(p for p in forensic_dir.rglob("*") if p.is_file()):
+                entry = _artifact_entry(f"forensic.{path.relative_to(forensic_dir).as_posix().replace('/', '.')}",
+                                        "forensic.evidence", "DIAGNOSTIC", "unknown", path)
+                entry["path"] = str(path.relative_to(run_root))
+                new_entries.append(entry)
+        resolved_root = run_root.resolve()
+        for entry in new_entries:
+            raw_path = pathlib.Path(entry["path"])
+            path = ((run_root / raw_path).resolve()
+                    if not raw_path.is_absolute() and (run_root / raw_path).exists()
+                    else raw_path.resolve())
+            entry["path"] = path.relative_to(resolved_root).as_posix()
+        if any(".." in pathlib.PurePosixPath(entry["path"]).parts for entry in new_entries):
+            raise ValueError("structured registry paths must not contain '..'")
+    update_artifact_registry(run_dir, new_entries, run_root)
 
     return 0
 

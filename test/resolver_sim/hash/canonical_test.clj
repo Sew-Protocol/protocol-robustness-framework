@@ -32,6 +32,12 @@
   (is (bytes= (byte-array [0x10 (unchecked-byte 0xF6) 0x01]) (hc/canonical-bytes 123)))
   (is (bytes= (byte-array [0x10 (unchecked-byte 0xF5) 0x01]) (hc/canonical-bytes -123))))
 
+(deftest test-rejects-lossy-numeric-types
+  (testing "canonical hashing must not alias non-integral numeric values"
+    (is (thrown? Exception (hc/canonical-bytes 1.0)))
+    (is (thrown? Exception (hc/canonical-bytes 1.9)))
+    (is (thrown? Exception (hc/canonical-bytes (/ 1 3))))))
+
 (deftest test-string
   (let [expected (byte-array [0x20 0x06 0x61 0x63 0x74 0x69 0x76 0x65])]
     (is (bytes= expected (hc/canonical-bytes "active")))))

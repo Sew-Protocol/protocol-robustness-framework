@@ -42,10 +42,17 @@
 
 (defn verify-manifest-signature
   "Verify a signature produced by sign-manifest.
-  Returns {:valid true/false :hash h} or {:error ...}."
-  [manifest signature-hex public-key-path]
+
+   When `:registry` is supplied, reconstruct the same registry-bound manifest
+   that sign-manifest signed. Returns {:valid true/false :hash h} or
+   {:error ...}."
+  [manifest signature-hex public-key-path & {:keys [registry]}]
   (try
-    (let [h     (manifest-hash manifest)
+    (let [manifest-with-registry (if registry
+                                   (assoc manifest :artifact-registry-sha
+                                          (mhash/canonical-hash registry))
+                                   manifest)
+          h     (manifest-hash manifest-with-registry)
           valid (signing/verify-signature h signature-hex public-key-path)]
       {:valid valid :hash h})
     (catch Exception e

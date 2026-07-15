@@ -4,28 +4,32 @@
 
   run:scenario
 {:doc "Run a scenario through the registry-driven execution path.
-Usage: bb run:scenario <scenario-id> [--result-display-level <summary|failures|standard|verbose|audit> | -v | -f | -s | -a] [--output-dir <dir>]
+Usage: bb run:scenario <scenario-id> [--result-display-level <summary|failures|standard|verbose|audit> | -v | -f | -s | -a] [--run-root <dir>]
+       --run-root is the canonical flag for structured output.
        --output-dir, --save-output, --scenario-output-dir are equivalent aliases."
-    :task (let [args          (vec *command-line-args*)
-                scenario-id   (first (remove (fn [a] (.startsWith a "--")) args))
-                output-dir-idx (.indexOf args "--output-dir")
+    :task (let [args             (vec *command-line-args*)
+                scenario-id      (first (remove (fn [a] (.startsWith a "--")) args))
+                run-root-idx     (.indexOf args "--run-root")
+                output-dir-idx   (.indexOf args "--output-dir")
                 scenario-output-dir-idx (.indexOf args "--scenario-output-dir")
-                save-idx      (.indexOf args "--save-output")
-                output-dir    (or (when (<= 0 output-dir-idx)
-                                    (nth args (inc output-dir-idx) nil))
-                                 (when (<= 0 scenario-output-dir-idx)
-                                    (nth args (inc scenario-output-dir-idx) nil))
-                                 (when (<= 0 save-idx)
-                                    (nth args (inc save-idx) nil)))
+                save-idx         (.indexOf args "--save-output")
+                run-root         (or (when (<= 0 run-root-idx)
+                                       (nth args (inc run-root-idx) nil))
+                                    (when (<= 0 output-dir-idx)
+                                       (nth args (inc output-dir-idx) nil))
+                                    (when (<= 0 scenario-output-dir-idx)
+                                       (nth args (inc scenario-output-dir-idx) nil))
+                                    (when (<= 0 save-idx)
+                                       (nth args (inc save-idx) nil)))
                 slug          (some-> scenario-id
                                       (clojure.string/replace (re-pattern "^.*/") "")
                                       (clojure.string/replace (re-pattern "\\.(json|edn)$") ""))]
             (when-not scenario-id
               (throw (ex-info "Missing scenario-id. Usage: bb run:scenario <scenario-id>" {})))
-            (if output-dir
-              ;; ── consolidated output path ──────────────────────────────────────
-              (let [manifest-dir (str output-dir "/manifest")
-                    scenario-root (str output-dir "/scenarios/" slug)
+            (if run-root
+              ;; ── structured run-root path ───────────────────────────────────────
+              (let [manifest-dir (str run-root "/manifest")
+                    scenario-root (str run-root "/scenarios/" slug)
                     forensic-dir  (str scenario-root "/forensic")
                     execution-dir (str scenario-root "/execution")
                     summary-dir   (str scenario-root "/summaries")
@@ -43,12 +47,18 @@ Usage: bb run:scenario <scenario-id> [--result-display-level <summary|failures|s
                                                "(System/exit (:exit-code "
                                                "((requiring-resolve 'resolver-sim.io.scenario-runner/run-and-report) "
                                                "{:scenario \"" scenario-id "\""
-                                               " :output-dir \"" forensic-dir "\""
-                                               " :output-file \"" replay-file "\"}"
-                                               "{"
-                                               fmt-opt
-                                               "}))))")]
-                             (doseq [d [output-dir manifest-dir scenario-root
+                                               " :run-root \"" run-root "\""
+                                               " :scenario-slug \"" slug "\""
+                                               " :scenario-root \"" scenario-root "\""
+                                               " :execution-dir \"" execution-dir "\""
+                                               " :artifact-dir \"" forensic-dir "\""
+                                               " :summary-dir \"" summary-dir "\""
+                                               " :output-file \"" replay-file "\""
+                                               " :manifest-dir \"" manifest-dir "\"}"
+                                                "{"
+                                                fmt-opt
+                                                "}))))")]
+                             (doseq [d [run-root manifest-dir scenario-root
                                        forensic-dir execution-dir summary-dir]]
                                (.mkdirs (java.io.File. d)))
                              (clojure {:dir "." :extra-deps {}}
@@ -58,39 +68,30 @@ Usage: bb run:scenario <scenario-id> [--result-display-level <summary|failures|s
                              (or (:exit (ex-data e)) 1)))
                     dur (- (System/currentTimeMillis) t0)
                     status (if (zero? exit) "pass" "fail")]
-                ;; Manifest stubs
-                (shell "python3" "scripts/evidence/write_scenario_run_manifest.py"
-                       "--scenario"    scenario-id
-                       "--status"      status
-                       "--duration-ms" (str dur)
-                       "--manifest-dir" manifest-dir)
+                ;; Write run manifest (run.json, summary.json, artifacts.json)
+                (let [run-id (str "run-" (java.time.Instant/now) "-" slug)]
+                  (shell "python3" "scripts/evidence/write_scenario_run_manifest.py"
+                         "--scenario"     scenario-id
+                         "--status"       status
+                         "--duration-ms"  (str dur)
+                         "--total"        "1"
+                         "--passed"       (if (zero? exit) "1" "0")
+                         "--failed"       (if (zero? exit) "0" "1")
+                         "--run-id"       run-id
+                         "--run-root"     run-root
+                         "--manifest-dir" manifest-dir
+                         "--output-file"  replay-file))
                 ;; Extract scenario artifacts
                 (try
                   (shell "python3" "scripts/evidence/extract_scenario_artifacts.py"
                          "--replay" replay-file
-                         "--run-dir" scenario-root)
+                         "--run-dir" scenario-root
+                         "--run-root" run-root)
                   (catch Exception e
                     (println "[scenario-artifacts] Extraction skipped:" (.getMessage e))))
-                ;; Generate run.json
-                (try
-                  (let [run-json (str manifest-dir "/run.json")
-                        py-cmd (str "import json, datetime;"
-                                    "ts = datetime.datetime.now(datetime.timezone.utc).isoformat();"
-                                    "json.dump({"
-                                    "'run/type': 'scenario-run', "
-                                    "'run/scenario': " (pr-str scenario-id) ", "
-                                    "'run/status': " (pr-str status) ", "
-                                    "'run/duration-ms': " dur ", "
-                                    "'run/exit-code': " exit ", "
-                                    "'run/timestamp': ts}, "
-                                    "open('" run-json "', 'w'), indent=2)")]
-                    (shell "python3" "-c" py-cmd)
-                    (println (str "[run.json] Written to " run-json)))
-                  (catch Exception e
-                    (println "[run.json] Failed:" (.getMessage e))))
                 ;; Validate artifact registry
                 (try
-                  (let [registry-path (str manifest-dir "/test-artifacts.json")]
+                  (let [registry-path (str manifest-dir "/artifacts.json")]
                     (if (.exists (java.io.File. registry-path))
                       (do
                         (println (str "[artifact-registry-validation] Validating " registry-path))
@@ -99,12 +100,20 @@ Usage: bb run:scenario <scenario-id> [--result-display-level <summary|failures|s
                       (println (str "[artifact-registry-validation] No registry at " registry-path))))
                   (catch Exception e
                     (println "[artifact-registry-validation] Skipped:" (.getMessage e))))
+                ;; Register the validator's structured output after it exists.
+                (try
+                  (shell "python3" "scripts/evidence/extract_scenario_artifacts.py"
+                         "--replay" replay-file
+                         "--run-dir" scenario-root
+                         "--run-root" run-root)
+                  (catch Exception e
+                    (println "[scenario-artifacts] Registry refresh skipped:" (.getMessage e))))
                 ;; Summary
                 (println)
                 (println "############################")
                 (println "# Scenario run complete")
                 (println (str "# Scenario: " scenario-id))
-                (println (str "# Output: " output-dir))
+                (println (str "# Run root: " run-root))
                 (let [show (fn [d label]
                              (let [f (java.io.File. d)]
                                (when (.exists f)
@@ -686,14 +695,8 @@ cli-args (cond-> ["-M:run:with-sew" "--invariants" "--scenario" scenario]
     :task (shell "bash" "-c"
             "bb test:quick && bb test:suites")}
 
-   adv:sweep {:doc "Run adversarial profitability sweeps and generate safe/unsafe regions"
-             :task (shell "python3 integration/python/adversarial_profitability_sweep.py")}
-
-  adv:sweep:promote {:doc "Run sweep and emit top risky promotion backlog"
-                     :task (shell "python3 integration/python/adversarial_profitability_sweep.py --top-n 20")}
-
-  trace:compare {:doc "Compare baseline vs candidate trace JSON and emit markdown+json report"
-                 :task (apply shell "python3" "test/integration/python/trace_compare.py" *command-line-args*)}
+  trace:compare {:doc "Compare baseline vs candidate replay JSON and emit markdown+JSON report"
+                 :task (apply shell "python3" "scripts/trace_compare.py" *command-line-args*)}
 
   trace:structural-diff {:doc "Structural world diff between replay JSON files. Usage: bb trace:structural-diff --baseline a.json --candidate b.json"
                          :task (apply shell "clojure -M:diff-traces" *command-line-args*)}
@@ -702,14 +705,13 @@ cli-args (cond-> ["-M:run:with-sew" "--invariants" "--scenario" scenario]
               :task (let [s1 (first *command-line-args*)
                           s2 (second *command-line-args*)
                           od (or (nth *command-line-args* 2 nil) "results/trace-compare/diff")]
-                      (apply shell "python3" "test/integration/python/trace_compare.py"
+                      (apply shell "python3" "scripts/trace_compare.py"
                              "--scenario-a" s1 "--scenario-b" s2 "--out-dir" od))}
 
   sim:diff {:doc "Compare scenario replay at baseline git commit vs HEAD. Usage: bb sim:diff --baseline <sha> --scenario <path>"
             :task (apply shell "./scripts/scenarios/sim_diff.sh" *command-line-args*)}
 
-  report:attack-map {:doc "Generate visual attack-to-outcome artifacts (state diagram, surface snapshot, timeline — all Mermaid)"
-                     :task (apply shell "python3" "test/integration/python/attack_outcome_map.py" *command-line-args*)}
+
 
   lint {:doc "Lint source and test code with clj-kondo (excludes notebooks/archive/)"
         :task (shell "clj -M:lint/core")}
@@ -812,22 +814,12 @@ cli-args (cond-> ["-M:run:with-sew" "--invariants" "--scenario" scenario]
                              "(require '[resolver-sim.scenario.coverage :as cov] '[resolver-sim.sim.reporter :as r]) (r/print-coverage (cov/coverage-report (or (first *command-line-args*) \"data/fixtures/traces\")))"
                              *args*)}
 
-  adv:broad {:doc "Run adversarial agent broad discovery preset"
-             :task (shell "python3 integration/python/adversarial_agent.py --target-effective-steps 40 --max-attempts 300 --guided-ratio 0.65 --rejected-step-weight 0.10")}
 
-  adv:deep {:doc "Run adversarial agent deeper exploit-chain preset"
-            :task (shell "python3 integration/python/adversarial_agent.py --target-effective-steps 80 --max-attempts 800 --guided-ratio 0.80 --rejected-step-weight 0.05")}
 
   adv:server {:doc "Start gRPC simulation server on 50051 in background"
               :task (shell "nohup clojure -M:with-sew -e \"(require 'resolver-sim.server.grpc) (resolver-sim.server.grpc/start! 50051) (resolver-sim.server.grpc/await-termination)\" > grpc-server.log 2>&1 &" "sleep 2" "ss -ltnp | grep 50051 || true")}
 
-  adv:all:broad {:doc "Start server (if needed) then run broad adversarial preset"
-                 :task (do (run 'adv:server)
-                           (run 'adv:broad))}
 
-  adv:all:deep {:doc "Start server (if needed) then run deep adversarial preset"
-                :task (do (run 'adv:server)
-                          (run 'adv:deep))}
 
   help:first {:doc "First-time visitor quick commands"
               :task (do

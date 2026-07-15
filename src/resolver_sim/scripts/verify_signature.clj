@@ -27,9 +27,8 @@
       (System/exit 1))
     (let [sig-obj (json/read-str (slurp sigf) :key-fn keyword)
           signature (get sig-obj :signature)
-          ;; publication.verify-manifest-signature expects manifest (with registry injected?)
-          ;; loader returns current manifest; if registry present it was injected at signing time
-          res (pub/verify-manifest-signature manifest signature pubkey)]
+          ;; Reconstruct the registry-bound manifest that sign-manifest signs.
+          res (pub/verify-manifest-signature manifest signature pubkey :registry registry)]
       (if (:error res)
         (do (println "ERROR:" (:error res)) (System/exit 2))
         (do (println "Signature valid?" (:valid res))

@@ -12,6 +12,9 @@ import json
 import sys
 from pathlib import Path
 
+_EVIDENCE_DIR = Path(__file__).resolve().parent.parent / "evidence"
+sys.path.insert(0, str(_EVIDENCE_DIR))
+
 from evidence_config import EvidenceConfig
 from schema_validator import SchemaValidator, SchemaValidationError
 

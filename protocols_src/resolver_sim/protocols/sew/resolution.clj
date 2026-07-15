@@ -1166,7 +1166,10 @@
                   :executed :already-executed
                   :unknown-status))
 
-       (< (time-ctx/block-ts world) (:appeal-deadline pending))
+       ;; The deadline belongs to the resolver's appeal window.  Execution is
+       ;; permitted strictly after it so same-timestamp appeal and execution
+       ;; cannot be ordered to defeat a timely appeal.
+       (<= (time-ctx/block-ts world) (:appeal-deadline pending))
        (t/fail :timelock-not-expired)
 
        :else

@@ -42,7 +42,7 @@ FAST_MODE=false
 if [ "$MODE" = "fast" ] || [ "$MODE" = "ci" ]; then
   FAST_MODE=true
 fi
-ARTIFACT_DIR="$(python3 -c "from scripts.evidence_config import EvidenceConfig; print(EvidenceConfig().artifact_dir)" 2>/dev/null)" || ARTIFACT_DIR="results/test-artifacts"
+ARTIFACT_DIR="$(python3 -c "from scripts.evidence.evidence_config import EvidenceConfig; print(EvidenceConfig().artifact_dir)" 2>/dev/null)" || ARTIFACT_DIR="results/test-artifacts"
 ARTIFACT_FILE="$ARTIFACT_DIR/test-summary.json"
 RUN_MANIFEST_FILE="$ARTIFACT_DIR/test-run.json"
 ARTIFACT_REGISTRY_FILE="$ARTIFACT_DIR/test-artifacts.json"
@@ -521,10 +521,7 @@ run_contracts() {
   grep -q 'rpc Step' proto/simulation.proto
   grep -q 'rpc DestroySession' proto/simulation.proto
 
-  # Python client must target same service/methods
-  grep -q '_SERVICE = "sew.simulation.SimulationEngine"' python/sim_api/grpc_client.py
-  grep -q 'StartSession' python/sim_api/grpc_client.py
-  grep -q 'DestroySession' python/sim_api/grpc_client.py
+
 
   # Clojure server must expose same RPC names and snake_case↔kebab-case bridge
   grep -q 'SimulationEngine' src/resolver_sim/server/grpc.clj
@@ -539,8 +536,8 @@ run_contracts() {
   # P1: Fixture/claim alignment checks for collusion assertions
   python scripts/validate/validate_collusion_alignment.py
 
-  # Artifact registry integrity + compatibility checks
-  python scripts/validate/validate_artifact_registry.py
+  # Artifact integrity requires a completed evidence bundle; validate it via
+  # scripts/validate/validate_artifact_registry.py after artifact emission.
 
   # Claim registry integrity checks (claim ids ↔ scenarios ↔ invariants)
   if [ "$STRICT_CLAIM_REGISTRY" = "1" ]; then
@@ -713,11 +710,6 @@ run_equivalence_new() {
           (println (str "  FAIL: " (:trace-id r) " [" (:outcome r) "]")))))))
   (when any-fail (System/exit 1)))"
 
-  _eq_out=$(python3 -c "from evidence_config import EvidenceConfig; c=EvidenceConfig(); print(c.artifact_path('equivalence-summary'))")
-  python3 test/integration/python/equivalence_pair_diff.py \
-    --traces-dir data/fixtures/traces \
-    --out "$_eq_out" \
-    --replay-dir "$ARTIFACT_DIR/equivalence-pairs" || true
 
   return $?
 }
@@ -738,22 +730,7 @@ run_coverage_gates() {
   return $?
 }
 
-run_adversarial_sweep() {
-  echo "Running adversarial profitability sweep..."
-  python3 test/integration/python/adversarial_profitability_sweep.py --top-n 10
-  return $?
-}
 
-run_adversarial_gates() {
-  echo "Running adversarial profitability gates..."
-  latest_dir=$(ls -1dt results/profitability-surfaces/* 2>/dev/null | head -n 1)
-  if [ -z "$latest_dir" ]; then
-    echo "No profitability surface output found. Run adversarial-sweep first."
-    return 1
-  fi
-  python3 scripts/validate/adversarial_gates.py "$latest_dir"
-  return $?
-}
 
 emit_claimable_classification() {
   require_clojure || return 0
@@ -846,12 +823,7 @@ case "$MODE" in
   coverage)
     run_target coverage run_coverage_gates || FAILURES=$((FAILURES + 1))
     ;;
-  adversarial-sweep)
-    run_target adversarial-sweep run_adversarial_sweep || FAILURES=$((FAILURES + 1))
-    ;;
-  adversarial-gates)
-    run_target adversarial-gates run_adversarial_gates || FAILURES=$((FAILURES + 1))
-    ;;
+
   monte-carlo)
     run_target monte-carlo run_monte_carlo || FAILURES=$((FAILURES + 1))
     ;;
