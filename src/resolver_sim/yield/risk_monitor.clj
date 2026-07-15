@@ -56,12 +56,9 @@
   []
   (let [attr* attr/*attribution*
         short-circuits (:accrual/short-circuits attr*)]
-    (when (and (seq short-circuits)
-               (some #{:recoverable-liquidity-cap
-                       :negative-yield-floor-breached
-                       :max-index-delta-capped
-                       :module-frozen-zero-accrual}
-                     short-circuits))
+    ;; Replay summaries need every short-circuit, not only the subset that is
+    ;; currently classified as a systemic-risk event.
+    (when (seq short-circuits)
       (swap! *risk-events* conj
              {:ts (or (:accrual/now attr*)
                       (:replay/event-time attr*)

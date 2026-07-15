@@ -3,168 +3,250 @@
             :task (apply clojure {:dir "." :extra-deps {}} "-M:run:with-sew" *command-line-args*)}
 
   run:scenario
-{:doc "Run a scenario through the registry-driven execution path. Usage: bb run:scenario <scenario-id> [--result-display-level <summary|failures|standard|verbose|audit> | -v | -f | -s | -a] [--save-output <dir>]"
+{:doc "Run a scenario through the registry-driven execution path.
+Usage: bb run:scenario <scenario-id> [--result-display-level <summary|failures|standard|verbose|audit> | -v | -f | -s | -a] [--output-dir <dir>]
+       --output-dir, --save-output, --scenario-output-dir are equivalent aliases."
     :task (let [args          (vec *command-line-args*)
                 scenario-id   (first (remove (fn [a] (.startsWith a "--")) args))
-                save-idx    (.indexOf args "--save-output")
-                save-dir    (when (<= 0 save-idx) (nth args (inc save-idx) nil))]
+                output-dir-idx (.indexOf args "--output-dir")
+                scenario-output-dir-idx (.indexOf args "--scenario-output-dir")
+                save-idx      (.indexOf args "--save-output")
+                output-dir    (or (when (<= 0 output-dir-idx)
+                                    (nth args (inc output-dir-idx) nil))
+                                 (when (<= 0 scenario-output-dir-idx)
+                                    (nth args (inc scenario-output-dir-idx) nil))
+                                 (when (<= 0 save-idx)
+                                    (nth args (inc save-idx) nil)))
+                slug          (some-> scenario-id
+                                      (clojure.string/replace (re-pattern "^.*/") "")
+                                      (clojure.string/replace (re-pattern "\\.(json|edn)$") ""))]
             (when-not scenario-id
               (throw (ex-info "Missing scenario-id. Usage: bb run:scenario <scenario-id>" {})))
-            (let [t0        (System/currentTimeMillis)
-                  output-tmp (str (java.io.File/createTempFile "replay-" ".json"))
-                  exit (try
-                         (let [;; Display level mapping
-                               alias-map {"-v" "verbose" "-f" "failures" "-s" "summary" "-a" "audit"}
-                               level-idx (.indexOf args "--result-display-level")
-                               level-val (when (<= 0 level-idx) (nth args (inc level-idx) nil))
-                               alias-idx (some (fn [i] (when (contains? alias-map (nth args i)) i)) (range 0 (count args)))
-                               alias-val (when alias-idx (get alias-map (nth args alias-idx)))
-                               chosen (or level-val alias-val)
-                               fmt-opt (if chosen (str " :report-format \"" chosen "\"") "")
-                               ;; Direct call to scenario-runner, bypassing -main dispatch.
-                               ;; The -main cond dispatch has a persistent issue where scenario
-                               ;; branches don't execute.  Call run-and-report directly instead.
-                               run-expr (str "(require 'resolver-sim.io.scenario-runner) "
-                                             "(System/exit (:exit-code "
-                                             "((requiring-resolve 'resolver-sim.io.scenario-runner/run-and-report) "
-                                             "{:scenario \"" scenario-id "\""
-                                             " :output-file \"" output-tmp "\"}"
-                                             "{"
-                                             fmt-opt
-                                             "}))))")]
-                           (clojure {:dir "." :extra-deps {}}
-                                    "-M:with-sew" "-e" run-expr))
-                         0
-                         (catch clojure.lang.ExceptionInfo e
-                           (or (:exit (ex-data e)) 1)))
-                  dur  (- (System/currentTimeMillis) t0)]
-                ;; 1. Write the run manifest stubs (creates run-specific directory)
-              (shell "python3" "scripts/evidence/write_scenario_run_manifest.py"
-                     "--scenario"    scenario-id
-                     "--status"      (if (zero? exit) "pass" "fail")
-                     "--duration-ms" (str dur))
-                ;; 2. Extract scenario-scoped artifacts from the replay output
-              (try
-                (let [slug (some-> scenario-id
-                                   (clojure.string/replace (re-pattern "^.*/") "")
-                                   (clojure.string/replace (re-pattern "\\.(json|edn)$") ""))
-                      runs-dir (java.io.File. "results/runs")
-                      dirs (when (.exists runs-dir)
-                             (->> (.listFiles runs-dir)
-                                  (filter (fn [x] (.isDirectory x)))
-                                  (filter (fn [x] (.startsWith (.getName x) (or slug ""))))
-                                  (sort-by (fn [x] (.lastModified x)))
-                                  vec))
-                      latest-run (last dirs)]
-                  (when (and latest-run (.exists (java.io.File. output-tmp)))
-                    (shell "python3" "scripts/evidence/extract_scenario_artifacts.py"
-                           "--replay" output-tmp
-                           "--run-dir" (str (.getPath latest-run)))))
-                (catch Exception e
-                  (println "[scenario-artifacts] Extraction skipped:" (.getMessage e))))
-                ;; 3. Save output if requested, otherwise clean up temp file
-              (if save-dir
+            (if output-dir
+              ;; ── consolidated output path ──────────────────────────────────────
+              (let [manifest-dir (str output-dir "/manifest")
+                    scenario-root (str output-dir "/scenarios/" slug)
+                    forensic-dir  (str scenario-root "/forensic")
+                    execution-dir (str scenario-root "/execution")
+                    summary-dir   (str scenario-root "/summaries")
+                    replay-file   (str execution-dir "/replay-output.json")
+                    t0        (System/currentTimeMillis)
+                    exit (try
+                           (let [alias-map {"-v" "verbose" "-f" "failures" "-s" "summary" "-a" "audit"}
+                                 level-idx (.indexOf args "--result-display-level")
+                                 level-val (when (<= 0 level-idx) (nth args (inc level-idx) nil))
+                                 alias-idx (some (fn [i] (when (contains? alias-map (nth args i)) i)) (range 0 (count args)))
+                                 alias-val (when alias-idx (get alias-map (nth args alias-idx)))
+                                 chosen (or level-val alias-val)
+                                 fmt-opt (if chosen (str " :report-format \"" chosen "\"") "")
+                                 run-expr (str "(require 'resolver-sim.io.scenario-runner) "
+                                               "(System/exit (:exit-code "
+                                               "((requiring-resolve 'resolver-sim.io.scenario-runner/run-and-report) "
+                                               "{:scenario \"" scenario-id "\""
+                                               " :output-dir \"" forensic-dir "\""
+                                               " :output-file \"" replay-file "\"}"
+                                               "{"
+                                               fmt-opt
+                                               "}))))")]
+                             (doseq [d [output-dir manifest-dir scenario-root
+                                       forensic-dir execution-dir summary-dir]]
+                               (.mkdirs (java.io.File. d)))
+                             (clojure {:dir "." :extra-deps {}}
+                                      "-M:with-sew" "-e" run-expr))
+                           0
+                           (catch clojure.lang.ExceptionInfo e
+                             (or (:exit (ex-data e)) 1)))
+                    dur (- (System/currentTimeMillis) t0)
+                    status (if (zero? exit) "pass" "fail")]
+                ;; Manifest stubs
+                (shell "python3" "scripts/evidence/write_scenario_run_manifest.py"
+                       "--scenario"    scenario-id
+                       "--status"      status
+                       "--duration-ms" (str dur)
+                       "--manifest-dir" manifest-dir)
+                ;; Extract scenario artifacts
                 (try
-                  (let [sd (java.io.File. save-dir)]
-                    (.mkdirs sd)
-                      ;; Copy replay output
-                    (if (.exists (java.io.File. output-tmp))
-                      (shell "cp" output-tmp (str save-dir "/replay-output.json")))
-                      ;; Copy test-artifacts contents
-                    (let [ta (java.io.File. "results/test-artifacts")]
-                      (when (.exists ta)
-                        (shell "cp" "-r" (str (.getCanonicalPath ta) "/.") (str save-dir "/artifacts/"))))
-                    (println (str "Saved demo output to " save-dir)))
+                  (shell "python3" "scripts/evidence/extract_scenario_artifacts.py"
+                         "--replay" replay-file
+                         "--run-dir" scenario-root)
                   (catch Exception e
-                    (println (str "[run:scenario] --save-output failed:" (.getMessage e)))))
-                (try (.delete (java.io.File. output-tmp)) (catch Exception _ nil)))
-                ;; 4. Validate the emitted artifact registry (additive, slug-filtered)
-              (try
-                (let [slug (some-> scenario-id
-                                   (clojure.string/replace (re-pattern "^.*/") "")
-                                   (clojure.string/replace (re-pattern "\\.(json|edn)$") ""))
-                      runs-dir (java.io.File. "results/runs")
-                      dirs (when (.exists runs-dir)
-                             (->> (.listFiles runs-dir)
-                                  (filter (fn [x] (.isDirectory x)))
-                                  (filter (fn [x] (.startsWith (.getName x) (or slug ""))))
-                                  (sort-by (fn [x] (.lastModified x)))
-                                  vec))
-                      latest-run (last dirs)
-                      registry-path (when latest-run
-                                      (str (.getPath latest-run) "/test-artifacts.json"))]
-                  (if (and registry-path (.exists (java.io.File. registry-path)))
-                    (do
-                      (println (str "[artifact-registry-validation] Validating " registry-path))
-                      (apply clojure {:dir "." :extra-deps {}}
-                             ["-M" "-m" "resolver-sim.validation.integration.artifact-registry" registry-path]))
-                    (println (str "[artifact-registry-validation] No artifact registry found for slug: " slug))))
-                (catch Exception e
-                  (println "[artifact-registry-validation] Skipped (operational):" (.getMessage e))))
-              ;; 5. Cross-link: reference file from artifact registry dir to forensic run dir
-              (try
-                (let [slug (some-> scenario-id
-                                   (clojure.string/replace (re-pattern "^.*/") "")
-                                   (clojure.string/replace (re-pattern "\\.(json|edn)$") ""))
-                      prf-dir (java.io.File. "prf-runs")
-                      forensic-dir (when (.exists prf-dir)
-                                     (->> (.listFiles prf-dir)
-                                          (filter (fn [d] (.startsWith (.getName d) "run-")))
-                                          (sort-by (fn [d] (.lastModified d)) >)
-                                          first))
-                      registry-dir (when (.exists prf-dir)
-                                     (->> (.listFiles prf-dir)
-                                          (filter (fn [d] (.startsWith (.getName d) (str slug "-"))))
-                                          (sort-by (fn [d] (.lastModified d)) >)
-                                          first))]
-                  (when (and forensic-dir registry-dir)
-                    (let [link-file (java.io.File. registry-dir "_forensic-run-path.txt")]
-                      (spit link-file (str (.getCanonicalPath forensic-dir) "\n"))))
-                  ;; 6. Format generated files for readability
-                  (try
-                    (when (and forensic-dir (.exists forensic-dir))
-                      (doseq [f (filter (fn [x] (.isFile x)) (file-seq forensic-dir))
-                              :let [n (.getName f)]]
-                        (cond
-                          (.endsWith n ".edn")
-                          (try
-                            (let [data (clojure.edn/read-string (slurp f))]
-                              (spit f (with-out-str (clojure.pprint/pprint data))))
-                            (catch Exception _ nil))
-                          (.endsWith n ".json")
-                          (try
-                            (let [path (.getCanonicalPath f)
-                                  py-cmd (str "import json; d=json.load(open('" path "'));"
-                                              "json.dump(d, open('" path ".fmt','w'), indent=2)")]
-                              (shell "python3" "-c" py-cmd)
-                              (shell "mv" (str path ".fmt") path))
-                            (catch Exception _ nil)))))
-                    (catch Exception e
-                      (println (str "[format] " (.getMessage e)))))
-                  ;; 7. Summary box — researcher-friendly output locations
-                  (println)
-                  (println "############################")
-                  (println "# Scenario run complete")
-                  (println (str "# Scenario: " scenario-id))
-                  (when forensic-dir
-                    (println (str "# Forensics: " (.getPath forensic-dir)))
-                    (let [entries (sort-by (fn [f] (str (if (.isDirectory f) 0 1) (.getName f)))
-                                           (.listFiles forensic-dir))]
-                      (doseq [e entries]
-                        (if (.isDirectory e)
-                          (let [fc (count (filter (fn [f] (.isFile f)) (file-seq e)))]
-                            (println (str "#   " (.getName e) "/    (" fc " file" (when-not (= 1 fc) "s") ")")))
-                          (println (str "#   " (.getName e)))))))
-                  (when registry-dir
-                    (println (str "# Registry: " (.getPath registry-dir)))
-                    (println (str "#   test-artifacts -> " (.getPath registry-dir) "/test-artifacts.json"))
-                    (println (str "#   test-summary -> " (.getPath registry-dir) "/test-summary.json"))
+                    (println "[scenario-artifacts] Extraction skipped:" (.getMessage e))))
+                ;; Generate run.json
+                (try
+                  (let [run-json (str manifest-dir "/run.json")
+                        py-cmd (str "import json, datetime;"
+                                    "ts = datetime.datetime.now(datetime.timezone.utc).isoformat();"
+                                    "json.dump({"
+                                    "'run/type': 'scenario-run', "
+                                    "'run/scenario': " (pr-str scenario-id) ", "
+                                    "'run/status': " (pr-str status) ", "
+                                    "'run/duration-ms': " dur ", "
+                                    "'run/exit-code': " exit ", "
+                                    "'run/timestamp': ts}, "
+                                    "open('" run-json "', 'w'), indent=2)")]
+                    (shell "python3" "-c" py-cmd)
+                    (println (str "[run.json] Written to " run-json)))
+                  (catch Exception e
+                    (println "[run.json] Failed:" (.getMessage e))))
+                ;; Validate artifact registry
+                (try
+                  (let [registry-path (str manifest-dir "/test-artifacts.json")]
+                    (if (.exists (java.io.File. registry-path))
+                      (do
+                        (println (str "[artifact-registry-validation] Validating " registry-path))
+                        (apply clojure {:dir "." :extra-deps {}}
+                               ["-M" "-m" "resolver-sim.validation.integration.artifact-registry" registry-path]))
+                      (println (str "[artifact-registry-validation] No registry at " registry-path))))
+                  (catch Exception e
+                    (println "[artifact-registry-validation] Skipped:" (.getMessage e))))
+                ;; Summary
+                (println)
+                (println "############################")
+                (println "# Scenario run complete")
+                (println (str "# Scenario: " scenario-id))
+                (println (str "# Output: " output-dir))
+                (let [show (fn [d label]
+                             (let [f (java.io.File. d)]
+                               (when (.exists f)
+                                 (let [fc (if (.isDirectory f)
+                                           (count (file-seq f))
+                                           1)]
+                                   (println (str "#   " label " (" fc " file" (when-not (= 1 fc) "s") ")"))))))]
+                  (show manifest-dir "manifest")
+                  (show execution-dir "execution")
+                  (show summary-dir "summaries")
+                  (show forensic-dir "forensic"))
+                (println "############################")
+                (when-not (zero? exit) (System/exit exit)))
+              ;; ── default scatter path (backward compatible) ────────────────────
+              (let [t0        (System/currentTimeMillis)
+                    output-tmp (str (java.io.File/createTempFile "replay-" ".json"))
+                    exit (try
+                           (let [alias-map {"-v" "verbose" "-f" "failures" "-s" "summary" "-a" "audit"}
+                                 level-idx (.indexOf args "--result-display-level")
+                                 level-val (when (<= 0 level-idx) (nth args (inc level-idx) nil))
+                                 alias-idx (some (fn [i] (when (contains? alias-map (nth args i)) i)) (range 0 (count args)))
+                                 alias-val (when alias-idx (get alias-map (nth args alias-idx)))
+                                 chosen (or level-val alias-val)
+                                 fmt-opt (if chosen (str " :report-format \"" chosen "\"") "")
+                                 run-expr (str "(require 'resolver-sim.io.scenario-runner) "
+                                               "(System/exit (:exit-code "
+                                               "((requiring-resolve 'resolver-sim.io.scenario-runner/run-and-report) "
+                                               "{:scenario \"" scenario-id "\""
+                                               " :output-file \"" output-tmp "\"}"
+                                               "{"
+                                               fmt-opt
+                                               "}))))")]
+                             (clojure {:dir "." :extra-deps {}}
+                                      "-M:with-sew" "-e" run-expr))
+                           0
+                           (catch clojure.lang.ExceptionInfo e
+                             (or (:exit (ex-data e)) 1)))
+                    dur  (- (System/currentTimeMillis) t0)]
+                  ;; 1. Write the run manifest stubs
+                (shell "python3" "scripts/evidence/write_scenario_run_manifest.py"
+                       "--scenario"    scenario-id
+                       "--status"      (if (zero? exit) "pass" "fail")
+                       "--duration-ms" (str dur))
+                  ;; 2. Extract scenario-scoped artifacts from the replay output
+                (try
+                  (let [runs-dir (java.io.File. "results/runs")
+                        dirs (when (.exists runs-dir)
+                               (->> (.listFiles runs-dir)
+                                    (filter (fn [x] (.isDirectory x)))
+                                    (filter (fn [x] (.startsWith (.getName x) (or slug ""))))
+                                    (sort-by (fn [x] (.lastModified x)))
+                                    vec))
+                        latest-run (last dirs)]
+                    (when (and latest-run (.exists (java.io.File. output-tmp)))
+                      (shell "python3" "scripts/evidence/extract_scenario_artifacts.py"
+                             "--replay" output-tmp
+                             "--run-dir" (str (.getPath latest-run)))))
+                  (catch Exception e
+                    (println "[scenario-artifacts] Extraction skipped:" (.getMessage e))))
+                  ;; 3. Clean up temp file
+                (try (.delete (java.io.File. output-tmp)) (catch Exception _ nil))
+                  ;; 4. Validate the emitted artifact registry (additive, slug-filtered)
+                (try
+                  (let [runs-dir (java.io.File. "results/runs")
+                        dirs (when (.exists runs-dir)
+                               (->> (.listFiles runs-dir)
+                                    (filter (fn [x] (.isDirectory x)))
+                                    (filter (fn [x] (.startsWith (.getName x) (or slug ""))))
+                                    (sort-by (fn [x] (.lastModified x)))
+                                    vec))
+                        latest-run (last dirs)
+                        registry-path (when latest-run
+                                        (str (.getPath latest-run) "/test-artifacts.json"))]
+                    (if (and registry-path (.exists (java.io.File. registry-path)))
+                      (do
+                        (println (str "[artifact-registry-validation] Validating " registry-path))
+                        (apply clojure {:dir "." :extra-deps {}}
+                               ["-M" "-m" "resolver-sim.validation.integration.artifact-registry" registry-path]))
+                      (println (str "[artifact-registry-validation] No artifact registry found for slug: " slug))))
+                  (catch Exception e
+                    (println "[artifact-registry-validation] Skipped (operational):" (.getMessage e))))
+                  ;; 5. Cross-link: reference file from artifact registry dir to forensic run dir
+                (try
+                  (let [prf-dir (java.io.File. "prf-runs")
+                        forensic-dir (when (.exists prf-dir)
+                                       (->> (.listFiles prf-dir)
+                                            (filter (fn [d] (.startsWith (.getName d) "run-")))
+                                            (sort-by (fn [d] (.lastModified d)) >)
+                                            first))
+                        registry-dir (when (.exists prf-dir)
+                                       (->> (.listFiles prf-dir)
+                                            (filter (fn [d] (.startsWith (.getName d) (str slug "-"))))
+                                            (sort-by (fn [d] (.lastModified d)) >)
+                                            first))]
                     (when (and forensic-dir registry-dir)
-                      (println (str "#   forensic-run-link -> " (.getPath (java.io.File. registry-dir "_forensic-run-path.txt"))))))
-                  (println "############################"))
-                (catch Exception e
-                  (println (str "[run-links] Error:" (.getMessage e)))))
-              (when-not (zero? exit) (System/exit exit))))}
+                      (let [link-file (java.io.File. registry-dir "_forensic-run-path.txt")]
+                        (spit link-file (str (.getCanonicalPath forensic-dir) "\n"))))
+                    ;; 6. Format generated files for readability
+                    (try
+                      (when (and forensic-dir (.exists forensic-dir))
+                        (doseq [f (filter (fn [x] (.isFile x)) (file-seq forensic-dir))
+                                :let [n (.getName f)]]
+                          (cond
+                            (.endsWith n ".edn")
+                            (try
+                              (let [data (clojure.edn/read-string (slurp f))]
+                                (spit f (with-out-str (clojure.pprint/pprint data))))
+                              (catch Exception _ nil))
+                            (.endsWith n ".json")
+                            (try
+                              (let [path (.getCanonicalPath f)
+                                    py-cmd (str "import json; d=json.load(open('" path "'));"
+                                                "json.dump(d, open('" path ".fmt','w'), indent=2)")]
+                                (shell "python3" "-c" py-cmd)
+                                (shell "mv" (str path ".fmt") path))
+                              (catch Exception _ nil)))))
+                      (catch Exception e
+                        (println (str "[format] " (.getMessage e)))))
+                    ;; 7. Summary box — researcher-friendly output locations
+                    (println)
+                    (println "############################")
+                    (println "# Scenario run complete")
+                    (println (str "# Scenario: " scenario-id))
+                    (when forensic-dir
+                      (println (str "# Forensics: " (.getPath forensic-dir)))
+                      (let [entries (sort-by (fn [f] (str (if (.isDirectory f) 0 1) (.getName f)))
+                                             (.listFiles forensic-dir))]
+                        (doseq [e entries]
+                          (if (.isDirectory e)
+                            (let [fc (count (filter (fn [f] (.isFile f)) (file-seq e)))]
+                              (println (str "#   " (.getName e) "/    (" fc " file" (when-not (= 1 fc) "s") ")")))
+                            (println (str "#   " (.getName e)))))))
+                    (when registry-dir
+                      (println (str "# Registry: " (.getPath registry-dir)))
+                      (println (str "#   test-artifacts -> " (.getPath registry-dir) "/test-artifacts.json"))
+                      (println (str "#   test-summary -> " (.getPath registry-dir) "/test-summary.json"))
+                      (when (and forensic-dir registry-dir)
+                        (println (str "#   forensic-run-link -> " (.getPath (java.io.File. registry-dir "_forensic-run-path.txt"))))))
+                    (println "############################"))
+                  (catch Exception e
+                    (println (str "[run-links] Error:" (.getMessage e)))))
+                (when-not (zero? exit) (System/exit exit)))))}
 
   run:scenario:search
   {:doc "Ad-hoc: run scenarios by text search (not a registered grouping, not for CI).
@@ -537,7 +619,7 @@ cli-args (cond-> ["-M:run:with-sew" "--invariants" "--scenario" scenario]
    :task (shell "env" "PARALLEL_WORKERS=4" "scripts/with-test-artifact-lock.sh" "./scripts/test.sh" "suites")}
 
   test:fast
-  {:doc "Run fast tests only (< 60 seconds, excludes slow tests like monte-carlo, long-horizon)"
+  {:doc "Run core regression targets; excludes explicit slow targets such as monte-carlo and long-horizon"
    :task (shell "scripts/with-test-artifact-lock.sh" "./scripts/test.sh" "fast")}
 
   test:slow

@@ -144,9 +144,10 @@
           report (sut/evaluate-stochastic-equilibrium result)
           mech (get-in report [:mechanism-proxy-results :budget-balance])
           ev (:evidence mech)]
-      ;; 5 flow keys + 3 surplus diagnostics (honest-profit, malice-profit, profit-ratio)
-      (is (= 8 (count ev))
-          "evidence map has 8 keys (5 flow + 3 surplus diagnostics)")
+      (is (= :pass (:status mech))
+          "the independently balanced fixture must pass")
+      (is (zero? (:residual ev))
+          "the independently balanced fixture has no residual")
       (is (contains? ev :total-fees-collected) "evidence includes :total-fees-collected")
       (is (contains? ev :resolver-profit-net-sum) "evidence includes :resolver-profit-net-sum")
       (is (contains? ev :total-bond-loss) "evidence includes :total-bond-loss")

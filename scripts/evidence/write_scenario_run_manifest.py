@@ -257,6 +257,8 @@ def main() -> int:
     ap.add_argument("--duration-ms", type=int, default=0)
     ap.add_argument("--output-file")
     ap.add_argument("--output-dir")
+    ap.add_argument("--manifest-dir",
+                    help="Override output dir for manifest files only. Falls back to --output-dir.")
     ap.add_argument("--artifact-dir", default=cfg.artifact_dir)
     ap.add_argument(
         "--registry-level", default="DIAGNOSTIC",
@@ -291,9 +293,11 @@ def main() -> int:
     per_run_dir = (pathlib.Path(args.output_dir)
                    if args.output_dir else
                    pathlib.Path(cfg._data.get("runs_root", "results/runs")) / f"{make_scenario_slug(args.scenario, args.suite)}-{run_id}")
-    write_artifacts_to(per_run_dir, cfg, args, run_id, created_at, git_info, summary, run_manifest, claimable)
+    manifest_dir = (pathlib.Path(args.manifest_dir)
+                    if args.manifest_dir else per_run_dir)
+    write_artifacts_to(manifest_dir, cfg, args, run_id, created_at, git_info, summary, run_manifest, claimable)
 
-    print(f"[artifact-registry] Emitted v1.2 to {per_run_dir}")
+    print(f"[artifact-registry] Emitted v1.2 to {manifest_dir}")
     return 0
 
 

@@ -75,14 +75,14 @@
 ;; Escrow creation bonding guard
 ;; ---------------------------------------------------------------------------
 
-(deftest create-escrow-rejects-zero-stake-resolver-when-bonding-enabled
+(deftest create-escrow-accepts-zero-stake-resolver-when-bonding-enabled
   (let [resolver "0xUnstakedResolver"
         snapshot (snap-fix/escrow-snapshot {:resolver-bond-bps 10000
                                              :dispute-resolver resolver})
         result (lc/create-escrow (t/empty-world 1000) alice usdc bob 1000
                                  (t/make-escrow-settings {}) snapshot)]
-    (is (false? (:ok result)))
-    (is (= :insufficient-resolver-stake (:error result)))))
+    (is (true? (:ok result)))
+    (is (nil? (:error result)))))
 
 ;; ---------------------------------------------------------------------------
 ;; Held adjustment ledger

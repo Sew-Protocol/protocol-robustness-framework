@@ -59,7 +59,6 @@
   :yield/position-principal 0,
   :cancellations-sender 0,
   :expected-reverts 1,
-  :negative-payoff-count 0,
   :escrow/live-state "released",
   :batch-buckets 0},
  :outcome :pass,

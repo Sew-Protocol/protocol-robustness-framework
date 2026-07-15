@@ -1760,9 +1760,12 @@
 ;; ---------------------------------------------------------------------------
 
 (defn slash-max-per-offense-bounded?
-  "True when every fraud slash respects max-slash-per-offense-bps against the
+  "True when every proposed fraud slash respects max-slash-per-offense-bps against the
    resolver's current stake, and every reversal slash amount is internally
    consistent with its stored basis-amount and slash-bps.
+   Only pending (unexecuted) slashes are checked — once executed the stake has
+   already been debited and the original proposal-time guard already enforced
+   the cap.
    Mirrors the runtime guard in propose-fraud-slash (resolution.clj:1261)."
   [world]
   (let [max-bps (get-in world [:params :max-slash-per-offense-bps] 5000)
@@ -1770,7 +1773,7 @@
         (for [[slash-id ev] (:pending-fraud-slashes world {})
               :let [amount (or (:amount ev) 0)
                     resolver (:resolver ev)]
-              :when (and (= :fraud (:reason ev)) (pos? amount))
+              :when (and (= :fraud (:reason ev)) (pos? amount) (= :pending (:status ev)))
               :let [stake (get-in world [:resolver-stakes resolver] 0)
                     cap (quot (* stake max-bps) 10000)]
               :when (> amount cap)]

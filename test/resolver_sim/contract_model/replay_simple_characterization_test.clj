@@ -5,7 +5,8 @@
             [resolver-sim.contract-model.replay.profile-adapter :as adapter]
             [resolver-sim.contract-model.replay.yield :as yield-replay]
             [resolver-sim.protocols.dummy :as dummy]
-            [resolver-sim.protocols.yield :as yp]))
+            [resolver-sim.protocols.yield :as yp]
+            [resolver-sim.yield.risk-monitor :as risk]))
 
 ;; ===========================================================================
 ;; Generic protocol path — current behaviour characterization
@@ -282,6 +283,24 @@
     (is (= :omit (:world-checkpoint-policy effective)))
     (is (= :finalize-only (:projection-mode effective)))
     (is (= :pass (:outcome result)))))
+
+(deftest minimal-replay-exposes-short-circuit-summary
+  (with-redefs [risk/events (constantly [{:short-circuits [:module-frozen-zero-accrual]
+                                          :module-id :aave-v3
+                                          :token :USDC}])]
+    (let [result (replay/simple-replay dummy/protocol minimal-scenario)]
+      (is (= [:module-frozen-zero-accrual]
+             (get-in result [:yield/risk-events 0 :short-circuits])))
+      (is (= :pass (:outcome result))))))
+
+(deftest minimal-replay-can-fail-closed-on-short-circuit
+  (with-redefs [risk/events (constantly [{:short-circuits [:module-frozen-zero-accrual]}])]
+    (let [result (replay/replay-events dummy/protocol minimal-scenario
+                                       {:minimal true
+                                        :flags {:fail-on-short-circuits #{:module-frozen-zero-accrual}}})]
+      (is (= :fail (:outcome result)))
+      (is (= :short-circuit-policy (:halt-reason result)))
+      (is (= [:module-frozen-zero-accrual] (:short-circuit-violations result))))))
 
 (deftest unsupported-flags-rejected-on-generic-path
   (doseq [opt [:signing-key :signing-password :tsa-url :evidence-mode]]

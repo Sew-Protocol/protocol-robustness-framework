@@ -2,6 +2,16 @@
 
 ## [Unreleased]
 
+### Changed (2026-07-15)
+
+- **Fast test target made genuinely fast and self-reporting:** `bb test:fast` now executes only focused replay/accounting smoke tests rather than the full unit, generator, invariant, fixture-suite, and reference-validation targets. It prints per-target durations and log locations, writes `results/test-artifacts/test-summary.json`, and the runner no longer promises an unenforced sub-minute duration. (`bb.edn`, `scripts/test.sh`, `scripts/evidence/generate_test_summary.py`)
+
+- **Minimal replay now exposes and can reject yield short-circuits:** Minimal, no-evidence replays retain captured yield short-circuit events in `:yield/risk-events`. Added `:fail-on-short-circuits`, which converts selected short-circuits into `:fail` results with `:short-circuit-policy` as the halt reason. Risk monitoring now captures all short-circuit types, including non-systemic degradation signals. (`src/resolver_sim/contract_model/replay/{flags.clj}`, `src/resolver_sim/contract_model/replay.clj`, `src/resolver_sim/yield/risk_monitor.clj`, `test/resolver_sim/contract_model/replay_simple_characterization_test.clj`)
+
+- **Budget-balance proxy test strengthened:** The balanced reconciliation fixture now asserts `:pass` status and a zero residual instead of relying on a brittle exact evidence-map key count. (`test/resolver_sim/sim/stochastic_equilibrium_test.clj`)
+
+- **Reference-validation registry checks fail closed:** Corrected artifact-emitter and registry-verifier paths, writes the registry to the suite `actual` directory, and removed ignored failures from registry generation and integrity verification. (`suites/reference-validation-v1/scripts/verify.sh`)
+
 ### Reviewed (2026-07-14)
 
 - **Solvency review — assurance boundary:** Replay `:solvency` establishes modeled held-custody/liability reconciliation, not deployed-contract or external-reserve solvency. The local SHA-256 state commitment is an integrity commitment, not by itself an independently verifiable solvency proof. `calculate-solvency-ratio` is a cumulative, cross-token conservation KPI rather than a current per-token solvency check. (`protocols_src/resolver_sim/protocols/sew/{invariants.clj,invariants/solvency.clj,financial/solvency.clj}`, `docs/architecture/HELD_CUSTODY_ACCOUNTING_AND_FORCE_AUTHORISATION.md`)

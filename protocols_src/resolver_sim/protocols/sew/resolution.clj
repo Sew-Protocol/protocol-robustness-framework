@@ -550,7 +550,8 @@
                    (and (pos? total) (>= pct-bps threshold))
                    (-> world''
                        (assoc-in [:circuit-breaker :active?] true)
-                       (assoc-in [:circuit-breaker :last-trigger] (time-ctx/block-ts world)))
+                       (cond-> (not breaker-was-active?)
+                         (assoc-in [:circuit-breaker :last-trigger] (time-ctx/block-ts world))))
 
                    ;; Below threshold but breaker still active — deactivate after cooldown
                    (and breaker-was-active?

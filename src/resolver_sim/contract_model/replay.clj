@@ -9,7 +9,8 @@
    Replay invariants (after every successful transition):
      1. protocol/check-invariants-single
      2. protocol/check-invariants-transition"
-  (:require [clojure.data.json                 :as json]
+  (:require [clojure.set                       :as set]
+            [clojure.data.json                 :as json]
             [clojure.java.io                   :as io]
             [resolver-sim.evidence.config      :as evcfg]
             [resolver-sim.evidence.capture    :as evcapture]
@@ -201,13 +202,25 @@
                      :scenario scenario
                      :run-id run-id
                      :replay-flags flags}
-            raw-result (execution/run-simulation-loop protocol context scenario-id events world0 [] (metrics/zero-metrics protocol (:metrics-profile flags)) options)
+            run-loop #(execution/run-simulation-loop protocol context scenario-id events world0 [] (metrics/zero-metrics protocol (:metrics-profile flags)) options)
+            raw-result (if (= :none (:evidence-mode flags))
+                         (risk/with-fresh-risk-context
+                           (let [result (run-loop)]
+                             (assoc result :yield/risk-events (risk/events))))
+                         (run-loop))
             trimmed-result (replay-checkpoints/apply-checkpoint-policy-to-result
                             (:world-checkpoint-policy flags)
-                            raw-result)]
+                            raw-result)
+            triggered (set (mapcat :short-circuits (:yield/risk-events trimmed-result)))
+            forbidden (set (:fail-on-short-circuits flags))
+            policy-result (if-let [matched (seq (set/intersection triggered forbidden))]
+                            (assoc trimmed-result :outcome :fail
+                                   :halt-reason :short-circuit-policy
+                                   :short-circuit-violations (vec (sort matched)))
+                            trimmed-result)]
         (if (:evaluate-expectations? flags true)
-          (finalize-scenario-result scenario trimmed-result flags)
-          trimmed-result))))))
+          (finalize-scenario-result scenario policy-result flags)
+          policy-result))))))
 
 (defn replay-with-protocol
   "Full replay plus evidence-chain, persistence, signing, timestamping and

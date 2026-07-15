@@ -91,8 +91,8 @@
 (def dr-scenario-paths
   "All S-DR-* dispute resolution scenario files, sorted."
   (sort (filter #(.contains % "S-DR-")
-                (map #(str "scenarios/" %)
-                     (.list (io/file "scenarios"))))))
+                (map #(str "scenarios/edn/" %)
+                     (.list (io/file "scenarios/edn"))))))
 
 (def reversal-scenario-ids
   "DR-N/O/P/Q/R reversal-reviewer slashing scenario IDs."
@@ -665,7 +665,7 @@
 (deftest test-theory-falsification-scenarios
   (testing "Theory-falsification scenarios demonstrate known vulnerabilities"
     (let [paths (filter #(.contains % "S-DR-")
-                        (map #(str "scenarios/" %) (.list (io/file "scenarios"))))
+                        (map #(str "scenarios/edn/" %) (.list (io/file "scenarios/edn"))))
           tf-scenarios (for [path paths]
                          (try (load-scenario path) (catch Exception _ nil)))
           tf-valid (filter (fn [s]

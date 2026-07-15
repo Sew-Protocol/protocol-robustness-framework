@@ -18,7 +18,8 @@
    :require-event-id?        false
    :include-telemetry-evidence? false
    :evidence-mode              :all
-   :yield-dt-validation?       false})
+   :yield-dt-validation?       false
+   :fail-on-short-circuits     #{}})
 
 (def fast-regression-flags
   "Fast regression: theory deferred (or disabled)."

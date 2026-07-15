@@ -129,17 +129,16 @@ echo "PASS verify-$SUITE"
 
 # ── Artifact Registry Emission ──────────────────────────────────────────
 echo "Emitting artifact registry..."
-python3 "$REPO_ROOT/scripts/write_scenario_run_manifest.py" \
+python3 "$REPO_ROOT/scripts/evidence/write_scenario_run_manifest.py" \
     --scenario "reference-validation" \
     --suite "reference-validation-v1" \
     --status "pass" \
-    --artifact-dir "$ACTUAL" \
-    --registry-level CORE || true
+    --output-dir "$ACTUAL" \
+    --registry-level CORE
 # ── Artifact Registry Orphan Audit ──────────────────────────────────────
 echo "Running orphan audit on evidence bundle..."
-ARTIFACT_DIR="$(python3 -c "from scripts.evidence_config import EvidenceConfig; print(EvidenceConfig().artifact_dir)" 2>/dev/null)" || ARTIFACT_DIR="results/test-artifacts"
-REGISTRY="$ARTIFACT_DIR/test-artifacts.json"
-python3 "$REPO_ROOT/scripts/verify_artifact_registry.py" "$REGISTRY" || true
+REGISTRY="$ACTUAL/test-artifacts.json"
+python3 "$REPO_ROOT/scripts/validate/verify_artifact_registry.py" "$REGISTRY"
 
 # ── Evidence Binding/Signing ──────────────────────────────────────────
 # Signs the evidence bundle to achieve Phase 4 authenticity

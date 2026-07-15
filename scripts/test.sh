@@ -48,6 +48,7 @@ RUN_MANIFEST_FILE="$ARTIFACT_DIR/test-run.json"
 ARTIFACT_REGISTRY_FILE="$ARTIFACT_DIR/test-artifacts.json"
 CLAIMABLE_CLASSIFICATION_FILE="$ARTIFACT_DIR/claimable-classification.json"
 RUN_ID="$(date +%Y%m%d-%H%M%S)"
+RUN_STARTED_AT="$(date +%s)"
 MAX_UNHIT_TRANSITIONS="${MAX_UNHIT_TRANSITIONS:-4}"
 MAX_UNSAFE_REGION_DELTA_PCT="${MAX_UNSAFE_REGION_DELTA_PCT:-10}"
 STRICT_CLAIM_REGISTRY="${STRICT_CLAIM_REGISTRY:-0}"
@@ -489,6 +490,27 @@ run_generators() {
   return $?
 }
 
+run_fast_smoke() {
+  require_clojure || return $?
+  echo "Running focused replay and accounting smoke tests..."
+  clojure -M:test:with-sew -e "
+(require '[clojure.test :as t]
+         'resolver-sim.yield.accrual-test
+         'resolver-sim.contract-model.replay-simple-characterization-test
+         'resolver-sim.sim.stochastic-equilibrium-test)
+(binding [t/*report-counters* (ref t/*initial-report-counters*)]
+  (t/test-vars
+   [#'resolver-sim.yield.accrual-test/test-multi-short-circuit-interaction
+    #'resolver-sim.contract-model.replay-simple-characterization-test/minimal-defaults-cover-all-flag-keys
+    #'resolver-sim.sim.stochastic-equilibrium-test/test-budget-balance-reports-all-components])
+  (let [results @t/*report-counters*]
+    (println (format \"Ran %d focused tests containing %d assertions.\" (:test results) (:pass results)))
+    (println (format \"%d failures, %d errors.\" (:fail results) (:error results)))
+    (when (pos? (+ (:error results) (:fail results)))
+      (System/exit 1))))"
+  return $?
+}
+
 run_contracts() {
   echo "Running cross-layer contract checks (proto/service/wire compatibility)..."
 
@@ -753,16 +775,20 @@ run_outcome_classification_report() {
   return $?
 }
 
+print_target_summary() {
+  local elapsed_seconds=$(( $(date +%s) - RUN_STARTED_AT ))
+  echo "  Elapsed: ${elapsed_seconds}s"
+  echo "  Target results (detailed logs are retained):"
+  if [ -f "$ARTIFACT_DIR/.targets-${RUN_ID}.csv" ]; then
+    while IFS=, read -r target status exit_code duration_ms log_file; do
+      printf "    %-22s %-4s %7sms  log: %s\n" "$target" "$status" "$duration_ms" "$log_file"
+    done < "$ARTIFACT_DIR/.targets-${RUN_ID}.csv"
+  fi
+  echo "  Target index: $ARTIFACT_DIR/.targets-${RUN_ID}.csv"
+  echo "  Machine-readable summary (written after this footer): $ARTIFACT_FILE"
+}
+
 case "$MODE" in
-  fast)
-    echo "Running FAST test suite (target: < 60 seconds)..."
-    run_target "unit" run_unit
-    run_target "generators" run_generators
-    run_target "contracts" run_contracts
-    run_target "invariants" run_invariants
-    run_target "suites" run_suites
-    run_target "reference-validation" run_reference_validation
-    ;;
   unit)
     run_unit || FAILURES=$((FAILURES + 1))
     ;;
@@ -883,20 +909,10 @@ case "$MODE" in
     fast)
       : > "$ARTIFACT_DIR/.targets-${RUN_ID}.csv"
       FAST_MODE=true
-      echo "Starting FAST test suite (target: < 90 seconds)..."
+      echo "Starting FAST test suite (explicit slow targets excluded)..."
       echo "========================================"
 
-      run_target unit run_unit || FAILURES=$((FAILURES + 1))
-      echo ""
-      run_target generators run_generators || FAILURES=$((FAILURES + 1))
-      echo ""
-      run_target contracts run_contracts || FAILURES=$((FAILURES + 1))
-      echo ""
-      run_target invariants run_invariants || FAILURES=$((FAILURES + 1))
-      echo ""
-      run_target suites run_suites || FAILURES=$((FAILURES + 1))
-      echo ""
-      run_target reference-validation run_reference_validation || FAILURES=$((FAILURES + 1))
+      run_target fast-smoke run_fast_smoke || FAILURES=$((FAILURES + 1))
 
       echo ""
       echo "========================================"
@@ -904,14 +920,13 @@ case "$MODE" in
       echo "  Targets: $TARGETS_COMPLETED completed"
       echo "  Passed: $TARGETS_PASSED"
       echo "  Failed: $((TARGETS_COMPLETED - TARGETS_PASSED))"
-      echo "  Duration: < 90 seconds (target)"
+      echo "  Explicit slow targets: excluded"
       if [ $FAILURES -gt 0 ]; then
         echo "  Exit code: 1 (failures detected)"
-        exit 1
       else
         echo "  Exit code: 0 (all passed)"
-        exit 0
       fi
+      print_target_summary
       ;;
 
     ci)
