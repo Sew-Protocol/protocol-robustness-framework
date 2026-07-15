@@ -90,9 +90,12 @@
                           dir-file)
             diff-dir-file (when (.isDirectory (io/file base-dir "diff-evidence"))
                             (io/file base-dir "diff-evidence"))
-            ev-files (filter #(.isFile %) (file-seq ev-dir-file))
+            json-artifact? (fn [f]
+                             (and (.isFile f)
+                                  (.endsWith (.getName f) ".json")))
+            ev-files (filter json-artifact? (file-seq ev-dir-file))
             diff-files (when diff-dir-file
-                         (filter #(.isFile %) (file-seq diff-dir-file)))
+                         (filter json-artifact? (file-seq diff-dir-file)))
             all-files (filter (fn [f] (not= "diff-index.json" (.getName f)))
                               (concat ev-files diff-files))
             artifacts (vec (sort-by :evidence/chain-seq

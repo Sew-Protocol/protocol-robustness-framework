@@ -97,7 +97,9 @@
       {:exit-code 3 :message "Artifact directory not found"}
       (try
         (println (str "Checking evidence coverage in " artifact-dir "..."))
-        (let [registry (load-registry dir)
+        ;; The chain registry tracks chain artifacts, while coverage concerns
+        ;; captured event evidence. Build the directory registry directly.
+        (let [registry (reg/build-evidence-registry (.getPath dir))
               entries (:entries registry [])
               types (set (map :evidence/type entries))
               expected (set (keys io-evidence/evidence-type->mechanism))
@@ -117,18 +119,29 @@
           {:exit-code 4 :message (.getMessage e)})))))
 
 (defn run-backstop
-  "Run the evidence review gate: run reference-validation suite, then verify evidence."
-  [{:keys [fast? full? artifact-dir json?] :as opts}]
+  "Run the evidence review gate: run reference-validation, then verify the
+   captured evidence directory. Coverage is reported in default mode and is
+   promoted to a gate only with :strict? because a single run need not exercise
+   every protocol evidence type."
+  [{:keys [fast? full? artifact-dir json? strict?] :as opts}]
   (println "Running evidence backstop...")
   (flush)
-  (let [suite-dir (run-suite-for-evidence)
-        results (if suite-dir
-                  (let [verify-opts (assoc opts :artifact-dir suite-dir)]
-                    [(verify-chain verify-opts)
-                     (validate verify-opts)
-                     (coverage verify-opts)])
+  (let [suite-complete? (boolean (run-suite-for-evidence))
+        ;; Reference validation writes reports to suites/.../actual but captures
+        ;; event evidence through the configured artifact directory.
+        ;; CLI supplies "target/run" as its generic default; it is not the
+        ;; directory populated by the reference-validation replay.
+        evidence-dir (if (and artifact-dir (not= artifact-dir "target/run"))
+                       artifact-dir
+                       "prf-artifacts")
+        verify-opts (assoc opts :artifact-dir evidence-dir)
+        results (if suite-complete?
+                  [(verify-chain verify-opts)
+                   (validate verify-opts)
+                   (coverage verify-opts)]
                   [{:exit-code 0 :message "Suite run completed"}])
-        failures (filter #(not (zero? (:exit-code % 0))) results)]
+        gate-results (if strict? results (take 2 results))
+        failures (filter #(not (zero? (:exit-code % 0))) gate-results)]
     (if (empty? failures)
       (do (println "Evidence backstop PASSED")
           {:exit-code 0 :results results})

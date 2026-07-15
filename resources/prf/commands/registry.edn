@@ -437,14 +437,6 @@
    :command/bb-task "monitor"
    :command/description "Start JMX monitoring system."}
 
-  {:command/id :report-attack-map
-   :command/path ["report" "attack-map"]
-   :command/title "Generate attack map"
-   :command/category :reporting
-   :command/surface :bb
-   :command/runtime :bb
-   :command/bb-task "report:attack-map"
-   :command/description "Generate visual attack-to-outcome artifacts."}
 
   {:command/id :notebook-index
    :command/path ["notebook" "index"]
